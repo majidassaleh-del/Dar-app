@@ -15,6 +15,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SyncModule } from './sync/sync.module';
 import { ReceiptsModule } from './receipts/receipts.module';
+import { FleetModule } from './fleet/fleet.module';
 import { JwtGuard } from './auth/jwt.guard';
 import { HouseholdGuard } from './tenancy/household.guard';
 import { ProblemFilter } from './common/problem.filter';
@@ -22,7 +23,7 @@ import { HealthController } from './health/health.controller';
 import { MembersController } from './members/members.controller';
 
 @Module({
-  imports: [ConfigModule, DbModule, CryptoModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule, LedgerModule, BankingModule, FilesModule, HrModule, NotificationsModule, DashboardModule, SyncModule, ReceiptsModule],
+  imports: [ConfigModule, DbModule, CryptoModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule, LedgerModule, BankingModule, FilesModule, HrModule, NotificationsModule, DashboardModule, SyncModule, ReceiptsModule, FleetModule],
   controllers: [HealthController, MembersController],
   providers: [
     // Order matters: authenticate, then resolve the household membership.

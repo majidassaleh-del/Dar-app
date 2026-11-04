@@ -391,6 +391,7 @@ enum TicketStatus {
 // ---- Cross-cutting ----
 enum AttachmentEntity {
   RECEIPT
+  MAINTENANCE_PLAN
   TRANSACTION
   STAFF_DOCUMENT
   REQUEST
@@ -563,6 +564,8 @@ model Household {
   attachments           Attachment[]
   reminders             Reminder[]
   syncOperations        SyncOperation[]
+  maintenancePlans      MaintenancePlan[]
+  odometerReadings      OdometerReading[]
   notifications         Notification[]
   auditLogs             AuditLog[]
   tenantKeys            TenantKey[]
@@ -636,6 +639,8 @@ model Membership {
   budgetsOwned        Budget[]
   reminders           Reminder[]
   syncOperations      SyncOperation[]
+  fuelLogs            FuelLog[]              @relation("FuelDriver")
+  odometerReadings    OdometerReading[]
   acknowledgments     PolicyAcknowledgment[] @relation("AckSigner")
   witnessedAcks       PolicyAcknowledgment[] @relation("AckWitness")
   pettyCashAccounts   PettyCashAccount[]     @relation("PettyCashCustodian")
@@ -1366,6 +1371,7 @@ model Receipt {
   uploadedBy   Membership    @relation(fields: [uploadedById], references: [id])
   transaction  Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
   pettyCashLog PettyCashLog?
+  fuelLog      FuelLog?
 
   @@unique([householdId, sha256])
   @@index([householdId, status])
@@ -1647,6 +1653,12 @@ model Vehicle {
   insuranceExpiry    DateTime?     @db.Date
   insurancePolicy    String?
   inspectionExpiry   DateTime?     @db.Date // Fahas
+  registrationNumber String? // Istimara serial
+  insuranceProvider  String?
+  lastInspectionAt   DateTime?     @db.Date
+  inspectionCenter   String?
+  tankCapacityL      Decimal?      @db.Decimal(6, 1)
+  expectedKmPerL     Decimal?      @db.Decimal(5, 2) // baseline for fuel anomaly checks; else the rolling average
   purchasePrice      Decimal?      @db.Decimal(18, 2)
   purchaseDate       DateTime?     @db.Date
   telematicsId       String? // GPS tracker device id
@@ -1663,6 +1675,8 @@ model Vehicle {
   transactions  Transaction[]
   workOrders    WorkOrder[]
   pettyCashLogs PettyCashLog[]
+  plans         MaintenancePlan[]
+  odometer      OdometerReading[]
 
   @@unique([householdId, plateNumber])
   @@index([householdId, status])
@@ -1705,10 +1719,12 @@ model MaintenanceRecord {
   currency      String            @default("SAR") @db.Char(3)
   notes         String?
   transactionId String?           @unique @db.Uuid
+  planId        String?           @db.Uuid
 
-  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  vehicle     Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  transaction Transaction? @relation(fields: [transactionId], references: [id])
+  household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  transaction Transaction?     @relation(fields: [transactionId], references: [id])
+  plan        MaintenancePlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   @@index([vehicleId, scheduledAt])
   @@index([householdId, nextDueDate])
@@ -1716,23 +1732,91 @@ model MaintenanceRecord {
 }
 
 model FuelLog {
-  id            String   @id @default(uuid()) @db.Uuid
-  householdId   String   @db.Uuid
-  vehicleId     String   @db.Uuid
-  filledAt      DateTime @db.Timestamptz(6)
-  liters        Decimal  @db.Decimal(10, 2)
-  pricePerLiter Decimal  @db.Decimal(10, 3)
-  totalCost     Decimal  @db.Decimal(18, 2)
-  odometerKm    Int
-  station       String?
-  transactionId String?  @unique @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  householdId    String    @db.Uuid
+  vehicleId      String    @db.Uuid
+  filledAt       DateTime  @db.Timestamptz(6)
+  liters         Decimal   @db.Decimal(10, 2)
+  pricePerLiter  Decimal   @db.Decimal(10, 3)
+  totalCost      Decimal   @db.Decimal(18, 2)
+  odometerKm     Int
+  station        String?
+  transactionId  String?   @unique @db.Uuid
+  driverId       String?   @db.Uuid // membership that filled up
+  receiptId      String?   @unique @db.Uuid
+  pettyCashLogId String?   @unique @db.Uuid // paid from the driver's float
+  fuelType       FuelType?
+  kmSinceLast    Int? // distance since the previous fill (set by trigger)
+  kmPerL         Decimal?  @db.Decimal(6, 2) // kmSinceLast / liters of THIS fill (full-to-full)
+  anomalies      Json      @default("[]") // [{ code, message, severity }]
+  flagged        Boolean   @default(false)
 
-  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  vehicle     Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  transaction Transaction? @relation(fields: [transactionId], references: [id])
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  transaction  Transaction?  @relation(fields: [transactionId], references: [id])
+  driver       Membership?   @relation("FuelDriver", fields: [driverId], references: [id], onDelete: SetNull)
+  receipt      Receipt?      @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  pettyCashLog PettyCashLog? @relation(fields: [pettyCashLogId], references: [id], onDelete: SetNull)
 
   @@index([vehicleId, filledAt])
   @@map("fuel_logs")
+}
+
+enum OdometerSource {
+  MANUAL
+  FUEL
+  TRIP
+  SERVICE
+}
+
+/// Preventive maintenance on a km and/or day interval (oil change every 10,000 km or 6 months,
+/// tyre rotation, periodic inspection). Next due date / km are kept by a trigger from the
+/// last COMPLETED service linked to the plan.
+model MaintenancePlan {
+  id           String          @id @default(uuid()) @db.Uuid
+  householdId  String          @db.Uuid
+  vehicleId    String          @db.Uuid
+  type         MaintenanceType
+  titleI18n    Json            @default("{}")
+  intervalKm   Int?
+  intervalDays Int?
+  lastDoneAt   DateTime?       @db.Date
+  lastDoneKm   Int?
+  nextDueDate  DateTime?       @db.Date
+  nextDueKm    Int?
+  /// When the odometer first came within the km warning window (alert anchor; cleared on service).
+  kmAlertAt    DateTime?       @db.Timestamptz(6)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime        @default(now()) @db.Timestamptz(6)
+
+  household Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  records   MaintenanceRecord[]
+
+  @@unique([vehicleId, type])
+  @@index([householdId, nextDueDate])
+  @@map("maintenance_plans")
+}
+
+/// Mileage history. Readings never go backwards (DB trigger); the vehicle's odometerKm follows the maximum.
+model OdometerReading {
+  id           String         @id @default(uuid()) @db.Uuid
+  householdId  String         @db.Uuid
+  vehicleId    String         @db.Uuid
+  readingKm    Int
+  readAt       DateTime       @default(now()) @db.Timestamptz(6)
+  source       OdometerSource @default(MANUAL)
+  recordedById String         @db.Uuid
+  note         String?
+  createdAt    DateTime       @default(now()) @db.Timestamptz(6)
+
+  household  Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  recordedBy Membership @relation(fields: [recordedById], references: [id])
+
+  @@index([vehicleId, readAt])
+  @@map("odometer_readings")
 }
 
 model TrafficViolation {
@@ -2191,6 +2275,7 @@ model PettyCashLog {
   workOrder   WorkOrder?       @relation(fields: [workOrderId], references: [id])
   trip        Trip?            @relation(fields: [tripId], references: [id])
   recordedBy  Membership       @relation("PettyCashRecorder", fields: [recordedById], references: [id])
+  fuelLog     FuelLog?
 
   @@index([accountId, occurredAt(sort: Desc)])
   @@index([householdId, status])

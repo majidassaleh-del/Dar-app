@@ -3,7 +3,7 @@ import { createKms } from '../crypto/kms';
 import { ServiceDb } from './service-db';
 import { dispatchNotifications } from '../notifications/dispatch';
 import { HttpSender, OutboxSender } from '../notifications/senders';
-import { provisionTenantKeys, runRecurringBills, syncDocumentReminders, syncStaffComplianceReminders } from './jobs';
+import { provisionTenantKeys, runRecurringBills, syncDocumentReminders, syncFleetReminders, syncStaffComplianceReminders } from './jobs';
 
 /** node dist/worker.js <keys:provision | reminders:documents> — run by Cloud Scheduler / cron. */
 void (async () => {
@@ -14,7 +14,7 @@ void (async () => {
     switch (process.argv[2]) {
       case 'keys:provision': console.log(`provisioned keys for ${await provisionTenantKeys(db, await createKms(env))} household(s)`); break;
       case 'reminders:documents': // kept as an alias of reminders:sync
-      case 'reminders:sync': console.log(JSON.stringify({ documents: await syncDocumentReminders(db), compliance: await syncStaffComplianceReminders(db) })); break;
+      case 'reminders:sync': console.log(JSON.stringify({ documents: await syncDocumentReminders(db), compliance: await syncStaffComplianceReminders(db), fleet: await syncFleetReminders(db) })); break;
       case 'recurring:run': console.log(JSON.stringify(await runRecurringBills(db))); break;
       case 'notifications:dispatch': {
         const configured = (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_TOKEN) || (env.FCM_PROJECT_ID && env.FCM_ACCESS_TOKEN);

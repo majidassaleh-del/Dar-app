@@ -21,12 +21,20 @@
       "document": "दस्तावेज़ की समय-सीमा",
       "medical": "चिकित्सा जाँच देय",
       "training": "प्रशिक्षण नवीनीकरण",
-      "handover": "सामान वापसी"
+      "handover": "सामान वापसी",
+      "vehicle": "वाहन दस्तावेज़ की समाप्ति",
+      "service": "वाहन सर्विस देय",
+      "serviceKm": "वाहन सर्विस देय",
+      "salary": "अपना वेतन पुष्टि करें"
     },
     "document": "{days, plural, =0 {{name} का {item} समाप्त हो गया है} one {{name} का {item} # दिन में समाप्त होगा} other {{name} का {item} # दिनों में समाप्त होगा}}",
     "medical": "{days, plural, =0 {{name} की वार्षिक चिकित्सा जाँच बकाया है} one {{name} की वार्षिक चिकित्सा जाँच # दिन में देय है} other {{name} की वार्षिक चिकित्सा जाँच # दिनों में देय है}}",
     "training": "{days, plural, =0 {{name} का {item} प्रशिक्षण समाप्त हो गया है} one {{name} का {item} प्रशिक्षण # दिन में समाप्त होगा} other {{name} का {item} प्रशिक्षण # दिनों में समाप्त होगा}}",
     "handover": "{days, plural, =0 {{name} से {item} की वापसी में देरी हो गई है} one {{name} को {item} # दिन में लौटाना है} other {{name} को {item} # दिनों में लौटाना है}}",
+    "vehicle": "{days, plural, =0 {{name} का {item} समाप्त हो गया है} one {{name} का {item} # दिन में समाप्त होगा} other {{name} का {item} # दिनों में समाप्त होगा}}",
+    "service": "{days, plural, =0 {{name} की {item} बकाया है} one {{name} की {item} # दिन में देय है} other {{name} की {item} # दिनों में देय है}}",
+    "serviceKm": "{name} की {item} {km, number} किमी पर देय है",
+    "salary": "{period} का आपका वेतन ({amount}) दर्ज किया गया है। कृपया प्राप्ति की पुष्टि करें या समस्या बताएं।",
     "item": {
       "IQAMA": "इक़ामा",
       "PASSPORT": "पासपोर्ट",
@@ -50,7 +58,18 @@
       "DEFENSIVE_DRIVING": "सुरक्षित ड्राइविंग",
       "HOUSEHOLD_POLICY": "घरेलू नीति",
       "EQUIPMENT_SAFETY": "उपकरण सुरक्षा",
-      "TRAINING": "सुरक्षा"
+      "TRAINING": "सुरक्षा",
+      "REGISTRATION": "पंजीकरण (इस्तिमारा)",
+      "INSURANCE": "बीमा",
+      "INSPECTION": "आवधिक निरीक्षण (फहस)",
+      "OIL_CHANGE": "तेल बदलना",
+      "TIRES": "टायर सर्विस",
+      "BRAKES": "ब्रेक सर्विस",
+      "BATTERY": "बैटरी जांच",
+      "REPAIR": "मरम्मत",
+      "BODYWORK": "बॉडीवर्क",
+      "CLEANING": "सफाई",
+      "OTHER": "सर्विस"
     }
   },
   "pulse": {
@@ -68,6 +87,9 @@
     "floatsLow": "{count, plural, one {# नकद फ़्लोट कम है} other {# नकद फ़्लोट कम हैं}}",
     "fundingToMatch": "{count, plural, one {मिलान के लिए # मालिक फ़ंडिंग प्रविष्टि} other {मिलान के लिए # मालिक फ़ंडिंग प्रविष्टियाँ}}",
     "medicalDueSoon": "{count, plural, one {# मेडिकल जाँच 30 दिनों में देय} other {# मेडिकल जाँच 30 दिनों में देय}}",
-    "payrollNotStarted": "इस महीने का वेतन अभी शुरू नहीं हुआ है"
+    "payrollNotStarted": "इस महीने का वेतन अभी शुरू नहीं हुआ है",
+    "vehicleDocsDue": "{count, plural, one {# वाहन दस्तावेज़ समाप्त या 15 दिनों में समाप्त} other {# वाहन दस्तावेज़ समाप्त या 15 दिनों में समाप्त}}",
+    "vehicleServiceOverdue": "{count, plural, one {# वाहन सर्विस बकाया है} other {# वाहन सर्विस बकाया हैं}}",
+    "fuelFlagged": "{count, plural, one {# ईंधन भराई संदिग्ध} other {# ईंधन भराई संदिग्ध}}"
   }
 }

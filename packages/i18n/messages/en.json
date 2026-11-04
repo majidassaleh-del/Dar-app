@@ -21,12 +21,20 @@
       "document": "Document expiring",
       "medical": "Medical checkup due",
       "training": "Training refresher",
-      "handover": "Item due back"
+      "handover": "Item due back",
+      "vehicle": "Vehicle document expiring",
+      "service": "Vehicle service due",
+      "serviceKm": "Vehicle service due",
+      "salary": "Confirm your salary"
     },
     "document": "{days, plural, =0 {{item} of {name} has expired} one {{item} of {name} expires in # day} other {{item} of {name} expires in # days}}",
     "medical": "{days, plural, =0 {Annual medical checkup for {name} is overdue} one {Annual medical checkup for {name} is due in # day} other {Annual medical checkup for {name} is due in # days}}",
     "training": "{days, plural, =0 {{item} training for {name} has expired} one {{item} training for {name} expires in # day} other {{item} training for {name} expires in # days}}",
     "handover": "{days, plural, =0 {{item} from {name} is overdue for return} one {{item} from {name} is due back in # day} other {{item} from {name} is due back in # days}}",
+    "vehicle": "{days, plural, =0 {{item} of {name} has expired} one {{item} of {name} expires in # day} other {{item} of {name} expires in # days}}",
+    "service": "{days, plural, =0 {{item} for {name} is overdue} one {{item} for {name} is due in # day} other {{item} for {name} is due in # days}}",
+    "serviceKm": "{item} for {name} is due at {km, number} km",
+    "salary": "Your salary for {period} ({amount}) was recorded. Please confirm you received it, or report a problem.",
     "item": {
       "IQAMA": "Iqama",
       "PASSPORT": "Passport",
@@ -50,7 +58,18 @@
       "DEFENSIVE_DRIVING": "Defensive driving",
       "HOUSEHOLD_POLICY": "Household policy",
       "EQUIPMENT_SAFETY": "Equipment safety",
-      "TRAINING": "Safety"
+      "TRAINING": "Safety",
+      "REGISTRATION": "Registration (Istimara)",
+      "INSURANCE": "Insurance",
+      "INSPECTION": "Periodic inspection (Fahas)",
+      "OIL_CHANGE": "Oil change",
+      "TIRES": "Tyre service",
+      "BRAKES": "Brake service",
+      "BATTERY": "Battery check",
+      "REPAIR": "Repair",
+      "BODYWORK": "Bodywork",
+      "CLEANING": "Cleaning",
+      "OTHER": "Service"
     }
   },
   "pulse": {
@@ -68,6 +87,9 @@
     "floatsLow": "{count, plural, one {# petty cash float is running low} other {# petty cash floats are running low}}",
     "fundingToMatch": "{count, plural, one {# owner funding item to match} other {# owner funding items to match}}",
     "medicalDueSoon": "{count, plural, one {# medical checkup due within 30 days} other {# medical checkups due within 30 days}}",
-    "payrollNotStarted": "This month's payroll has not been started"
+    "payrollNotStarted": "This month's payroll has not been started",
+    "vehicleDocsDue": "{count, plural, one {# vehicle document has expired or expires within 15 days} other {# vehicle documents have expired or expire within 15 days}}",
+    "vehicleServiceOverdue": "{count, plural, one {# vehicle service is overdue} other {# vehicle services are overdue}}",
+    "fuelFlagged": "{count, plural, one {# fuel fill-up was flagged} other {# fuel fill-ups were flagged}}"
   }
 }

@@ -21,12 +21,20 @@
       "document": "وثيقة تقترب من الانتهاء",
       "medical": "موعد الفحص الطبي",
       "training": "تجديد تدريب",
-      "handover": "موعد إرجاع عهدة"
+      "handover": "موعد إرجاع عهدة",
+      "vehicle": "وثيقة مركبة قاربت على الانتهاء",
+      "service": "موعد صيانة المركبة",
+      "serviceKm": "موعد صيانة المركبة",
+      "salary": "تأكيد استلام الراتب"
     },
     "document": "{days, plural, =0 {انتهت صلاحية {item} للعامل {name}} one {تنتهي {item} للعامل {name} خلال يوم واحد} two {تنتهي {item} للعامل {name} خلال يومين} few {تنتهي {item} للعامل {name} خلال # أيام} many {تنتهي {item} للعامل {name} خلال # يوماً} other {تنتهي {item} للعامل {name} خلال # يوم}}",
     "medical": "{days, plural, =0 {الفحص الطبي السنوي للعامل {name} متأخر} one {الفحص الطبي السنوي للعامل {name} مستحق خلال يوم واحد} two {الفحص الطبي السنوي للعامل {name} مستحق خلال يومين} few {الفحص الطبي السنوي للعامل {name} مستحق خلال # أيام} many {الفحص الطبي السنوي للعامل {name} مستحق خلال # يوماً} other {الفحص الطبي السنوي للعامل {name} مستحق خلال # يوم}}",
     "training": "{days, plural, =0 {انتهت صلاحية تدريب {item} للعامل {name}} one {تنتهي صلاحية تدريب {item} للعامل {name} خلال يوم واحد} two {تنتهي صلاحية تدريب {item} للعامل {name} خلال يومين} few {تنتهي صلاحية تدريب {item} للعامل {name} خلال # أيام} many {تنتهي صلاحية تدريب {item} للعامل {name} خلال # يوماً} other {تنتهي صلاحية تدريب {item} للعامل {name} خلال # يوم}}",
     "handover": "{days, plural, =0 {تأخر إرجاع {item} من العامل {name}} one {يجب إرجاع {item} من العامل {name} خلال يوم واحد} two {يجب إرجاع {item} من العامل {name} خلال يومين} few {يجب إرجاع {item} من العامل {name} خلال # أيام} many {يجب إرجاع {item} من العامل {name} خلال # يوماً} other {يجب إرجاع {item} من العامل {name} خلال # يوم}}",
+    "vehicle": "{days, plural, =0 {انتهت {item} للمركبة {name}} one {تنتهي {item} للمركبة {name} خلال يوم واحد} two {تنتهي {item} للمركبة {name} خلال يومين} few {تنتهي {item} للمركبة {name} خلال # أيام} other {تنتهي {item} للمركبة {name} خلال # يومًا}}",
+    "service": "{days, plural, =0 {{item} للمركبة {name} متأخرة} one {{item} للمركبة {name} مستحقة خلال يوم واحد} two {{item} للمركبة {name} مستحقة خلال يومين} few {{item} للمركبة {name} مستحقة خلال # أيام} other {{item} للمركبة {name} مستحقة خلال # يومًا}}",
+    "serviceKm": "{item} للمركبة {name} مستحقة عند {km, number} كم",
+    "salary": "تم تسجيل راتبك لشهر {period} ({amount}). يرجى تأكيد الاستلام أو الإبلاغ عن مشكلة.",
     "item": {
       "IQAMA": "الإقامة",
       "PASSPORT": "جواز السفر",
@@ -50,7 +58,18 @@
       "DEFENSIVE_DRIVING": "القيادة الوقائية",
       "HOUSEHOLD_POLICY": "سياسة المنزل",
       "EQUIPMENT_SAFETY": "سلامة المعدات",
-      "TRAINING": "السلامة"
+      "TRAINING": "السلامة",
+      "REGISTRATION": "الاستمارة",
+      "INSURANCE": "التأمين",
+      "INSPECTION": "الفحص الدوري",
+      "OIL_CHANGE": "تغيير الزيت",
+      "TIRES": "صيانة الإطارات",
+      "BRAKES": "صيانة الفرامل",
+      "BATTERY": "فحص البطارية",
+      "REPAIR": "الإصلاح",
+      "BODYWORK": "السمكرة",
+      "CLEANING": "التنظيف",
+      "OTHER": "الصيانة"
     }
   },
   "pulse": {
@@ -68,6 +87,9 @@
     "floatsLow": "{count, plural, one {عهدة نقدية واحدة رصيدها منخفض} other {# عهد نقدية رصيدها منخفض}}",
     "fundingToMatch": "{count, plural, one {بند تمويل واحد من المالك للمطابقة} other {# بنود تمويل من المالك للمطابقة}}",
     "medicalDueSoon": "{count, plural, one {فحص طبي واحد مستحق خلال 30 يومًا} other {# فحوصات طبية مستحقة خلال 30 يومًا}}",
-    "payrollNotStarted": "لم تبدأ مسيرة رواتب هذا الشهر بعد"
+    "payrollNotStarted": "لم تبدأ مسيرة رواتب هذا الشهر بعد",
+    "vehicleDocsDue": "{count, plural, one {وثيقة مركبة واحدة منتهية أو تنتهي خلال 15 يومًا} other {# وثائق مركبات منتهية أو تنتهي خلال 15 يومًا}}",
+    "vehicleServiceOverdue": "{count, plural, one {صيانة مركبة واحدة متأخرة} other {# صيانات مركبات متأخرة}}",
+    "fuelFlagged": "{count, plural, one {تعبئة وقود واحدة عليها ملاحظة} other {# تعبئات وقود عليها ملاحظات}}"
   }
 }

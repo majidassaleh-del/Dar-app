@@ -8,6 +8,7 @@ INSERT INTO users (id, "fullNameI18n", "preferredLocale", "updatedAt") VALUES
  ('a0000000-0000-0000-0000-000000000005', '{"am":"Tigist"}',           'am', now()),   -- nanny
  ('a0000000-0000-0000-0000-000000000006', '{"hi":"Sunita"}',           'hi', now()),   -- cook (ledger suite)
  ('a0000000-0000-0000-0000-000000000007', '{"ar":"سمير"}',             'ar', now()),   -- gardener (HR extension suite)
+ ('a0000000-0000-0000-0000-000000000008', '{"bn":"Rahim"}',           'bn', now()),   -- driver (fleet suite)
  ('a0000000-0000-0000-0000-000000000009', '{"en":"Other head"}',       'en', now());   -- head of household 2
 
 -- Fixed ids via p_id (renaming ids after the fact would cascade through tables
@@ -25,6 +26,7 @@ FROM (VALUES ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-0
              ('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004', 'SPOUSE', 'Umm Ahmed'),
              ('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000005', 'STAFF', 'Tigist'),
              ('c0000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000006', 'STAFF', 'Sunita'),
-             ('c0000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000007', 'STAFF', 'Samir')) v(mid, uid, role, dn)
+             ('c0000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000007', 'STAFF', 'Samir'),
+             ('c0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000008', 'DRIVER', 'Rahim')) v(mid, uid, role, dn)
 JOIN roles r ON r."householdId" = 'b0000000-0000-0000-0000-000000000001' AND r."systemRole" = v.role::"SystemRole";
 RESET app.user_id;

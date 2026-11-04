@@ -350,22 +350,47 @@ Request `payload` schemas by `type`:
 
 ## 7. Vehicle fleet
 
+> **Status:** implemented in `apps/api/src/fleet/`, with e2e and unit tests in `apps/api/test/fleet.e2e.test.ts` and DB-suite section 14. Not yet implemented: trips, traffic violations and the fleet cost report (rows marked *planned*).
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/vehicles` | `fleet.read` | Drivers see their assigned vehicles only |
-| POST | `/vehicles` · PATCH `/vehicles/{id}` | `fleet.manage` | |
-| GET | `/vehicles/{id}` | `fleet.read` | Includes the current driver, upcoming expiries and cost per km |
-| POST | `/vehicles/{id}/odometer` | `fleet.trips.log` | `{ km, photo? }` |
-| GET | `/vehicles/{id}/assignments` · POST | `fleet.read` / `fleet.manage` | Assign a driver |
-| PATCH · DELETE | `/vehicle-assignments/{id}` | **Head / EFA only** | End or correct an assignment (protected table) |
-| GET | `/vehicles/{id}/maintenance` · POST | `fleet.read` / `fleet.manage` | Scheduled or completed. Can create a linked transaction |
-| PATCH | `/maintenance/{id}` | `fleet.manage` | Complete and set the next due km/date |
-| GET | `/maintenance/upcoming?withinDays=30` | `fleet.read` | |
-| GET | `/vehicles/{id}/fuel-logs` · POST | `fleet.read` / `fleet.fuel.log` | Driver logs a fill-up (with receipt); computes L/100 km |
-| GET | `/vehicles/{id}/trips` · POST `/trips/start` · POST `/trips/{id}/end` | `fleet.read` / `fleet.trips.log` | School runs and errands, with passengers |
-| GET | `/violations` · POST · PATCH `/violations/{id}` | `fleet.read` / `fleet.manage` | `status: PAID \| CHARGED_TO_STAFF` (creates a payroll deduction) |
-| POST | `/violations/sync` | `fleet.manage` | Pull from the government adapter where available |
-| GET | `/reports/fleet?vehicleId=&period=` | `fleet.read` (ALL) | Total cost of ownership |
+| GET | `/vehicles` | `fleet.read` | Drivers see only their assigned vehicles |
+| POST | `/vehicles` | `fleet.manage` | Make/model/year, plate (Latin and Arabic), VIN, fuel type, odometer, `registrationNumber` + `registrationExpiry` (Istimara), `insuranceProvider` / `insurancePolicy` / `insuranceExpiry`, `inspectionExpiry` / `lastInspectionAt` / `inspectionCenter` (Fahas), `tankCapacityL`, `expectedKmPerL` |
+| PATCH | `/vehicles/{id}` | `fleet.manage` | Drivers are refused (DB trigger `vehicles_0_guard`), so they cannot change insurance or plate details |
+| GET | `/vehicles/{id}` | `fleet.read` | Profile with days left per document, current drivers, maintenance plans with status (`OK` / `DUE_SOON` / `OVERDUE`) and the last fill-ups |
+| POST | `/vehicles/{id}/assignments` | `fleet.manage` | `{ driverId, startsAt?, isPrimary }`. A new primary assignment ends the previous one, recording the odometer |
+| GET · POST | `/vehicles/{id}/maintenance-plans` | `fleet.read` / `fleet.manage` | `{ type, intervalKm?, intervalDays?, lastDoneAt?, lastDoneKm? }`. Without history the plan starts from today's odometer and date. `nextDueKm` and `nextDueDate` are kept by a trigger |
+| PATCH | `/maintenance-plans/{id}` | `fleet.manage` | Intervals, active flag |
+| POST | `/vehicles/{id}/maintenance` | `fleet.manage` | Record a service. A COMPLETED one linked to a plan (explicitly or by type) resets the plan and adds an odometer reading. An inspection updates `lastInspectionAt` |
+| GET · POST | `/vehicles/{id}/odometer` | `fleet.read` / `fleet.trips.log` | Readings are append-only and never go backwards (422). The vehicle's odometer follows the maximum |
+| GET | `/vehicles/{id}/fuel?flagged=` | `fleet.read` | Fill-ups with km since the last fill, km/L, anomalies; summary of litres, cost, average km/L and flagged count |
+| POST | `/vehicles/{id}/fuel` | `fleet.fuel.log` (assigned driver) | `{ liters, totalCost, pricePerLiter?, odometerKm, fuelType?, station?, filledAt?, receiptId?, pettyCashAccountId? }`. One transaction: odometer reading, fuel log and, when paid from the driver's float, a `PENDING_REVIEW` petty-cash expense linked to the vehicle and receipt |
+| GET | `/fleet/overview` | `fleet.read` (ALL) | Documents due within 60 days, maintenance due or overdue, flagged fuel (90 days) |
+| GET | `/vehicles/{id}/trips` · POST `/trips/start` · POST `/trips/{id}/end` | `fleet.read` / `fleet.trips.log` | *Planned* |
+| GET | `/violations` · POST · PATCH `/violations/{id}` | `fleet.read` / `fleet.manage` | *Planned* |
+| GET | `/reports/fleet?vehicleId=&period=` | `fleet.read` (ALL) | *Planned*: total cost of ownership |
+
+**Fuel validation:**
+* **Hard rules (database).** The total must equal litres × price, within 1 SAR or 2%. The odometer must not go backwards. Distance and km/L since the previous fill are derived by the trigger, not taken from the client.
+* **Soft flags.** These mark the fuel log `flagged` and are written into the petty-cash entry's description, so the reviewer sees them:
+
+| Code | Raised when |
+|---|---|
+| `EFFICIENCY_LOW` | km/L below 60% of the baseline (`expectedKmPerL`, else the median of the last 5 fills); usually fuel not used by the car |
+| `EFFICIENCY_HIGH` | km/L above 160% of the baseline (a missed fill or a wrong reading) |
+| `OVER_TANK` | litres above 105% of `tankCapacityL` |
+| `REFILL_TOO_SOON` | fewer than 50 km since the last fill, and within 6 hours or more than 20% of the tank |
+| `ODOMETER_JUMP` | more distance than a full tank's range |
+| `FUEL_TYPE_MISMATCH` / `FUEL_ON_ELECTRIC` | wrong fuel for the vehicle |
+| `PRICE_OUT_OF_RANGE` | more than 25% off the reference pump price |
+| `RECEIPT_MISMATCH` | entered total differs from the scanned receipt by more than 1 SAR |
+
+**Reminders (60/30/15 engine, `reminders:sync`):**
+* Istimara, insurance and Fahas expiries, as `VEHICLE` reminders.
+* Maintenance plans by date, as `MAINTENANCE_PLAN` reminders. Only tiers shorter than the interval are used; 15 days always is.
+* Maintenance plans by km: one alert once the odometer is within 1,000 km of `nextDueKm`. It is anchored at `kmAlertAt` and cleared by the next service.
+* These go out through the notification dispatcher as WhatsApp templates `herp_vehicle_document`, `herp_vehicle_service` and `herp_vehicle_service_km`, plus push and in-app, in all six languages.
+* The Daily Pulse shows vehicle documents due within 15 days, overdue services, and fuel flagged in the last 30 days.
 
 ## 8. Property management
 

@@ -730,4 +730,26 @@ SELECT pg_temp.expect('other household cannot reference an H1 task',
      VALUES (gen_random_uuid(), %s, %s, 'dev-9', gen_random_uuid(), 'TASK_UPDATE', 'd3000000-0000-0000-0000-000000000001', 'APPLIED', now())$q$,
      pg_temp.q('h2'), pg_temp.q('head2'))), -3);
 
+-- ---- 14. fleet ----
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000e','h1');  -- driver
+SELECT pg_temp.expect('driver cannot edit the vehicle profile (insurance, plate…)',
+  pg_temp.try_rows($q$UPDATE vehicles SET "insuranceExpiry" = '2040-01-01' WHERE id = '20000000-0000-0000-0000-000000000001'$q$), -1);
+INSERT INTO odometer_readings (id,"householdId","vehicleId","readingKm","recordedById")
+VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), '20000000-0000-0000-0000-000000000001', 12000, (SELECT v FROM ids WHERE k='driver'));
+SELECT pg_temp.expect('…but records an odometer reading for the assigned car, which updates it',
+  (SELECT "odometerKm" FROM vehicles WHERE id = '20000000-0000-0000-0000-000000000001'), 12000);
+SELECT pg_temp.expect('…not for the unassigned one (invisible)', pg_temp.try_rows(format($q$INSERT INTO odometer_readings (id,"householdId","vehicleId","readingKm","recordedById")
+     VALUES (gen_random_uuid(), %s, '20000000-0000-0000-0000-000000000002', 100, %s)$q$, pg_temp.q('h1'), pg_temp.q('driver'))), -1);
+SELECT pg_temp.expect('…and never backwards', pg_temp.try_rows(format($q$INSERT INTO odometer_readings (id,"householdId","vehicleId","readingKm","recordedById")
+     VALUES (gen_random_uuid(), %s, '20000000-0000-0000-0000-000000000001', 11000, %s)$q$, pg_temp.q('h1'), pg_temp.q('driver'))), -2);
+SELECT pg_temp.expect('readings are immutable', pg_temp.try_rows($q$UPDATE odometer_readings SET "readingKm" = 1$q$), -1);
+SELECT pg_temp.expect('driver cannot create maintenance plans', pg_temp.try_rows(format($q$INSERT INTO maintenance_plans (id,"householdId","vehicleId",type,"intervalKm")
+     VALUES (gen_random_uuid(), %s, '20000000-0000-0000-0000-000000000001', 'OIL_CHANGE', 5000)$q$, pg_temp.q('h1'))), -1);
+SELECT pg_temp.expect('fuel cost must equal litres × price', pg_temp.try_rows(format($q$INSERT INTO fuel_logs (id,"householdId","vehicleId","filledAt",liters,"pricePerLiter","totalCost","odometerKm")
+     VALUES (gen_random_uuid(), %s, '20000000-0000-0000-0000-000000000001', now(), 40, 2.18, 20, 12100)$q$, pg_temp.q('h1'))), -2);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
+SELECT pg_temp.expect('other household cannot attach a plan to an H1 vehicle', pg_temp.try_rows(format($q$INSERT INTO maintenance_plans (id,"householdId","vehicleId",type,"intervalKm")
+     VALUES (gen_random_uuid(), %s, '20000000-0000-0000-0000-000000000001', 'OIL_CHANGE', 5000)$q$, pg_temp.q('h2'))), -3);
+SELECT pg_temp.expect('…nor see its odometer history', (SELECT count(*) FROM odometer_readings), 0);
+
 ROLLBACK;

@@ -21,12 +21,20 @@
       "document": "Malapit nang mag-expire",
       "medical": "Taunang medical",
       "training": "Pag-renew ng training",
-      "handover": "Pagbabalik ng gamit"
+      "handover": "Pagbabalik ng gamit",
+      "vehicle": "Mag-e-expire ang dokumento ng sasakyan",
+      "service": "Serbisyo ng sasakyan",
+      "serviceKm": "Serbisyo ng sasakyan",
+      "salary": "Kumpirmahin ang iyong sahod"
     },
     "document": "{days, plural, =0 {Expired na ang {item} ni {name}} one {Mag-e-expire ang {item} ni {name} sa loob ng # araw} other {Mag-e-expire ang {item} ni {name} sa loob ng # araw}}",
     "medical": "{days, plural, =0 {Overdue na ang taunang medical ni {name}} one {Dapat magpa-medical si {name} sa loob ng # araw} other {Dapat magpa-medical si {name} sa loob ng # araw}}",
     "training": "{days, plural, =0 {Expired na ang {item} training ni {name}} one {Mag-e-expire ang {item} training ni {name} sa loob ng # araw} other {Mag-e-expire ang {item} training ni {name} sa loob ng # araw}}",
     "handover": "{days, plural, =0 {Lampas na sa takdang pagbabalik ang {item} ni {name}} one {Dapat ibalik ni {name} ang {item} sa loob ng # araw} other {Dapat ibalik ni {name} ang {item} sa loob ng # araw}}",
+    "vehicle": "{days, plural, =0 {Expired na ang {item} ng {name}} one {Mag-e-expire ang {item} ng {name} sa loob ng # araw} other {Mag-e-expire ang {item} ng {name} sa loob ng # araw}}",
+    "service": "{days, plural, =0 {Lampas na ang {item} ng {name}} one {Dapat gawin ang {item} ng {name} sa loob ng # araw} other {Dapat gawin ang {item} ng {name} sa loob ng # araw}}",
+    "serviceKm": "Dapat gawin ang {item} ng {name} sa {km, number} km",
+    "salary": "Naitala ang iyong sahod para sa {period} ({amount}). Pakikumpirma na natanggap mo ito, o mag-ulat ng problema.",
     "item": {
       "IQAMA": "Iqama",
       "PASSPORT": "Pasaporte",
@@ -50,7 +58,18 @@
       "DEFENSIVE_DRIVING": "Ligtas na pagmamaneho",
       "HOUSEHOLD_POLICY": "Patakaran ng bahay",
       "EQUIPMENT_SAFETY": "Kaligtasan sa kagamitan",
-      "TRAINING": "Kaligtasan"
+      "TRAINING": "Kaligtasan",
+      "REGISTRATION": "Rehistro (Istimara)",
+      "INSURANCE": "Insurance",
+      "INSPECTION": "Periodic inspection (Fahas)",
+      "OIL_CHANGE": "Pagpapalit ng langis",
+      "TIRES": "Serbisyo sa gulong",
+      "BRAKES": "Serbisyo sa preno",
+      "BATTERY": "Pagsusuri ng baterya",
+      "REPAIR": "Pagkukumpuni",
+      "BODYWORK": "Bodywork",
+      "CLEANING": "Paglilinis",
+      "OTHER": "Serbisyo"
     }
   },
   "pulse": {
@@ -68,6 +87,9 @@
     "floatsLow": "{count, plural, one {# petty cash ang paubos na} other {# petty cash ang paubos na}}",
     "fundingToMatch": "{count, plural, one {# pondo mula sa may-ari na itutugma} other {# pondo mula sa may-ari na itutugma}}",
     "medicalDueSoon": "{count, plural, one {# medical checkup sa loob ng 30 araw} other {# medical checkup sa loob ng 30 araw}}",
-    "payrollNotStarted": "Hindi pa nasisimulan ang payroll ngayong buwan"
+    "payrollNotStarted": "Hindi pa nasisimulan ang payroll ngayong buwan",
+    "vehicleDocsDue": "{count, plural, one {# dokumento ng sasakyan ang expired o mag-e-expire sa 15 araw} other {# dokumento ng sasakyan ang expired o mag-e-expire sa 15 araw}}",
+    "vehicleServiceOverdue": "{count, plural, one {# serbisyo ng sasakyan ang lampas na} other {# serbisyo ng sasakyan ang lampas na}}",
+    "fuelFlagged": "{count, plural, one {# pagpapakarga ng gasolina ang na-flag} other {# pagpapakarga ng gasolina ang na-flag}}"
   }
 }

@@ -2157,7 +2157,8 @@ INSERT INTO app.entity_tables VALUES
   ('attachment','ASSET_HANDOVER','asset_handovers'), ('attachment','EVALUATION','staff_evaluations'),
   ('reminder','STAFF_DOCUMENT','identity_documents'), ('reminder','MEDICAL_CHECKUP','staff_profiles'), ('reminder','TRAINING','staff_trainings'),
   ('reminder','ASSET_HANDOVER','asset_handovers'), ('reminder','VEHICLE','vehicles'), ('reminder','LEASE','leases'),
-  ('reminder','BILL','utility_bills'), ('reminder','STAFF','staff_profiles'), ('reminder','WORK_ORDER','work_orders');
+  ('reminder','BILL','utility_bills'), ('reminder','STAFF','staff_profiles'), ('reminder','WORK_ORDER','work_orders'),
+  ('reminder','MAINTENANCE_PLAN','maintenance_plans');
 
 CREATE OR REPLACE FUNCTION app.validate_entity_ref() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -2506,6 +2507,197 @@ BEGIN
   RETURN NEW;
 END $$;
 
+-- ================================================================ FLEET ==
+-- Vehicles: only fleet managers edit the profile. (veh_upd also admits assigned
+-- drivers; the odometer is now kept from odometer_readings by a definer trigger.)
+CREATE OR REPLACE FUNCTION app.guard_vehicle() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF app.caller_is_restricted() AND NOT COALESCE(app.perm_scope('fleet.manage') = 'ALL', false) THEN
+    RAISE EXCEPTION 'only fleet managers can edit a vehicle; drivers record odometer readings instead' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS vehicles_0_guard ON vehicles;
+CREATE TRIGGER vehicles_0_guard BEFORE UPDATE ON vehicles FOR EACH ROW EXECUTE FUNCTION app.guard_vehicle();
+
+-- Maintenance plans: readable like the vehicle, managed by fleet managers.
+CREATE POLICY mp_read ON maintenance_plans AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('fleet.read')), app.vehicle_drivers("vehicleId")));
+CREATE POLICY mp_ins ON maintenance_plans AS RESTRICTIVE FOR INSERT TO app_user WITH CHECK ((SELECT app.perm_scope('fleet.manage')) = 'ALL');
+CREATE POLICY mp_upd ON maintenance_plans AS RESTRICTIVE FOR UPDATE TO app_user USING ((SELECT app.perm_scope('fleet.manage')) = 'ALL');
+CREATE POLICY mp_del ON maintenance_plans AS RESTRICTIVE FOR DELETE TO app_user USING ((SELECT app.perm_scope('fleet.manage')) = 'ALL');
+
+CREATE OR REPLACE FUNCTION app.maintenance_plan_due() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW."intervalKm" IS NULL AND NEW."intervalDays" IS NULL THEN
+    RAISE EXCEPTION 'a maintenance plan needs an interval in km, in days, or both' USING ERRCODE = 'check_violation';
+  END IF;
+  IF COALESCE(NEW."intervalKm", 1) <= 0 OR COALESCE(NEW."intervalDays", 1) <= 0 THEN
+    RAISE EXCEPTION 'intervals must be positive' USING ERRCODE = 'check_violation';
+  END IF;
+  -- No service history yet: the plan starts from today's odometer and date (fixed baseline, so it never slides).
+  NEW."lastDoneKm" := COALESCE(NEW."lastDoneKm", (SELECT "odometerKm" FROM vehicles WHERE id = NEW."vehicleId"));
+  NEW."lastDoneAt" := COALESCE(NEW."lastDoneAt", (now() AT TIME ZONE 'Asia/Riyadh')::date);
+  NEW."nextDueKm" := CASE WHEN NEW."intervalKm" IS NOT NULL THEN NEW."lastDoneKm" + NEW."intervalKm" END;
+  NEW."nextDueDate" := CASE WHEN NEW."intervalDays" IS NOT NULL THEN NEW."lastDoneAt" + NEW."intervalDays" END;
+  IF TG_OP = 'UPDATE' AND (NEW."lastDoneKm", NEW."intervalKm") IS DISTINCT FROM (OLD."lastDoneKm", OLD."intervalKm") THEN NEW."kmAlertAt" := NULL; END IF;
+  NEW."updatedAt" := now();
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS maintenance_plans_due ON maintenance_plans;
+CREATE TRIGGER maintenance_plans_due BEFORE INSERT OR UPDATE ON maintenance_plans FOR EACH ROW EXECUTE FUNCTION app.maintenance_plan_due();
+
+-- A completed service resets its plan (and the vehicle's odometer reading). Definer: runs for whoever records it.
+CREATE OR REPLACE FUNCTION app.apply_maintenance_record() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_plan maintenance_plans;
+BEGIN
+  IF NEW."planId" IS NOT NULL THEN
+    SELECT * INTO v_plan FROM maintenance_plans WHERE id = NEW."planId";
+    IF v_plan."vehicleId" IS DISTINCT FROM NEW."vehicleId" THEN
+      RAISE EXCEPTION 'maintenance plan belongs to another vehicle' USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF NEW.status = 'COMPLETED' AND (TG_OP = 'INSERT' OR OLD.status <> 'COMPLETED') THEN
+    NEW."completedAt" := COALESCE(NEW."completedAt", now());
+    IF NEW."planId" IS NOT NULL THEN
+      UPDATE maintenance_plans SET "lastDoneAt" = (NEW."completedAt" AT TIME ZONE 'Asia/Riyadh')::date,
+             "lastDoneKm" = COALESCE(NEW."odometerKm", (SELECT "odometerKm" FROM vehicles WHERE id = NEW."vehicleId"))
+       WHERE id = NEW."planId";
+      SELECT "nextDueKm", "nextDueDate" INTO NEW."nextDueKm", NEW."nextDueDate" FROM maintenance_plans WHERE id = NEW."planId";
+    END IF;
+    IF NEW.type = 'INSPECTION' THEN
+      UPDATE vehicles SET "lastInspectionAt" = (NEW."completedAt" AT TIME ZONE 'Asia/Riyadh')::date WHERE id = NEW."vehicleId";
+    END IF;
+    IF NEW."odometerKm" IS NOT NULL THEN
+      INSERT INTO odometer_readings (id, "householdId", "vehicleId", "readingKm", "readAt", source, "recordedById", note)
+      VALUES (gen_random_uuid(), NEW."householdId", NEW."vehicleId", NEW."odometerKm", NEW."completedAt", 'SERVICE',
+              COALESCE(app.current_membership_id(), (SELECT "driverId" FROM vehicle_assignments WHERE "vehicleId" = NEW."vehicleId" ORDER BY "startsAt" DESC LIMIT 1)),
+              format('service %s', NEW.type));
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS maintenance_records_apply ON maintenance_records;
+CREATE TRIGGER maintenance_records_apply BEFORE INSERT OR UPDATE ON maintenance_records FOR EACH ROW EXECUTE FUNCTION app.apply_maintenance_record();
+
+-- Odometer readings: assigned drivers (fleet.trips.log) and managers append; immutable afterwards.
+CREATE POLICY odo_read ON odometer_readings AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('fleet.read')), app.vehicle_drivers("vehicleId")));
+CREATE POLICY odo_ins ON odometer_readings AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ("recordedById" = app.current_membership_id()
+              AND (app.can_access((SELECT app.perm_scope('fleet.trips.log')), app.vehicle_drivers("vehicleId"))
+                   OR app.can_access((SELECT app.perm_scope('fleet.fuel.log')), app.vehicle_drivers("vehicleId"))
+                   OR (SELECT app.perm_scope('fleet.manage')) = 'ALL'));
+CREATE POLICY odo_del ON odometer_readings AS RESTRICTIVE FOR DELETE TO app_user USING ((SELECT app.perm_scope('fleet.manage')) = 'ALL');
+REVOKE UPDATE ON odometer_readings FROM app_user;
+
+CREATE OR REPLACE FUNCTION app.apply_odometer_reading() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_max int;
+BEGIN
+  IF NEW."readingKm" < 0 OR NEW."readingKm" > 2000000 THEN
+    RAISE EXCEPTION 'odometer reading % km is not plausible', NEW."readingKm" USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT GREATEST(COALESCE(max("readingKm"), 0), (SELECT "odometerKm" FROM vehicles WHERE id = NEW."vehicleId")) INTO v_max
+  FROM odometer_readings WHERE "vehicleId" = NEW."vehicleId" AND "readAt" <= NEW."readAt";
+  IF NEW."readingKm" < v_max THEN
+    RAISE EXCEPTION 'odometer cannot go backwards: % km is below the last reading of % km', NEW."readingKm", v_max USING ERRCODE = 'check_violation';
+  END IF;
+  IF EXISTS (SELECT 1 FROM odometer_readings WHERE "vehicleId" = NEW."vehicleId" AND "readAt" > NEW."readAt" AND "readingKm" < NEW."readingKm") THEN
+    RAISE EXCEPTION 'a later reading is lower than % km', NEW."readingKm" USING ERRCODE = 'check_violation';
+  END IF;
+  UPDATE vehicles SET "odometerKm" = GREATEST("odometerKm", NEW."readingKm") WHERE id = NEW."vehicleId";
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS odometer_readings_apply ON odometer_readings;
+CREATE TRIGGER odometer_readings_apply BEFORE INSERT ON odometer_readings FOR EACH ROW EXECUTE FUNCTION app.apply_odometer_reading();
+
+-- Fuel: cost must equal litres × price (±1 SAR / 2%); distance and km/L since the previous fill are derived here,
+-- so the anomaly checks in the API work from numbers the driver cannot set.
+CREATE OR REPLACE FUNCTION app.apply_fuel_log() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_prev int;
+BEGIN
+  IF NEW.liters <= 0 OR NEW."pricePerLiter" <= 0 OR NEW."totalCost" <= 0 THEN
+    RAISE EXCEPTION 'litres, price and total must be positive' USING ERRCODE = 'check_violation';
+  END IF;
+  IF abs(NEW.liters * NEW."pricePerLiter" - NEW."totalCost") > GREATEST(1, NEW."totalCost" * 0.02) THEN
+    RAISE EXCEPTION 'total % does not match % L × % SAR/L', NEW."totalCost", NEW.liters, NEW."pricePerLiter" USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    NEW."driverId" := COALESCE(app.current_membership_id(), NEW."driverId");
+    SELECT "odometerKm" INTO v_prev FROM fuel_logs WHERE "vehicleId" = NEW."vehicleId" AND "filledAt" < NEW."filledAt" ORDER BY "filledAt" DESC LIMIT 1;
+    NEW."kmSinceLast" := CASE WHEN v_prev IS NOT NULL THEN NEW."odometerKm" - v_prev END;
+    NEW."kmPerL" := CASE WHEN v_prev IS NOT NULL AND NEW."odometerKm" > v_prev THEN round((NEW."odometerKm" - v_prev) / NEW.liters, 2) END;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS fuel_logs_apply ON fuel_logs;
+CREATE TRIGGER fuel_logs_apply BEFORE INSERT OR UPDATE OF liters, "pricePerLiter", "totalCost" ON fuel_logs FOR EACH ROW EXECUTE FUNCTION app.apply_fuel_log();
+
+-- Fleet reminders on the 60/30/15 engine: Istimara, insurance, Fahas (VEHICLE), and maintenance plans
+-- by date (tiers below the interval) or by km (alert once within 1,000 km, anchored at kmAlertAt).
+CREATE OR REPLACE FUNCTION app.sync_fleet_reminders(p_household uuid DEFAULT NULL)
+RETURNS TABLE (inserted int, removed int)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_ins int; v_del int;
+BEGIN
+  UPDATE maintenance_plans p SET "kmAlertAt" = now()
+  FROM vehicles v WHERE v.id = p."vehicleId" AND p."isActive" AND p."nextDueKm" IS NOT NULL AND p."kmAlertAt" IS NULL
+    AND v."odometerKm" >= p."nextDueKm" - 1000 AND (p_household IS NULL OR p."householdId" = p_household);
+
+  CREATE TEMP TABLE IF NOT EXISTS _fwant (hh uuid, et "AttachmentEntity", eid uuid, due_at timestamptz, remind_at timestamptz, tier int, title jsonb) ON COMMIT DROP;
+  TRUNCATE _fwant;
+  INSERT INTO _fwant
+  SELECT v."householdId", 'VEHICLE', v.id, (d.due + time '09:00') AT TIME ZONE h.timezone, (d.due - t + time '09:00') AT TIME ZONE h.timezone, t,
+         jsonb_build_object('doc', d.doc, 'plate', v."plateNumber",
+           'ar', format('%s للمركبة %s %s', d.ar, v."plateNumber", CASE WHEN t = 0 THEN 'منتهية' ELSE format('تنتهي خلال %s يوماً', t) END),
+           'en', format('%s for %s %s', d.en, v."plateNumber", CASE WHEN t = 0 THEN 'has expired' ELSE format('expires within %s days', t) END))
+  FROM vehicles v JOIN households h ON h.id = v."householdId"
+  CROSS JOIN LATERAL (VALUES ('REGISTRATION', v."registrationExpiry", 'الاستمارة', 'Registration (Istimara)'),
+                             ('INSURANCE', v."insuranceExpiry", 'التأمين', 'Insurance'),
+                             ('INSPECTION', v."inspectionExpiry", 'الفحص الدوري', 'Periodic inspection (Fahas)')) d(doc, due, ar, en)
+  CROSS JOIN LATERAL app.reminder_tiers(d.due - (now() AT TIME ZONE h.timezone)::date, ARRAY[60, 30, 15]) t
+  WHERE d.due IS NOT NULL AND v."deletedAt" IS NULL AND v.status NOT IN ('SOLD', 'OUT_OF_SERVICE') AND (p_household IS NULL OR v."householdId" = p_household);
+  -- by date
+  INSERT INTO _fwant
+  SELECT p."householdId", 'MAINTENANCE_PLAN', p.id, (p."nextDueDate" + time '09:00') AT TIME ZONE h.timezone,
+         (p."nextDueDate" - t + time '09:00') AT TIME ZONE h.timezone, t,
+         jsonb_build_object('basis', 'date', 'plate', v."plateNumber", 'ar', format('صيانة %s للمركبة %s', p.type, v."plateNumber"),
+                            'en', format('%s for %s %s', initcap(replace(lower(p.type::text), '_', ' ')), v."plateNumber",
+                                         CASE WHEN t = 0 THEN 'is overdue' ELSE format('is due within %s days', t) END))
+  FROM maintenance_plans p JOIN vehicles v ON v.id = p."vehicleId" JOIN households h ON h.id = p."householdId"
+  CROSS JOIN LATERAL app.reminder_tiers(p."nextDueDate" - (now() AT TIME ZONE h.timezone)::date,
+                                        ARRAY(SELECT x FROM unnest(ARRAY[60, 30, 15]) x WHERE x < p."intervalDays" OR x = 15)) t
+  WHERE p."isActive" AND p."nextDueDate" IS NOT NULL AND v."deletedAt" IS NULL AND v.status NOT IN ('SOLD', 'OUT_OF_SERVICE')
+    AND (p_household IS NULL OR p."householdId" = p_household);
+  -- by km
+  INSERT INTO _fwant
+  SELECT p."householdId", 'MAINTENANCE_PLAN', p.id, p."kmAlertAt", p."kmAlertAt", -1,
+         jsonb_build_object('basis', 'km', 'plate', v."plateNumber", 'dueKm', p."nextDueKm", 'odometerKm', v."odometerKm",
+                            'ar', format('صيانة %s للمركبة %s عند %s كم (العداد %s كم)', p.type, v."plateNumber", p."nextDueKm", v."odometerKm"),
+                            'en', format('%s for %s due at %s km (odometer %s km)', initcap(replace(lower(p.type::text), '_', ' ')), v."plateNumber", p."nextDueKm", v."odometerKm"))
+  FROM maintenance_plans p JOIN vehicles v ON v.id = p."vehicleId"
+  WHERE p."isActive" AND p."kmAlertAt" IS NOT NULL AND v."deletedAt" IS NULL AND (p_household IS NULL OR p."householdId" = p_household);
+
+  DELETE FROM reminders r
+  WHERE r."entityType" IN ('VEHICLE', 'MAINTENANCE_PLAN') AND r.status = 'PENDING' AND (p_household IS NULL OR r."householdId" = p_household)
+    AND NOT EXISTS (SELECT 1 FROM _fwant w WHERE w.eid = r."entityId" AND w.et = r."entityType" AND w.due_at = r."dueAt");
+  GET DIAGNOSTICS v_del = ROW_COUNT;
+  INSERT INTO reminders (id, "householdId", "recipientId", "entityType", "entityId", "titleI18n", "dueAt", "remindAt", status, channels)
+  SELECT gen_random_uuid(), hh, NULL, et, eid, title || jsonb_build_object('tier', tier), due_at, remind_at, 'PENDING',
+         CASE WHEN tier <= 15 THEN ARRAY['IN_APP','PUSH','WHATSAPP']::"NotificationChannel"[] ELSE ARRAY['IN_APP','PUSH']::"NotificationChannel"[] END
+  FROM _fwant
+  ON CONFLICT ("householdId", "entityType", "entityId", "dueAt", "remindAt") DO NOTHING;
+  GET DIAGNOSTICS v_ins = ROW_COUNT;
+  RETURN QUERY SELECT v_ins, v_del;
+END $$;
+REVOKE ALL ON FUNCTION app.sync_fleet_reminders(uuid) FROM PUBLIC, app_user;
+GRANT EXECUTE ON FUNCTION app.sync_fleet_reminders(uuid) TO app_service;
+
 -- ========================================================= OCR RECEIPTS ==
 -- Receipts are admin-only for UPDATE (protected table); OCR results are written
 -- through this function, which lets the uploader (or an admin) record the
@@ -2635,7 +2827,8 @@ INSERT INTO app.tenant_refs VALUES
   ('asset_handovers',         'cardId',             'cards',              false),
   ('staff_evaluations',       'evaluatorId',        'memberships',        false),
   ('staff_trainings',         'recordedById',       'memberships',        false),
-  ('staff_trainings',         'certificateAttachmentId', 'attachments',   false)
+  ('staff_trainings',         'certificateAttachmentId', 'attachments',   false),
+  ('odometer_readings',       'recordedById',       'memberships',        false)
 ON CONFLICT DO NOTHING;
 
 DO $$

@@ -21,12 +21,20 @@
       "document": "নথির মেয়াদ শেষ হচ্ছে",
       "medical": "বার্ষিক মেডিকেল চেকআপ",
       "training": "প্রশিক্ষণ নবায়ন",
-      "handover": "জিনিস ফেরত"
+      "handover": "জিনিস ফেরত",
+      "vehicle": "গাড়ির নথির মেয়াদ শেষ হচ্ছে",
+      "service": "গাড়ির সার্ভিস",
+      "serviceKm": "গাড়ির সার্ভিস",
+      "salary": "আপনার বেতন নিশ্চিত করুন"
     },
     "document": "{days, plural, =0 {{name}-এর {item}-এর মেয়াদ শেষ হয়ে গেছে} one {{name}-এর {item}-এর মেয়াদ # দিনের মধ্যে শেষ হবে} other {{name}-এর {item}-এর মেয়াদ # দিনের মধ্যে শেষ হবে}}",
     "medical": "{days, plural, =0 {{name}-এর বার্ষিক মেডিকেল চেকআপ বাকি পড়েছে} one {{name}-এর বার্ষিক মেডিকেল চেকআপ # দিনের মধ্যে করতে হবে} other {{name}-এর বার্ষিক মেডিকেল চেকআপ # দিনের মধ্যে করতে হবে}}",
     "training": "{days, plural, =0 {{name}-এর {item} প্রশিক্ষণের মেয়াদ শেষ হয়ে গেছে} one {{name}-এর {item} প্রশিক্ষণের মেয়াদ # দিনের মধ্যে শেষ হবে} other {{name}-এর {item} প্রশিক্ষণের মেয়াদ # দিনের মধ্যে শেষ হবে}}",
     "handover": "{days, plural, =0 {{name}-এর কাছ থেকে {item} ফেরতের সময় পেরিয়ে গেছে} one {{name}-কে # দিনের মধ্যে {item} ফেরত দিতে হবে} other {{name}-কে # দিনের মধ্যে {item} ফেরত দিতে হবে}}",
+    "vehicle": "{days, plural, =0 {{name}-এর {item}-এর মেয়াদ শেষ} one {{name}-এর {item}-এর মেয়াদ # দিনে শেষ হবে} other {{name}-এর {item}-এর মেয়াদ # দিনে শেষ হবে}}",
+    "service": "{days, plural, =0 {{name}-এর {item} বিলম্বিত} one {{name}-এর {item} # দিনে বাকি} other {{name}-এর {item} # দিনে বাকি}}",
+    "serviceKm": "{name}-এর {item} {km, number} কিমি-তে বাকি",
+    "salary": "{period}-এর আপনার বেতন ({amount}) নথিভুক্ত হয়েছে। অনুগ্রহ করে প্রাপ্তি নিশ্চিত করুন বা সমস্যা জানান।",
     "item": {
       "IQAMA": "ইকামা",
       "PASSPORT": "পাসপোর্ট",
@@ -50,7 +58,18 @@
       "DEFENSIVE_DRIVING": "নিরাপদ ড্রাইভিং",
       "HOUSEHOLD_POLICY": "গৃহস্থালির নীতি",
       "EQUIPMENT_SAFETY": "সরঞ্জাম নিরাপত্তা",
-      "TRAINING": "নিরাপত্তা"
+      "TRAINING": "নিরাপত্তা",
+      "REGISTRATION": "নিবন্ধন (ইস্তিমারা)",
+      "INSURANCE": "বীমা",
+      "INSPECTION": "পর্যায়ক্রমিক পরিদর্শন (ফাহাস)",
+      "OIL_CHANGE": "তেল পরিবর্তন",
+      "TIRES": "টায়ার সার্ভিস",
+      "BRAKES": "ব্রেক সার্ভিস",
+      "BATTERY": "ব্যাটারি পরীক্ষা",
+      "REPAIR": "মেরামত",
+      "BODYWORK": "বডিওয়ার্ক",
+      "CLEANING": "পরিষ্কার",
+      "OTHER": "সার্ভিস"
     }
   },
   "pulse": {
@@ -68,6 +87,9 @@
     "floatsLow": "{count, plural, one {# খুচরা তহবিলে ব্যালেন্স কম} other {# খুচরা তহবিলে ব্যালেন্স কম}}",
     "fundingToMatch": "{count, plural, one {মেলানোর জন্য # মালিকের তহবিল} other {মেলানোর জন্য # মালিকের তহবিল}}",
     "medicalDueSoon": "{count, plural, one {৩০ দিনের মধ্যে # মেডিকেল চেকআপ} other {৩০ দিনের মধ্যে # মেডিকেল চেকআপ}}",
-    "payrollNotStarted": "এই মাসের বেতন এখনও শুরু হয়নি"
+    "payrollNotStarted": "এই মাসের বেতন এখনও শুরু হয়নি",
+    "vehicleDocsDue": "{count, plural, one {# গাড়ির নথির মেয়াদ শেষ বা ১৫ দিনে শেষ হবে} other {# গাড়ির নথির মেয়াদ শেষ বা ১৫ দিনে শেষ হবে}}",
+    "vehicleServiceOverdue": "{count, plural, one {# গাড়ির সার্ভিস বিলম্বিত} other {# গাড়ির সার্ভিস বিলম্বিত}}",
+    "fuelFlagged": "{count, plural, one {# জ্বালানি ভরাট চিহ্নিত} other {# জ্বালানি ভরাট চিহ্নিত}}"
   }
 }

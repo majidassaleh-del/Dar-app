@@ -31,11 +31,12 @@ export class PulseController {
       const prev = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
       const monthEnd = new Date(Date.UTC(y, m, 0));
 
-      const [payroll, documents, medical, workOrders, approvals, petty, budgets, funding, handovers, disputes, remindersToday] = await Promise.all([
+      const [payroll, documents, medical, workOrders, approvals, petty, budgets, funding, handovers, disputes, remindersToday, fleet] = await Promise.all([
         this.payroll(tx, y, m, prev, monthEnd, today), this.documents(tx, ctx), this.medical(tx, ctx, today), this.workOrders(tx),
         this.approvals(tx, ctx), this.pettyCash(tx), this.budgetAlerts(tx, ctx, today), this.funding(tx), this.handovers(tx),
         tx.salaryPayment.count({ where: { status: 'DISPUTED' } }),
         tx.reminder.count({ where: { status: 'PENDING', remindAt: { lte: new Date() } } }),
+        this.fleet(tx, today),
       ]);
 
       const attention: Attention[] = [];
@@ -53,14 +54,28 @@ export class PulseController {
       add(petty.lowBalance.length, 'info', 'pulse.floatsLow', 'herp://petty-cash');
       add(funding.openItems, 'info', 'pulse.fundingToMatch', 'herp://funding-clearing');
       add(medical.dueSoon, 'info', 'pulse.medicalDueSoon', 'herp://compliance/staff');
+      add(fleet.documentsDue, 'warning', 'pulse.vehicleDocsDue', 'herp://fleet/overview');
+      add(fleet.servicesOverdue, 'warning', 'pulse.vehicleServiceOverdue', 'herp://fleet/overview');
+      add(fleet.fuelFlagged, 'warning', 'pulse.fuelFlagged', 'herp://fleet/overview');
       if (payroll.currentMonth.status === 'NONE' && payroll.currentMonth.daysUntilDue <= 5) attention.push({ severity: 'warning', key: 'pulse.payrollNotStarted', count: 1, deepLink: 'herp://payroll-runs' });
       const rank = { critical: 0, warning: 1, info: 2 } as const;
       attention.sort((a, b) => rank[a.severity] - rank[b.severity] || b.count - a.count);
 
       return { generatedAt: new Date().toISOString(), today: isoDate(today), attention, payroll, documents, medical, workOrders, approvals, pettyCash: petty,
                budgets: { alerts: budgets.filter((b) => b.alert).length, over: budgets.filter((b) => b.overBudget).length, items: budgets.filter((b) => b.alert) },
-               fundingClearing: funding, handovers, salaryDisputes: disputes, remindersDueNow: remindersToday };
+               fundingClearing: funding, handovers, salaryDisputes: disputes, remindersDueNow: remindersToday, fleet };
     });
+  }
+
+  private async fleet(tx: Tx, today: Date) {
+    const soon = new Date(today.getTime() + 15 * 86_400_000);
+    const vehicles = await tx.vehicle.findMany({ where: { deletedAt: null, status: { notIn: ['SOLD', 'OUT_OF_SERVICE'] } },
+      select: { odometerKm: true, registrationExpiry: true, insuranceExpiry: true, inspectionExpiry: true,
+                plans: { where: { isActive: true }, select: { nextDueKm: true, nextDueDate: true } } } });
+    const documentsDue = vehicles.flatMap((v) => [v.registrationExpiry, v.insuranceExpiry, v.inspectionExpiry]).filter((x) => x && x <= soon).length;
+    const servicesOverdue = vehicles.flatMap((v) => v.plans.filter((p) => (p.nextDueDate && p.nextDueDate < today) || (p.nextDueKm != null && v.odometerKm > p.nextDueKm))).length;
+    const fuelFlagged = await tx.fuelLog.count({ where: { flagged: true, filledAt: { gte: new Date(Date.now() - 30 * 86_400_000) } } });
+    return { vehicles: vehicles.length, documentsDue, servicesOverdue, fuelFlagged };
   }
 
   private async payroll(tx: Tx, y: number, m: number, prev: { y: number; m: number }, monthEnd: Date, today: Date) {

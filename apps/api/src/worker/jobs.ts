@@ -25,6 +25,14 @@ export async function syncStaffComplianceReminders(db: ServiceDb, householdId?: 
   return r ?? { inserted: 0, removed: 0 };
 }
 
+/** Istimara / insurance / Fahas expiries and preventive maintenance (date and km). Idempotent. */
+export async function syncFleetReminders(db: ServiceDb, householdId?: string) {
+  const [r] = await db.run((tx) => householdId
+    ? tx.$queryRaw<Array<{ inserted: number; removed: number }>>`SELECT * FROM app.sync_fleet_reminders(${householdId}::uuid)`
+    : tx.$queryRaw<Array<{ inserted: number; removed: number }>>`SELECT * FROM app.sync_fleet_reminders()`);
+  return r ?? { inserted: 0, removed: 0 };
+}
+
 export async function syncDocumentReminders(db: ServiceDb, householdId?: string) {
   const [r] = await db.run((tx) => householdId
     ? tx.$queryRaw<Array<{ inserted: number; removed: number }>>`SELECT * FROM app.sync_document_reminders(${householdId}::uuid)`

@@ -10,7 +10,7 @@ const DAY = 86_400_000;
 const MAX_ATTEMPTS = 5;
 
 /** What a reminder is about, from its entity (all reads inside the reminder's household). */
-async function describe(tx: Tx, r: { householdId: string; entityType: string; entityId: string }) {
+async function describe(tx: Tx, r: { householdId: string; entityType: string; entityId: string; titleI18n: Prisma.JsonValue }) {
   const staffName = (s: { fullNameI18n: Prisma.JsonValue } | null | undefined) => (s?.fullNameI18n ?? {}) as I18nText;
   switch (r.entityType) {
     case 'STAFF_DOCUMENT': {
@@ -28,6 +28,23 @@ async function describe(tx: Tx, r: { householdId: string; entityType: string; en
     case 'ASSET_HANDOVER': {
       const h = await tx.assetHandover.findFirst({ where: { id: r.entityId, householdId: r.householdId }, include: { staff: { select: { fullNameI18n: true } } } });
       return h && { kind: 'handover' as ReminderKind, itemKey: h.itemType, name: staffName(h.staff), deepLink: `herp://staff/${h.staffId}/handovers` };
+    }
+    case 'VEHICLE': {
+      const v = await tx.vehicle.findFirst({ where: { id: r.entityId, householdId: r.householdId } });
+      const doc = (r.titleI18n as { doc?: string }).doc ?? 'REGISTRATION';
+      return v && { kind: 'vehicle' as ReminderKind, itemKey: doc, name: v.plateNumber, deepLink: `herp://vehicles/${v.id}` };
+    }
+    case 'MAINTENANCE_PLAN': {
+      const p = await tx.maintenancePlan.findFirst({ where: { id: r.entityId, householdId: r.householdId }, include: { vehicle: { select: { plateNumber: true } } } });
+      const byKm = (r.titleI18n as { basis?: string }).basis === 'km';
+      return p && { kind: (byKm ? 'serviceKm' : 'service') as ReminderKind, itemKey: p.type, name: p.vehicle.plateNumber, km: p.nextDueKm ?? 0,
+                    deepLink: `herp://vehicles/${p.vehicleId}/maintenance` };
+    }
+    case 'SALARY_PAYMENT': {
+      const sp = await tx.salaryPayment.findFirst({ where: { id: r.entityId, householdId: r.householdId } });
+      if (!sp || sp.status !== 'RECORDED') return null; // already acknowledged / disputed / reversed: nothing to ask
+      return { kind: 'salary' as ReminderKind, itemKey: 'SALARY', name: '', period: `${sp.periodYear}-${String(sp.periodMonth).padStart(2, '0')}`,
+               amount: `${Number(sp.amount).toFixed(2)} ${sp.currency}`, deepLink: `herp://salary-payments/${sp.id}/acknowledge` };
     }
     default: return null;
   }
@@ -56,8 +73,9 @@ export async function dispatchNotifications(db: ServiceDb, sender: ChannelSender
       const days = Math.ceil((r.dueAt.getTime() - now.getTime()) / DAY);
       for (const m of recipients) {
         const locale = m.user.preferredLocale as Locale;
-        const name = about ? resolveI18n(about.name, { locale }).text : '';
-        const text = about ? await renderReminder(locale, about.kind, { name, itemKey: about.itemKey, days })
+        const name = about ? (typeof about.name === 'string' ? about.name : resolveI18n(about.name, { locale }).text) : '';
+        const text = about ? await renderReminder(locale, about.kind, { name, itemKey: about.itemKey, days, km: 'km' in about ? about.km : undefined,
+            period: 'period' in about ? about.period : undefined, amount: 'amount' in about ? about.amount : undefined })
                            : { title: resolveI18n(r.titleI18n as I18nText, { locale }).text, body: resolveI18n(r.titleI18n as I18nText, { locale }).text, item: '' };
         const dueLocal = new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SA-u-nu-latn' : locale, { dateStyle: 'medium', timeZone: 'Asia/Riyadh' }).format(r.dueAt);
         const data = { reminderId: r.id, kind: about?.kind ?? 'reminder', entityType: r.entityType, entityId: r.entityId, deepLink: about?.deepLink ?? 'herp://reminders' };
@@ -67,7 +85,10 @@ export async function dispatchNotifications(db: ServiceDb, sender: ChannelSender
             if (!m.user.phone) skip = 'user has no phone number';
             else if (!about) skip = 'no WhatsApp template for this reminder kind';
             else payload = whatsappTemplate(m.user.phone, WHATSAPP_TEMPLATE[about.kind], WHATSAPP_LANG[locale],
-              about.kind === 'medical' ? [name, dueLocal] : [name, text.item, dueLocal]);
+              about.kind === 'medical' ? [name, dueLocal]
+                : about.kind === 'serviceKm' ? [name, text.item, String('km' in about ? about.km : '')]
+                : about.kind === 'salary' ? ['period' in about ? about.period! : '', 'amount' in about ? about.amount! : '']
+                : [name, text.item, dueLocal]);
           } else if (channel === 'PUSH') {
             if (!m.user.devices.length) skip = 'no registered device';
             else payload = m.user.devices.map((d) => fcmMessage(d.pushToken, text.title, text.body, data));

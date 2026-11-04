@@ -1,13 +1,14 @@
 import { IntlMessageFormat } from 'intl-messageformat';
 import { loadMessages, localeMeta, type Locale } from '@herp/i18n';
 
-export type ReminderKind = 'document' | 'medical' | 'training' | 'handover';
+export type ReminderKind = 'document' | 'medical' | 'training' | 'handover' | 'vehicle' | 'service' | 'serviceKm' | 'salary';
 
 /** Render a reminder in the recipient's language from the shared ICU catalogue. */
-export async function renderReminder(locale: Locale, kind: ReminderKind, p: { name: string; itemKey: string; days: number }) {
+export async function renderReminder(locale: Locale, kind: ReminderKind, p: { name: string; itemKey: string; days: number; km?: number; period?: string; amount?: string }) {
   const m = (await loadMessages(locale)) as unknown as { notify: { title: Record<ReminderKind, string>; item: Record<string, string> } & Record<ReminderKind, string> };
   const item = m.notify.item[p.itemKey] ?? m.notify.item[kind === 'document' ? 'DOCUMENT' : kind === 'training' ? 'TRAINING' : 'ITEM'] ?? p.itemKey;
-  const body = new IntlMessageFormat(m.notify[kind], localeMeta[locale].intlTag).format({ name: p.name, item, days: Math.max(0, p.days) }) as string;
+  const body = new IntlMessageFormat(m.notify[kind], localeMeta[locale].intlTag).format({ name: p.name, item, days: Math.max(0, p.days), km: p.km ?? 0,
+    period: p.period ?? '', amount: p.amount ?? '' }) as string;
   return { title: m.notify.title[kind], body, item };
 }
 
@@ -20,4 +21,5 @@ export async function renderReminder(locale: Locale, kind: ReminderKind, p: { na
 export const WHATSAPP_LANG: Record<Locale, string> = { ar: 'ar', en: 'en_US', hi: 'hi', tl: 'fil', bn: 'bn', am: 'en_US' };
 export const WHATSAPP_TEMPLATE: Record<ReminderKind, string> = {
   document: 'herp_document_expiry', medical: 'herp_medical_due', training: 'herp_training_due', handover: 'herp_item_return',
+  vehicle: 'herp_vehicle_document', service: 'herp_vehicle_service', serviceKm: 'herp_vehicle_service_km', salary: 'herp_salary_acknowledge',
 };

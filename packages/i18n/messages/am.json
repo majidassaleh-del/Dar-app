@@ -21,12 +21,20 @@
       "document": "የሰነድ ማብቂያ",
       "medical": "ዓመታዊ የሕክምና ምርመራ",
       "training": "የሥልጠና እድሳት",
-      "handover": "የእቃ መመለሻ"
+      "handover": "የእቃ መመለሻ",
+      "vehicle": "የተሽከርካሪ ሰነድ ጊዜው እያለቀ ነው",
+      "service": "የተሽከርካሪ አገልግሎት",
+      "serviceKm": "የተሽከርካሪ አገልግሎት",
+      "salary": "ደመወዝዎን ያረጋግጡ"
     },
     "document": "{days, plural, =0 {የ{name} {item} ጊዜው አልፏል} one {የ{name} {item} በ# ቀን ውስጥ ያበቃል} other {የ{name} {item} በ# ቀናት ውስጥ ያበቃል}}",
     "medical": "{days, plural, =0 {የ{name} ዓመታዊ የሕክምና ምርመራ ዘግይቷል} one {የ{name} ዓመታዊ የሕክምና ምርመራ በ# ቀን ውስጥ ይጠበቃል} other {የ{name} ዓመታዊ የሕክምና ምርመራ በ# ቀናት ውስጥ ይጠበቃል}}",
     "training": "{days, plural, =0 {የ{name} የ{item} ሥልጠና ጊዜው አልፏል} one {የ{name} የ{item} ሥልጠና በ# ቀን ውስጥ ያበቃል} other {የ{name} የ{item} ሥልጠና በ# ቀናት ውስጥ ያበቃል}}",
     "handover": "{days, plural, =0 {{name} {item} የመመለሻ ጊዜው አልፏል} one {{name} {item} በ# ቀን ውስጥ መመለስ አለበት} other {{name} {item} በ# ቀናት ውስጥ መመለስ አለበት}}",
+    "vehicle": "{days, plural, =0 {የ{name} {item} ጊዜው አልፏል} one {የ{name} {item} በ# ቀን ውስጥ ጊዜው ያልፋል} other {የ{name} {item} በ# ቀናት ውስጥ ጊዜው ያልፋል}}",
+    "service": "{days, plural, =0 {የ{name} {item} ዘግይቷል} one {የ{name} {item} በ# ቀን ውስጥ ይደርሳል} other {የ{name} {item} በ# ቀናት ውስጥ ይደርሳል}}",
+    "serviceKm": "የ{name} {item} በ{km, number} ኪ.ሜ ይደርሳል",
+    "salary": "የ{period} ደመወዝዎ ({amount}) ተመዝግቧል። እባክዎ መቀበልዎን ያረጋግጡ ወይም ችግር ካለ ያሳውቁ።",
     "item": {
       "IQAMA": "ኢቃማ",
       "PASSPORT": "ፓስፖርት",
@@ -50,7 +58,18 @@
       "DEFENSIVE_DRIVING": "ጥንቃቄ የተሞላበት አነዳድ",
       "HOUSEHOLD_POLICY": "የቤት መመሪያ",
       "EQUIPMENT_SAFETY": "የመሣሪያ ደኅንነት",
-      "TRAINING": "ደኅንነት"
+      "TRAINING": "ደኅንነት",
+      "REGISTRATION": "ምዝገባ (ኢስቲማራ)",
+      "INSURANCE": "ኢንሹራንስ",
+      "INSPECTION": "ወቅታዊ ምርመራ (ፋሐስ)",
+      "OIL_CHANGE": "ዘይት መቀየር",
+      "TIRES": "የጎማ አገልግሎት",
+      "BRAKES": "የፍሬን አገልግሎት",
+      "BATTERY": "የባትሪ ፍተሻ",
+      "REPAIR": "ጥገና",
+      "BODYWORK": "የአካል ጥገና",
+      "CLEANING": "ጽዳት",
+      "OTHER": "አገልግሎት"
     }
   },
   "pulse": {
@@ -68,6 +87,9 @@
     "floatsLow": "{count, plural, one {# የጥቃቅን ገንዘብ ቀሪ ዝቅተኛ ነው} other {# የጥቃቅን ገንዘብ ቀሪዎች ዝቅተኛ ናቸው}}",
     "fundingToMatch": "{count, plural, one {የሚዛመድ # የባለቤት ገንዘብ} other {የሚዛመዱ # የባለቤት ገንዘቦች}}",
     "medicalDueSoon": "{count, plural, one {በ30 ቀናት ውስጥ # የሕክምና ምርመራ} other {በ30 ቀናት ውስጥ # የሕክምና ምርመራዎች}}",
-    "payrollNotStarted": "የዚህ ወር ደመወዝ ገና አልተጀመረም"
+    "payrollNotStarted": "የዚህ ወር ደመወዝ ገና አልተጀመረም",
+    "vehicleDocsDue": "{count, plural, one {# የተሽከርካሪ ሰነድ ጊዜው አልፏል ወይም በ15 ቀናት ውስጥ ያልፋል} other {# የተሽከርካሪ ሰነዶች ጊዜያቸው አልፏል ወይም በ15 ቀናት ውስጥ ያልፋል}}",
+    "vehicleServiceOverdue": "{count, plural, one {# የተሽከርካሪ አገልግሎት ዘግይቷል} other {# የተሽከርካሪ አገልግሎቶች ዘግይተዋል}}",
+    "fuelFlagged": "{count, plural, one {# የነዳጅ ሙሌት ተጠቁሟል} other {# የነዳጅ ሙሌቶች ተጠቁመዋል}}"
   }
 }
