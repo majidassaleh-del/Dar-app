@@ -5,6 +5,7 @@ import { CategoriesController } from './categories.controller';
 import { TransactionsController } from './transactions.controller';
 import { BudgetsController } from './budgets.controller';
 import { RecurringController } from './recurring.controller';
+import { StatementsController } from './statements.controller';
 
-@Module({ controllers: [AccountsController, CardsController, CategoriesController, TransactionsController, BudgetsController, RecurringController] })
+@Module({ controllers: [AccountsController, CardsController, CategoriesController, TransactionsController, BudgetsController, RecurringController, StatementsController] })
 export class BankingModule {}

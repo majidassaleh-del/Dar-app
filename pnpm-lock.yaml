@@ -29,6 +29,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@herp/bank-statements':
+        specifier: workspace:*
+        version: link:../../packages/bank-statements
       '@herp/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
@@ -130,6 +133,18 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  packages/bank-statements:
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.20.5)(jiti@2.7.0)
 
   packages/crypto:
     dependencies:

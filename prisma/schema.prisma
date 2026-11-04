@@ -547,6 +547,8 @@ model Household {
   journalEntries        JournalEntry[]
   journalLines          JournalLine[]
   fundingMatches        FundingMatch[]
+  statementImports      BankStatementImport[]
+  statementLines        BankStatementLine[]
   policies              Policy[]
   codesOfEthics         CodeOfEthics[]
   privacyAgreements     PrivacyAgreement[]
@@ -991,13 +993,15 @@ model FinancialAccount {
   createdAt      DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime             @updatedAt @db.Timestamptz(6)
 
-  household     Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  custodian     Membership?       @relation("AccountCustodian", fields: [custodianId], references: [id], onDelete: SetNull)
-  cards         Card[]
-  transactions  Transaction[]     @relation("TxnAccount")
-  transfersIn   Transaction[]     @relation("TxnCounterAccount")
-  pettyCash     PettyCashAccount?
-  ledgerAccount LedgerAccount?
+  household        Household             @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  custodian        Membership?           @relation("AccountCustodian", fields: [custodianId], references: [id], onDelete: SetNull)
+  cards            Card[]
+  transactions     Transaction[]         @relation("TxnAccount")
+  transfersIn      Transaction[]         @relation("TxnCounterAccount")
+  pettyCash        PettyCashAccount?
+  ledgerAccount    LedgerAccount?
+  statementImports BankStatementImport[]
+  statementLines   BankStatementLine[]
 
   @@index([householdId, type])
   @@map("financial_accounts")
@@ -1110,6 +1114,7 @@ model Transaction {
   fuelLog        FuelLog?
   fundingMatches FundingMatch[]
   recurringRule  RecurringRule?     @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  statementLine  BankStatementLine?
   rentPayment    RentPayment?
   utilityBill    UtilityBill?
   pettyCashLog   PettyCashLog?
@@ -2353,6 +2358,78 @@ model JournalLine {
   @@index([householdId, ledgerAccountId])
   @@index([staffId])
   @@map("journal_lines")
+}
+
+enum StatementFormat {
+  CSV
+  OFX
+}
+
+enum StatementImportStatus {
+  PARSED // lines stored and matched; nothing created yet
+  APPLIED // unmatched lines turned into transactions, matched ones reconciled
+}
+
+enum StatementLineStatus {
+  UNMATCHED
+  MATCHED // paired with an existing transaction
+  CREATED // a transaction was created from it
+  IGNORED // user chose to skip it (duplicate, internal transfer…)
+}
+
+/// One uploaded bank statement file. The same file (sha256) cannot be imported twice per account.
+model BankStatementImport {
+  id             String                @id @default(uuid()) @db.Uuid
+  householdId    String                @db.Uuid
+  accountId      String                @db.Uuid
+  format         StatementFormat
+  fileName       String
+  sha256         String                @db.Char(64)
+  periodStart    DateTime?             @db.Date
+  periodEnd      DateTime?             @db.Date
+  openingBalance Decimal?              @db.Decimal(18, 2)
+  closingBalance Decimal?              @db.Decimal(18, 2)
+  status         StatementImportStatus @default(PARSED)
+  warnings       Json                  @default("[]")
+  importedById   String                @db.Uuid
+  appliedAt      DateTime?             @db.Timestamptz(6)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(6)
+
+  household Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  account   FinancialAccount    @relation(fields: [accountId], references: [id])
+  lines     BankStatementLine[]
+
+  @@unique([accountId, sha256])
+  @@index([householdId, accountId])
+  @@map("bank_statement_imports")
+}
+
+model BankStatementLine {
+  id            String              @id @default(uuid()) @db.Uuid
+  householdId   String              @db.Uuid
+  importId      String              @db.Uuid
+  accountId     String              @db.Uuid
+  lineNo        Int
+  bookedOn      DateTime            @db.Date
+  /// Signed from the account's view: money in > 0, out < 0.
+  amount        Decimal             @db.Decimal(18, 2)
+  description   String
+  reference     String? // bank id (OFX FITID / CSV ref); becomes the created transaction's externalRef
+  balance       Decimal?            @db.Decimal(18, 2)
+  /// Dedupe across overlapping statements: reference, else date|amount|description|occurrence.
+  fingerprint   String
+  status        StatementLineStatus @default(UNMATCHED)
+  transactionId String?             @unique @db.Uuid
+  matchScore    Int?
+
+  household   Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  import      BankStatementImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  account     FinancialAccount    @relation(fields: [accountId], references: [id])
+  transaction Transaction?        @relation(fields: [transactionId], references: [id])
+
+  @@unique([accountId, fingerprint])
+  @@index([importId, status])
+  @@map("bank_statement_lines")
 }
 
 /// Reconciliation of 1190 Owner funding clearing: links a funding bank

@@ -28,6 +28,7 @@ const Spend = z.object({
 const Simple = z.object({ amount, description: z.string().trim().min(1).max(300).optional() }).strict();
 const Adjust = z.object({ amount: z.number().refine((n) => n !== 0, 'non-zero').refine((n) => Math.abs(n) <= 1_000_000), reason: z.string().trim().min(3).max(300) }).strict();
 const Review = z.object({ decision: z.enum(['APPROVED', 'REJECTED']), categoryId: z.guid().optional() }).strict();
+const FundFromBank = z.object({ accountId: z.guid(), amount, description: z.string().trim().max(200).optional() }).strict();
 const Reconcile = z.object({ countedCash: z.number().min(0).max(1_000_000), note: z.string().max(300).optional() }).strict();
 const LogQuery = z.object({ status: z.enum(['PENDING_REVIEW', 'APPROVED', 'REJECTED']).optional(), type: z.enum(['TOP_UP', 'EXPENSE', 'RETURN', 'ADJUSTMENT']).optional() });
 
@@ -108,6 +109,29 @@ export class PettyCashController {
   @Post(':id/adjustments')
   adjust(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodBody(Adjust)) b: z.infer<typeof Adjust>) {
     return this.log(ctx, id, 'ADJUSTMENT', b.amount, b.reason);
+  }
+
+  /**
+   * One-touch: move money from a bank account into this float. In ONE transaction:
+   * a funding bank transaction (Dr 1190 / Cr bank), the petty-cash TOP_UP
+   * (Dr float / Cr 1190), and the funding match between them, so the
+   * clearing account nets to zero immediately (nothing left to reconcile by hand).
+   */
+  @Post(':id/fund-from-bank')
+  fundFromBank(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodBody(FundFromBank)) b: z.infer<typeof FundFromBank>) {
+    return this.db.withRls(ctx, async (tx) => {
+      const a = await this.find(tx, id);
+      const floatName = resolveI18n(a.nameI18n as I18nText, { locale: ctx.locale }).text;
+      const bank = await tx.transaction.create({ data: { householdId: ctx.householdId!, accountId: b.accountId, type: 'TRANSFER', isFunding: true,
+        amount: b.amount, baseAmount: b.amount, currency: a.currency, occurredAt: new Date(), createdById: ctx.membershipId!,
+        merchantName: `Petty cash top-up: ${floatName}`.slice(0, 120), descriptionI18n: { [ctx.locale]: b.description ?? `Petty cash top-up: ${floatName}` } } });
+      const log = await tx.pettyCashLog.create({ data: { householdId: ctx.householdId!, accountId: id, type: 'TOP_UP', amount: b.amount,
+        descriptionI18n: { [ctx.locale]: b.description ?? 'Top-up from bank' }, originalLocale: ctx.locale, recordedById: ctx.membershipId! } });
+      const entry = await tx.journalEntry.findFirst({ where: { source: 'PETTY_CASH', sourceId: log.id }, select: { id: true } });
+      if (!entry) throw new NotFoundException('top-up was not posted to the ledger');
+      await tx.fundingMatch.create({ data: { householdId: ctx.householdId!, transactionId: bank.id, journalEntryId: entry.id, amount: b.amount, matchedById: ctx.membershipId! } });
+      return { float: floatDto(await this.find(tx, id), ctx.locale), entry: logDto(log, ctx.locale), bankTransactionId: bank.id, fundingMatched: b.amount.toFixed(2) };
+    });
   }
 
   /** Count the cash in hand; any variance becomes a signed ADJUSTMENT so the books match the box. */

@@ -1855,7 +1855,7 @@ BEGIN
   v_manager := COALESCE(app.perm_scope('finance.accounts.manage') = 'ALL', false);
   v_me := app.current_membership_id();
   IF TG_OP = 'INSERT' THEN
-    IF NEW.source NOT IN ('MANUAL', 'RECEIPT_OCR') OR NEW."recurringRuleId" IS NOT NULL THEN
+    IF NOT (NEW.source IN ('MANUAL', 'RECEIPT_OCR') OR (NEW.source = 'BANK_FEED' AND v_manager)) OR NEW."recurringRuleId" IS NOT NULL THEN
       RAISE EXCEPTION 'source % is reserved for system jobs', NEW.source USING ERRCODE = 'insufficient_privilege';
     END IF;
     IF NEW."isFunding" AND NOT v_manager THEN
@@ -2080,6 +2080,65 @@ BEGIN
 END $$;
 CREATE TRIGGER recurring_rules_0_template BEFORE INSERT OR UPDATE OF template ON recurring_rules FOR EACH ROW EXECUTE FUNCTION app.validate_recurring_template();
 
+-- ============================================== BANK STATEMENT IMPORT ==
+CREATE POLICY bsi_read ON bank_statement_imports AS RESTRICTIVE FOR SELECT TO app_user
+  USING ((SELECT app.perm_scope('finance.accounts.read')) = 'ALL');
+CREATE POLICY bsi_ins ON bank_statement_imports AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('finance.accounts.manage')) = 'ALL' AND "importedById" = app.current_membership_id());
+CREATE POLICY bsi_upd ON bank_statement_imports AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('finance.accounts.manage')) = 'ALL');
+CREATE POLICY bsi_del ON bank_statement_imports AS RESTRICTIVE FOR DELETE TO app_user
+  USING ((SELECT app.perm_scope('finance.accounts.manage')) = 'ALL' AND status = 'PARSED');
+REVOKE UPDATE ON bank_statement_imports FROM app_user;
+GRANT UPDATE (status, "appliedAt") ON bank_statement_imports TO app_user;
+
+CREATE POLICY bsl_read ON bank_statement_lines AS RESTRICTIVE FOR SELECT TO app_user
+  USING ((SELECT app.perm_scope('finance.accounts.read')) = 'ALL');
+CREATE POLICY bsl_ins ON bank_statement_lines AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('finance.accounts.manage')) = 'ALL');
+CREATE POLICY bsl_upd ON bank_statement_lines AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('finance.accounts.manage')) = 'ALL');
+CREATE POLICY bsl_del ON bank_statement_lines AS RESTRICTIVE FOR DELETE TO app_user
+  USING ((SELECT app.perm_scope('finance.accounts.manage')) = 'ALL' AND status = 'UNMATCHED');
+REVOKE UPDATE ON bank_statement_lines FROM app_user;
+GRANT UPDATE (status, "transactionId", "matchScore") ON bank_statement_lines TO app_user;
+
+-- A line can only point at a transaction on ITS account whose effect equals the line amount;
+-- once MATCHED/CREATED the link is permanent (the transaction is RECONCILED from the statement).
+CREATE OR REPLACE FUNCTION app.validate_statement_line() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE t transactions; v_delta numeric; v_imp bank_statement_imports;
+BEGIN
+  SELECT * INTO v_imp FROM bank_statement_imports WHERE id = NEW."importId";
+  IF v_imp."accountId" <> NEW."accountId" THEN
+    RAISE EXCEPTION 'statement line account differs from its import' USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'UPDATE' THEN
+    -- A wrong auto-match can be undone before applying; a CREATED line is final.
+    IF OLD.status = 'CREATED' AND (NEW.status, NEW."transactionId") IS DISTINCT FROM (OLD.status, OLD."transactionId") THEN
+      RAISE EXCEPTION 'line % already created a transaction', OLD."lineNo" USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_imp.status = 'APPLIED' AND NEW.status IS DISTINCT FROM OLD.status THEN
+      RAISE EXCEPTION 'statement already applied' USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF (NEW.status IN ('MATCHED', 'CREATED')) <> (NEW."transactionId" IS NOT NULL) THEN
+    RAISE EXCEPTION 'MATCHED/CREATED lines need a transaction (and only they)' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."transactionId" IS NOT NULL THEN
+    SELECT * INTO t FROM transactions WHERE id = NEW."transactionId";
+    IF t.status = 'REVERSED' THEN RAISE EXCEPTION 'cannot match a reversed transaction' USING ERRCODE = 'check_violation'; END IF;
+    v_delta := CASE WHEN t."counterAccountId" = NEW."accountId" THEN t.amount
+                    WHEN t."accountId" = NEW."accountId" AND t.type IN ('INCOME', 'REFUND') THEN t.amount
+                    WHEN t."accountId" = NEW."accountId" THEN -t.amount END;
+    IF v_delta IS NULL OR v_delta <> NEW.amount THEN
+      RAISE EXCEPTION 'transaction does not match line % (account or amount differs)', NEW."lineNo" USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER bank_statement_lines_0_validate BEFORE INSERT OR UPDATE ON bank_statement_lines FOR EACH ROW EXECUTE FUNCTION app.validate_statement_line();
+
 -- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
 -- Foreign keys prove a referenced row EXISTS, not that it belongs to the same
 -- household. Without this, a request that guessed another household's UUID
@@ -2153,7 +2212,8 @@ INSERT INTO app.tenant_refs VALUES
   ('attachments',             'uploadedById',       'memberships',        false),
   ('journal_entries',         'postedById',         'memberships',        false),
   ('recurring_rules',         'createdById',        'memberships',        false),
-  ('funding_matches',         'matchedById',        'memberships',        false)
+  ('funding_matches',         'matchedById',        'memberships',        false),
+  ('bank_statement_imports',  'importedById',       'memberships',        false)
 ON CONFLICT DO NOTHING;
 
 DO $$

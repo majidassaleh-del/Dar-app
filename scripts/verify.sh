@@ -8,6 +8,7 @@ check() { local name=$1; shift; if "$@" >"$OUT/$name.log" 2>&1; then echo "ok   
 db_suite() { tests/apply.sh >"$OUT/db.txt" 2>&1; ! grep -qE 'FAIL|ERROR' "$OUT/db.txt" && grep -q '^PASS' "$OUT/db.txt"; }
 check prisma-validate env DATABASE_URL=postgresql://x@l/x DIRECT_URL=postgresql://x@l/x npx prisma validate
 check prisma-generate npx prisma generate
+check schema-drift scripts/drift.sh
 check db-suite db_suite
 check packages pnpm -r --filter "./packages/*" test
 check api-typecheck bash -c 'cd apps/api && npx tsc -p . --noEmit'

@@ -149,6 +149,36 @@ Petty-cash top-ups, salary payments and salary advances credit **1190 Owner fund
 
 A matched funding transaction, or a matched clearing entry (such as the salary payment behind it), cannot be reversed until it is unmatched.
 
+### 4.2a Bank statement import (CSV / OFX)
+
+> **Status: implemented.** The parser is `packages/bank-statements` (no dependencies). The API is `apps/api/src/banking/statements.controller.ts`.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/accounts/{id}/statements` | `finance.accounts.manage` | `{ fileName, content, encoding?: utf8\|base64, format?: CSV\|OFX, dateOrder?: DMY\|MDY }`. Parses, stores the lines and auto-matches them. The same file twice → `409`. Lines already imported from an overlapping statement are skipped (`duplicatesSkipped`) |
+| GET | `/accounts/{id}/statements` · `/statements/{id}` | `finance.accounts.read` | Import summary (matched / unmatched / created / ignored) and lines |
+| POST | `/statements/{id}/lines/{lineId}` | `finance.accounts.manage` | `{ action: match, transactionId }` · `{ action: unmatch }` · `{ action: ignore }`. The DB refuses a match on another account or with a different signed amount (`422`) |
+| POST | `/statements/{id}/apply` | `finance.accounts.manage` | Unmatched lines become `BANK_FEED` transactions. Per-line overrides: `categoryId`, `isFunding` (owner funding), or `counterAccountId` (internal transfer). **Every matched or created transaction becomes RECONCILED.** Returns `balanceCheck`: bank closing vs book balance on the last statement day. Final once applied |
+
+**Parser:**
+* CSV headers in Arabic or English, with up to 15 preamble rows. Delimiters `, ; tab |`.
+* Debit/credit columns or a signed amount. Digits in Arabic-Indic or EU decimal format, `(…)`, CR/DR.
+* `dd/mm/yyyy` by default, switching to month-first only when the data proves it.
+* Newest-first exports are re-sorted.
+* Running balances are checked, and the opening and closing balances derived.
+* OFX 1.x SGML and 2.x XML: `STMTTRN`, `FITID`, `LEDGERBAL`, `CURDEF`.
+
+**Matching:** exact signed amount; the bank reference wins, then same day, then ±1 and ±3 days, plus merchant words. One-to-one, greedy by score.
+
+### 4.2b One-touch bank → petty-cash float
+
+`POST /petty-cash/{id}/fund-from-bank { accountId, amount, description? }` runs as a single database transaction:
+* a funding bank transaction (Dr 1190 / Cr bank);
+* the float TOP_UP (Dr float / Cr 1190);
+* the funding match between them.
+
+The clearing account nets to zero immediately. It's all-or-nothing: a top-up over the float limit leaves the bank untouched. It needs `finance.pettycash.manage` and `finance.ledger.manage`.
+
 ### 4.2 Bank statement reconciliation
 
 `POST /accounts/{id}/reconcile { statementBalance, asOf, transactionIds? }` computes the cleared balance: opening + already RECONCILED + selected POSTED up to the end of `asOf` (household time). If it equals the statement, the selection becomes `RECONCILED`. Otherwise nothing changes and the response carries the `difference`.
