@@ -1,0 +1,19 @@
+{
+  "app": { "name": "হাউসহোল্ড ইআরপি", "tagline": "ঘরের সবকিছু, এক জায়গায়" },
+  "nav": { "dashboard": "হোম", "staff": "কর্মী", "finance": "অর্থ", "pettyCash": "নগদ তহবিল", "workOrders": "কাজের আদেশ", "travel": "ভ্রমণ", "policies": "নীতিমালা" },
+  "dashboard": {
+    "greeting": "হ্যালো {name}",
+    "pendingApprovals": "{count, plural, =0 {আপনার অনুমোদনের অপেক্ষায় কোনো অনুরোধ নেই} one {# টি অনুরোধ আপনার অনুমোদনের অপেক্ষায়} other {# টি অনুরোধ আপনার অনুমোদনের অপেক্ষায়}}",
+    "expiringDocuments": "{count, plural, =0 {শীঘ্রই মেয়াদ শেষ হবে এমন কোনো নথি নেই} one {# টি নথির মেয়াদ {days} দিনের মধ্যে শেষ হবে} other {# টি নথির মেয়াদ {days} দিনের মধ্যে শেষ হবে}}",
+    "today": "আজ {date}"
+  },
+  "pettyCash": { "balance": "নগদ ব্যালেন্স: {amount}", "logExpense": "খরচ লিখুন", "pendingReview": "পর্যালোচনার অপেক্ষায়" },
+  "workOrder": {
+    "status": { "NEW": "নতুন", "ASSIGNED": "বরাদ্দ করা হয়েছে", "IN_PROGRESS": "চলছে", "COMPLETED": "সম্পন্ন", "VERIFIED": "যাচাই করা হয়েছে" },
+    "translatedBadge": "{language} থেকে যন্ত্রে অনূদিত",
+    "showOriginal": "মূল লেখা দেখান"
+  },
+  "policy": { "acknowledge": "আমি পড়েছি এবং সম্মত", "acknowledgedOn": "{date} তারিখে স্বীকার করা হয়েছে" },
+  "receipt": { "scanned": "রসিদ স্ক্যান হয়েছে", "zatcaVerified": "বৈধ ZATCA QR", "total": "মোট {amount}" },
+  "common": { "language": "ভাষা", "save": "সংরক্ষণ", "cancel": "বাতিল" }
+}

@@ -1,0 +1,22 @@
+/* Logical properties only (margin-inline-start, padding-inline-end, inset-inline-start …)
+   so the same stylesheet works for RTL Arabic and LTR languages. */
+:root {
+  --bg: #f7f5f2; --fg: #1d1b18; --muted: #6b655c; --card: #ffffff; --line: #e6e1d9; --accent: #0f6b5c;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151412; --fg: #f1ede6; --muted: #a39b8f; --card: #1f1d1a; --line: #2f2c27; --accent: #4fc2ab; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-stack); line-height: 1.6; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+         padding-block: 1rem; padding-inline: 1.25rem; border-block-end: 1px solid var(--line); }
+main { max-width: 64rem; margin-inline: auto; padding: 1.25rem; display: grid; gap: 1rem; }
+nav ul { display: flex; flex-wrap: wrap; gap: .25rem 1rem; list-style: none; margin: 0; padding: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: .75rem; padding: 1rem 1.25rem; }
+.card h2 { margin-block: 0 .25rem; font-size: 1rem; }
+.muted { color: var(--muted); }
+.badge { display: inline-block; font-size: .75rem; padding-inline: .5rem; border-radius: 99px;
+         border: 1px solid var(--line); margin-inline-start: .5rem; }
+/* Arrows and chevrons point "forward" in either direction. */
+[dir='rtl'] .flip { transform: scaleX(-1); display: inline-block; }
+select { font: inherit; padding-block: .25rem; padding-inline: .5rem; }

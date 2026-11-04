@@ -1,0 +1,19 @@
+{
+  "app": { "name": "हाउसहोल्ड ERP", "tagline": "घर से जुड़ी हर चीज़, एक ही जगह" },
+  "nav": { "dashboard": "होम", "staff": "कर्मचारी", "finance": "वित्त", "pettyCash": "पेटी कैश", "workOrders": "कार्य आदेश", "travel": "यात्रा", "policies": "नीतियाँ" },
+  "dashboard": {
+    "greeting": "नमस्ते {name}",
+    "pendingApprovals": "{count, plural, =0 {आपकी मंज़ूरी के लिए कोई अनुरोध नहीं} one {# अनुरोध आपकी मंज़ूरी का इंतज़ार कर रहा है} other {# अनुरोध आपकी मंज़ूरी का इंतज़ार कर रहे हैं}}",
+    "expiringDocuments": "{count, plural, =0 {जल्द समाप्त होने वाला कोई दस्तावेज़ नहीं} one {# दस्तावेज़ {days} दिनों में समाप्त होगा} other {# दस्तावेज़ {days} दिनों में समाप्त होंगे}}",
+    "today": "आज {date} है"
+  },
+  "pettyCash": { "balance": "नकद शेष: {amount}", "logExpense": "खर्च दर्ज करें", "pendingReview": "समीक्षा लंबित" },
+  "workOrder": {
+    "status": { "NEW": "नया", "ASSIGNED": "सौंपा गया", "IN_PROGRESS": "जारी है", "COMPLETED": "पूरा हुआ", "VERIFIED": "सत्यापित" },
+    "translatedBadge": "{language} से मशीनी अनुवाद",
+    "showOriginal": "मूल पाठ दिखाएँ"
+  },
+  "policy": { "acknowledge": "मैंने पढ़ लिया है और सहमत हूँ", "acknowledgedOn": "{date} को स्वीकार किया" },
+  "receipt": { "scanned": "रसीद स्कैन हो गई", "zatcaVerified": "मान्य ZATCA QR", "total": "कुल {amount}" },
+  "common": { "language": "भाषा", "save": "सहेजें", "cancel": "रद्द करें" }
+}

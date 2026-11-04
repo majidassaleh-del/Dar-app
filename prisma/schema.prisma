@@ -1,0 +1,2257 @@
+// =============================================================================
+//  Household ERP Platform — Prisma Schema (PostgreSQL / Supabase)
+// -----------------------------------------------------------------------------
+//  Multi-tenancy model : shared database, shared schema, row-level isolation.
+//                        Every tenant-owned table carries `householdId`, and
+//                        Postgres RLS policies (see prisma/rls.sql) enforce it
+//                        in addition to the application-layer guard.
+//  i18n model          : user-entered translatable text is stored as JSONB
+//                        `{ "ar": "...", "en": "...", "hi": "..." }` in
+//                        `*I18n` columns. UI strings live in the frontend
+//                        (next-intl / i18next), NOT in the database.
+//  Money               : Decimal(18,2) + ISO-4217 currency (default SAR).
+//                        Investments use Decimal(24,8) for quantities.
+//  Dates               : stored in UTC (timestamptz). Hijri display is a
+//                        presentation concern; `hijriDueDate` strings are kept
+//                        only where a contract is legally Hijri-dated.
+//  Soft delete         : `deletedAt` on business records; financial ledger
+//                        rows are immutable (reversed, never deleted).
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgcrypto, citext, pg_trgm]
+}
+
+// =============================================================================
+//  ENUMS
+// =============================================================================
+
+enum Locale {
+  ar
+  en
+  hi
+  tl // Tagalog / Filipino
+  am // Amharic
+  bn // Bengali
+}
+
+/// System roles. Fine-grained rights come from RolePermission and can be
+/// overridden per membership via MembershipPermission.
+enum SystemRole {
+  HOUSEHOLD_HEAD // owner, full control, billing
+  EFA_OFFICE_ADMIN // EFA = Esam Alnahdi Family Affairs office (مكتب EFA - الإدارة التشغيلية); same write powers as the head on protected tables
+  SPOUSE // co-admin; configurable restrictions
+  DEPENDENT // children / dependents: own allowance, own requests
+  STAFF // maids, cooks, nannies, gardeners
+  DRIVER // staff with fleet capabilities
+  ACCOUNTANT // external, read-mostly finance access
+  GUEST // time-boxed, view-only
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum SubscriptionPlan {
+  FREE
+  FAMILY
+  PREMIUM
+  ENTERPRISE // family offices
+}
+
+// ---- Staff HR ----
+enum StaffType {
+  HOUSEMAID
+  COOK
+  NANNY
+  DRIVER
+  GARDENER
+  SECURITY
+  NURSE
+  TUTOR
+  OTHER
+}
+
+enum EmploymentStatus {
+  RECRUITING
+  ON_PROBATION
+  ACTIVE
+  ON_LEAVE
+  ABSCONDED // "huroob" — legally significant in GCC
+  TERMINATED
+  FINAL_EXIT
+}
+
+enum IdentityDocumentType {
+  PASSPORT
+  NATIONAL_ID
+  IQAMA // residency permit
+  VISA
+  EXIT_REENTRY_VISA
+  WORK_PERMIT
+  DRIVING_LICENSE
+  MEDICAL_INSURANCE
+  MEDICAL_CERTIFICATE
+  CONTRACT
+  OTHER
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  EMERGENCY
+  UNPAID
+  HAJJ_UMRAH
+  VACATION_TRAVEL // with exit/re-entry
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum PayrollLineType {
+  BASIC_SALARY
+  ALLOWANCE
+  OVERTIME
+  BONUS
+  DEDUCTION
+  ADVANCE_RECOVERY
+  END_OF_SERVICE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  DAY_OFF
+  ON_LEAVE
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+// ---- Accounting ----
+enum FinancialAccountType {
+  BANK_CURRENT
+  BANK_SAVINGS
+  CASH_BOX // petty cash held by staff
+  DIGITAL_WALLET // STC Pay, Apple Pay balance, etc.
+  CREDIT_CARD
+  LOAN
+  INVESTMENT_CASH
+}
+
+enum CardType {
+  DEBIT
+  CREDIT
+  PREPAID
+  VIRTUAL
+}
+
+enum CardStatus {
+  ACTIVE
+  FROZEN
+  LOST
+  EXPIRED
+  CLOSED
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+  TRANSFER
+  ALLOWANCE
+  REFUND
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  RECONCILED
+  REVERSED
+}
+
+enum TransactionSource {
+  MANUAL
+  RECEIPT_OCR
+  BANK_FEED
+  CARD_WEBHOOK
+  SMS_PARSE // GCC banks send SMS alerts
+  RECURRING
+  SYSTEM
+}
+
+enum ReceiptStatus {
+  UPLOADED
+  PROCESSING
+  EXTRACTED
+  VERIFIED
+  REJECTED
+}
+
+enum BudgetPeriod {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+// ---- Requests / workflow ----
+enum RequestType {
+  PURCHASE
+  REIMBURSEMENT
+  SALARY_ADVANCE
+  LEAVE
+  ALLOWANCE_TOPUP
+  CARD_LIMIT_CHANGE
+  VEHICLE_USAGE
+  MAINTENANCE
+  GENERAL
+}
+
+enum RequestStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+  FULFILLED
+}
+
+enum RequestPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ApprovalDecision {
+  PENDING
+  APPROVED
+  REJECTED
+  DELEGATED
+}
+
+// ---- Investments ----
+enum AssetClass {
+  EQUITY
+  ETF
+  MUTUAL_FUND
+  SUKUK
+  BOND
+  REAL_ESTATE
+  GOLD
+  PRECIOUS_METAL
+  CRYPTO
+  PRIVATE_EQUITY
+  DEPOSIT // murabaha / term deposit
+  CASH
+  OTHER
+}
+
+enum InvestmentTxnType {
+  BUY
+  SELL
+  DIVIDEND
+  COUPON
+  RENTAL_INCOME
+  FEE
+  SPLIT
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum ValuationSource {
+  MARKET_FEED
+  MANUAL
+  APPRAISAL
+}
+
+// ---- Fleet ----
+enum VehicleStatus {
+  ACTIVE
+  IN_MAINTENANCE
+  OUT_OF_SERVICE
+  SOLD
+}
+
+enum OwnershipType {
+  OWNED
+  LEASED
+  FINANCED
+  RENTED
+}
+
+enum FuelType {
+  PETROL_91
+  PETROL_95
+  DIESEL
+  HYBRID
+  ELECTRIC
+}
+
+enum MaintenanceType {
+  OIL_CHANGE
+  TIRES
+  BRAKES
+  BATTERY
+  INSPECTION // e.g. Fahas
+  REPAIR
+  BODYWORK
+  CLEANING
+  OTHER
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ViolationStatus {
+  UNPAID
+  PAID
+  DISPUTED
+  CHARGED_TO_STAFF
+}
+
+// ---- Property ----
+enum PropertyType {
+  VILLA
+  APARTMENT
+  BUILDING
+  LAND
+  FARM // istiraha
+  COMMERCIAL
+}
+
+enum PropertyUsage {
+  PRIMARY_RESIDENCE
+  SECONDARY_RESIDENCE
+  RENTAL
+  VACANT
+}
+
+enum LeaseStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum BillType {
+  ELECTRICITY
+  WATER
+  GAS
+  INTERNET
+  MOBILE
+  SEWAGE
+  HOA
+  OTHER
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// ---- Cross-cutting ----
+enum AttachmentEntity {
+  RECEIPT
+  TRANSACTION
+  STAFF_DOCUMENT
+  REQUEST
+  VEHICLE
+  MAINTENANCE
+  PROPERTY
+  LEASE
+  BILL
+  TICKET
+  ASSET
+  POLICY
+  WORK_ORDER
+  TRIP
+  PETTY_CASH
+  OTHER
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  ACKNOWLEDGED
+  SNOOZED
+  DISMISSED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  LOGIN
+  EXPORT
+  VIEW_SENSITIVE
+}
+
+// =============================================================================
+//  IDENTITY, TENANCY & RBAC
+// =============================================================================
+
+/// Global identity. Mirrors Supabase `auth.users.id` (same UUID) so RLS can
+/// use `auth.uid()`. A user can belong to many households.
+model User {
+  id              String    @id @db.Uuid // = auth.users.id
+  phone           String?   @unique // E.164; primary login for staff (OTP)
+  email           String?   @unique @db.Citext
+  fullNameI18n    Json      @default("{}") // { "ar": "...", "en": "..." }
+  preferredLocale Locale    @default(ar)
+  timezone        String    @default("Asia/Riyadh")
+  avatarUrl       String?
+  nationality     String?   @db.Char(2) // ISO-3166 alpha-2
+  lastLoginAt     DateTime? @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime? @db.Timestamptz(6)
+
+  memberships   Membership[]
+  devices       UserDevice[]
+  notifications Notification[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@map("users")
+}
+
+model UserDevice {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  platform   String // ios | android | web
+  pushToken  String   @unique
+  appVersion String?
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_devices")
+}
+
+/// The tenant.
+model Household {
+  id              String           @id @default(uuid()) @db.Uuid
+  slug            String           @unique
+  nameI18n        Json             @default("{}")
+  defaultLocale   Locale           @default(ar)
+  enabledLocales  Locale[]         @default([ar, en])
+  baseCurrency    String           @default("SAR") @db.Char(3)
+  countryCode     String           @default("SA") @db.Char(2)
+  timezone        String           @default("Asia/Riyadh")
+  weekStartDay    Int              @default(0) // 0 = Sunday
+  fiscalYearStart Int              @default(1) // month 1..12
+  plan            SubscriptionPlan @default(FREE)
+  planRenewsAt    DateTime?        @db.Timestamptz(6)
+  settings        Json             @default("{}") // feature flags, approval thresholds
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime?        @db.Timestamptz(6)
+
+  memberships           Membership[]
+  roles                 Role[]
+  staff                 StaffProfile[]
+  identityDocs          IdentityDocument[]
+  contracts             EmploymentContract[]
+  payrollRuns           PayrollRun[]
+  payrollLines          PayrollLine[]
+  salaryAdvances        SalaryAdvance[]
+  leaves                LeaveRecord[]
+  attendance            Attendance[]
+  tasks                 HouseholdTask[]
+  financialAccounts     FinancialAccount[]
+  cards                 Card[]
+  categories            Category[]
+  transactions          Transaction[]
+  receipts              Receipt[]
+  budgets               Budget[]
+  recurringRules        RecurringRule[]
+  allowances            AllowancePlan[]
+  requests              Request[]
+  approvals             Approval[]
+  approvalPolicies      ApprovalPolicy[]
+  portfolios            Portfolio[]
+  assets                Asset[]
+  holdings              Holding[]
+  investmentTxns        InvestmentTransaction[]
+  valuations            AssetValuation[]
+  vehicles              Vehicle[]
+  vehicleAssignments    VehicleAssignment[]
+  maintenance           MaintenanceRecord[]
+  fuelLogs              FuelLog[]
+  violations            TrafficViolation[]
+  tripLogs              TripLog[]
+  properties            Property[]
+  propertyUnits         PropertyUnit[]
+  leases                Lease[]
+  rentPayments          RentPayment[]
+  utilityBills          UtilityBill[]
+  tickets               MaintenanceTicket[]
+  attachments           Attachment[]
+  reminders             Reminder[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  tenantKeys            TenantKey[]
+  policies              Policy[]
+  codesOfEthics         CodeOfEthics[]
+  privacyAgreements     PrivacyAgreement[]
+  acknowledgments       PolicyAcknowledgment[]
+  pettyCashAccounts     PettyCashAccount[]
+  pettyCashLogs         PettyCashLog[]
+  workOrders            WorkOrder[]
+  workOrderInstructions WorkOrderInstruction[]
+  trips                 Trip[]
+  tripPassengers        TripPassenger[]
+  tripBookings          TripBooking[]
+
+  @@map("households")
+}
+
+/// User ↔ Household link. This is the security principal for every
+/// tenant-scoped operation (all `createdById`, `assigneeId` etc. point here,
+/// not at User, so access is always evaluated inside a tenant).
+model Membership {
+  id           String           @id @default(uuid()) @db.Uuid
+  householdId  String           @db.Uuid
+  userId       String           @db.Uuid
+  roleId       String           @db.Uuid
+  status       MembershipStatus @default(INVITED)
+  displayName  String? // nickname inside this household ("Mama", "Abu Ahmed")
+  relationship String? // son, daughter, mother-in-law ...
+  dateOfBirth  DateTime?        @db.Date // drives dependent age-gating
+  guardianId   String?          @db.Uuid // dependent → parent membership
+  invitedById  String?          @db.Uuid
+  expiresAt    DateTime?        @db.Timestamptz(6) // guests, temp staff
+  joinedAt     DateTime?        @db.Timestamptz(6)
+  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role         @relation(fields: [roleId], references: [id])
+  guardian  Membership?  @relation("Guardianship", fields: [guardianId], references: [id])
+  wards     Membership[] @relation("Guardianship")
+
+  permissionOverrides MembershipPermission[]
+  staffProfile        StaffProfile?
+  cardsHeld           Card[]                 @relation("CardHolder")
+  transactionsCreated Transaction[]          @relation("TxnCreatedBy")
+  transactionsSpent   Transaction[]          @relation("TxnSpentBy")
+  receiptsUploaded    Receipt[]
+  requestsMade        Request[]              @relation("Requester")
+  approvals           Approval[]             @relation("Approver")
+  allowancePlans      AllowancePlan[]
+  tasksAssigned       HouseholdTask[]        @relation("TaskAssignee")
+  tasksCreated        HouseholdTask[]        @relation("TaskCreator")
+  vehicleAssignments  VehicleAssignment[]
+  tripLogs            TripLog[]
+  ticketsAssigned     MaintenanceTicket[]    @relation("TicketAssignee")
+  ticketsReported     MaintenanceTicket[]    @relation("TicketReporter")
+  financialAccounts   FinancialAccount[]     @relation("AccountCustodian")
+  budgetsOwned        Budget[]
+  reminders           Reminder[]
+  acknowledgments     PolicyAcknowledgment[] @relation("AckSigner")
+  witnessedAcks       PolicyAcknowledgment[] @relation("AckWitness")
+  pettyCashAccounts   PettyCashAccount[]     @relation("PettyCashCustodian")
+  pettyCashLogs       PettyCashLog[]         @relation("PettyCashRecorder")
+  workOrdersRequested WorkOrder[]            @relation("WorkOrderRequester")
+  workOrdersAssigned  WorkOrder[]            @relation("WorkOrderAssignee")
+  tripsOrganized      Trip[]
+  tripSeats           TripPassenger[]
+
+  @@unique([householdId, userId])
+  @@index([householdId, status])
+  @@index([userId])
+  @@map("memberships")
+}
+
+/// Per-household role (seeded from SystemRole templates, customisable).
+model Role {
+  id          String     @id @default(uuid()) @db.Uuid
+  householdId String     @db.Uuid
+  systemRole  SystemRole
+  nameI18n    Json       @default("{}")
+  isDefault   Boolean    @default(false) // seeded template, cannot delete
+  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
+
+  household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  memberships Membership[]
+
+  @@unique([householdId, systemRole, isDefault])
+  @@index([householdId])
+  @@map("roles")
+}
+
+/// Global permission catalogue, e.g. "finance.transaction.read",
+/// "staff.salary.read", "fleet.vehicle.assign". Not tenant-scoped.
+model Permission {
+  id          String  @id // the key itself, e.g. "finance.card.manage"
+  module      String // staff | finance | invest | fleet | property | admin
+  description String?
+
+  roles     RolePermission[]
+  overrides MembershipPermission[]
+
+  @@map("permissions")
+}
+
+/// `scope` narrows a permission: ALL (whole household), OWN (records the
+/// member owns/created), ASSIGNED (records assigned to the member),
+/// WARDS (records of dependents the member is guardian of).
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String
+  scope        String @default("ALL") // ALL | OWN | ASSIGNED | WARDS
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model MembershipPermission {
+  membershipId String  @db.Uuid
+  permissionId String
+  granted      Boolean // true = grant, false = explicit deny (deny wins)
+  scope        String  @default("ALL")
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, permissionId])
+  @@map("membership_permissions")
+}
+
+// =============================================================================
+//  MODULE 1 — DOMESTIC STAFF HR
+// =============================================================================
+
+model StaffProfile {
+  id                     String           @id @default(uuid()) @db.Uuid
+  householdId            String           @db.Uuid
+  membershipId           String?          @unique @db.Uuid // null until staff gets app access
+  staffType              StaffType
+  status                 EmploymentStatus @default(RECRUITING)
+  fullNameI18n           Json             @default("{}") // name as in passport + Arabic transliteration
+  nationality            String           @db.Char(2)
+  gender                 String?
+  dateOfBirth            DateTime?        @db.Date
+  religion               String?
+  preferredLocale        Locale           @default(en)
+  phone                  String?
+  emergencyContact       Json? // { name, phone, relation, country }
+  recruitmentAgency      String?
+  musanedRef             String? // government domestic-labour platform reference
+  borderNumberCiphertext String? // KMS envelope
+  hireDate               DateTime?        @db.Date
+  probationEndsAt        DateTime?        @db.Date
+  terminationDate        DateTime?        @db.Date
+  weeklyDayOff           Int? // 0..6
+  livesIn                Boolean          @default(true)
+  notes                  String?
+  createdAt              DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime         @updatedAt @db.Timestamptz(6)
+  deletedAt              DateTime?        @db.Timestamptz(6)
+
+  household    Household            @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  membership   Membership?          @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  documents    IdentityDocument[]
+  contracts    EmploymentContract[]
+  payrollLines PayrollLine[]
+  advances     SalaryAdvance[]
+  leaves       LeaveRecord[]
+  attendance   Attendance[]
+  violations   TrafficViolation[]
+  tripSeats    TripPassenger[]
+
+  @@index([householdId, status])
+  @@index([householdId, staffType])
+  @@map("staff_profiles")
+}
+
+/// Passports, iqamas, visas, licences — the #1 source of expiry reminders.
+model IdentityDocument {
+  id               String               @id @default(uuid()) @db.Uuid
+  householdId      String               @db.Uuid
+  staffId          String               @db.Uuid
+  type             IdentityDocumentType
+  numberCiphertext String // KMS envelope (packages/crypto) — AAD binds it to household + column
+  numberBlindIndex String // HMAC-SHA256(normalised number, tenant index key) → exact-match lookup
+  numberLast4      String?              @db.VarChar(4) // display only
+  issuingCountry   String?              @db.Char(2)
+  issueDate        DateTime?            @db.Date
+  expiryDate       DateTime?            @db.Date
+  heldByEmployer   Boolean              @default(false) // passport custody tracking
+  remindDaysBefore Int                  @default(60)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime             @updatedAt @db.Timestamptz(6)
+
+  household      Household       @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff          StaffProfile    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tripPassengers TripPassenger[]
+
+  @@unique([householdId, type, numberBlindIndex])
+  @@index([householdId, expiryDate])
+  @@index([staffId, type])
+  @@map("identity_documents")
+}
+
+model EmploymentContract {
+  id                 String    @id @default(uuid()) @db.Uuid
+  householdId        String    @db.Uuid
+  staffId            String    @db.Uuid
+  startDate          DateTime  @db.Date
+  endDate            DateTime? @db.Date
+  basicSalary        Decimal   @db.Decimal(18, 2)
+  currency           String    @default("SAR") @db.Char(3)
+  allowances         Json      @default("[]") // [{ code: "FOOD", amount: 200 }]
+  annualLeaveDays    Int       @default(30)
+  ticketEntitlement  Boolean   @default(true) // home-country air ticket
+  endOfServiceRule   String    @default("SA_DOMESTIC") // pluggable calc strategy
+  workingHoursPerDay Int?
+  isActive           Boolean   @default(true)
+  signedAt           DateTime? @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, isActive])
+  @@index([householdId])
+  @@map("employment_contracts")
+}
+
+model PayrollRun {
+  id           String        @id @default(uuid()) @db.Uuid
+  householdId  String        @db.Uuid
+  periodYear   Int
+  periodMonth  Int
+  status       PayrollStatus @default(DRAFT)
+  totalAmount  Decimal       @default(0) @db.Decimal(18, 2)
+  currency     String        @default("SAR") @db.Char(3)
+  approvedById String?       @db.Uuid
+  approvedAt   DateTime?     @db.Timestamptz(6)
+  paidAt       DateTime?     @db.Timestamptz(6)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+
+  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  lines     PayrollLine[]
+
+  @@unique([householdId, periodYear, periodMonth])
+  @@map("payroll_runs")
+}
+
+model PayrollLine {
+  id              String          @id @default(uuid()) @db.Uuid
+  householdId     String          @db.Uuid
+  payrollRunId    String          @db.Uuid
+  staffId         String          @db.Uuid
+  type            PayrollLineType
+  descriptionI18n Json            @default("{}")
+  amount          Decimal         @db.Decimal(18, 2) // negative for deductions
+  advanceId       String?         @db.Uuid
+  transactionId   String?         @unique @db.Uuid // ledger posting when paid
+
+  household   Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  payrollRun  PayrollRun     @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  staff       StaffProfile   @relation(fields: [staffId], references: [id])
+  advance     SalaryAdvance? @relation(fields: [advanceId], references: [id])
+  transaction Transaction?   @relation(fields: [transactionId], references: [id])
+
+  @@index([payrollRunId])
+  @@index([staffId])
+  @@map("payroll_lines")
+}
+
+model SalaryAdvance {
+  id                 String    @id @default(uuid()) @db.Uuid
+  householdId        String    @db.Uuid
+  staffId            String    @db.Uuid
+  requestId          String?   @unique @db.Uuid
+  amount             Decimal   @db.Decimal(18, 2)
+  outstanding        Decimal   @db.Decimal(18, 2)
+  monthlyInstallment Decimal   @db.Decimal(18, 2)
+  currency           String    @default("SAR") @db.Char(3)
+  issuedAt           DateTime  @db.Date
+  settledAt          DateTime? @db.Date
+
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff        StaffProfile  @relation(fields: [staffId], references: [id])
+  request      Request?      @relation(fields: [requestId], references: [id])
+  payrollLines PayrollLine[]
+
+  @@index([staffId, settledAt])
+  @@map("salary_advances")
+}
+
+model LeaveRecord {
+  id                String    @id @default(uuid()) @db.Uuid
+  householdId       String    @db.Uuid
+  staffId           String    @db.Uuid
+  requestId         String?   @unique @db.Uuid
+  type              LeaveType
+  startDate         DateTime  @db.Date
+  endDate           DateTime  @db.Date
+  days              Decimal   @db.Decimal(5, 1)
+  paid              Boolean   @default(true)
+  exitReentryVisaId String?   @db.Uuid
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id])
+  request   Request?     @relation(fields: [requestId], references: [id])
+
+  @@index([staffId, startDate])
+  @@map("leave_records")
+}
+
+model Attendance {
+  id          String           @id @default(uuid()) @db.Uuid
+  householdId String           @db.Uuid
+  staffId     String           @db.Uuid
+  date        DateTime         @db.Date
+  status      AttendanceStatus
+  checkInAt   DateTime?        @db.Timestamptz(6)
+  checkOutAt  DateTime?        @db.Timestamptz(6)
+  checkInGeo  Json? // { lat, lng, accuracy } — opt-in, for drivers/day staff
+  note        String?
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+  @@index([householdId, date])
+  @@map("attendance")
+}
+
+/// Chores / daily tasks assigned to staff or dependents.
+model HouseholdTask {
+  id            String               @id @default(uuid()) @db.Uuid
+  householdId   String               @db.Uuid
+  titleI18n     Json                 @default("{}") // auto-translated into assignee's locale
+  description   String?
+  assigneeId    String?              @db.Uuid
+  createdById   String               @db.Uuid
+  status        TaskStatus           @default(TODO)
+  dueAt         DateTime?            @db.Timestamptz(6)
+  recurrence    RecurrenceFrequency?
+  completedAt   DateTime?            @db.Timestamptz(6)
+  proofPhotoUrl String?
+  createdAt     DateTime             @default(now()) @db.Timestamptz(6)
+
+  household Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  assignee  Membership? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy Membership  @relation("TaskCreator", fields: [createdById], references: [id])
+
+  @@index([householdId, assigneeId, status])
+  @@map("household_tasks")
+}
+
+// =============================================================================
+//  MODULE 2 — HOUSEHOLD ACCOUNTING
+// =============================================================================
+
+model FinancialAccount {
+  id             String               @id @default(uuid()) @db.Uuid
+  householdId    String               @db.Uuid
+  type           FinancialAccountType
+  nameI18n       Json                 @default("{}")
+  institution    String? // bank name
+  ibanLast4      String?              @db.VarChar(4)
+  ibanCiphertext String? // KMS envelope
+  ibanBlindIndex String? // HMAC lookup / dedupe
+  currency       String               @default("SAR") @db.Char(3)
+  openingBalance Decimal              @default(0) @db.Decimal(18, 2)
+  currentBalance Decimal              @default(0) @db.Decimal(18, 2) // maintained by trigger / service
+  custodianId    String?              @db.Uuid // e.g. driver holding petty cash
+  bankFeedRef    String? // aggregator (Lean/Tarabut) connection id
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(6)
+
+  household    Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  custodian    Membership?       @relation("AccountCustodian", fields: [custodianId], references: [id], onDelete: SetNull)
+  cards        Card[]
+  transactions Transaction[]     @relation("TxnAccount")
+  transfersIn  Transaction[]     @relation("TxnCounterAccount")
+  pettyCash    PettyCashAccount?
+
+  @@index([householdId, type])
+  @@map("financial_accounts")
+}
+
+/// Physical/virtual cards issued to family members or staff.
+model Card {
+  id                 String     @id @default(uuid()) @db.Uuid
+  householdId        String     @db.Uuid
+  accountId          String     @db.Uuid
+  holderId           String?    @db.Uuid
+  type               CardType
+  status             CardStatus @default(ACTIVE)
+  nickname           String?
+  last4              String     @db.VarChar(4) // NEVER store PAN/CVV (PCI-DSS)
+  network            String? // mada, visa, mastercard
+  expiryMonth        Int
+  expiryYear         Int
+  dailyLimit         Decimal?   @db.Decimal(18, 2)
+  monthlyLimit       Decimal?   @db.Decimal(18, 2)
+  perTxnLimit        Decimal?   @db.Decimal(18, 2)
+  allowedCategoryIds String[]   @db.Uuid // MCC-style restriction for dependents/staff
+  issuerToken        String?    @unique // tokenised reference at issuing partner
+  createdAt          DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @db.Timestamptz(6)
+
+  household    Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  account      FinancialAccount @relation(fields: [accountId], references: [id])
+  holder       Membership?      @relation("CardHolder", fields: [holderId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@index([householdId, holderId])
+  @@map("cards")
+}
+
+model Category {
+  id          String          @id @default(uuid()) @db.Uuid
+  householdId String          @db.Uuid
+  parentId    String?         @db.Uuid
+  kind        TransactionType // EXPENSE or INCOME
+  nameI18n    Json            @default("{}")
+  icon        String?
+  color       String?
+  isSystem    Boolean         @default(false)
+  sortOrder   Int             @default(0)
+
+  household     Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  parent        Category?      @relation("CategoryTree", fields: [parentId], references: [id])
+  children      Category[]     @relation("CategoryTree")
+  transactions  Transaction[]
+  budgets       Budget[]
+  pettyCashLogs PettyCashLog[]
+
+  @@index([householdId, kind])
+  @@map("categories")
+}
+
+/// Single-entry ledger with transfer pairing. Immutable once POSTED;
+/// corrections are new REVERSED/ADJUSTMENT rows linked via `reversalOfId`.
+model Transaction {
+  id               String            @id @default(uuid()) @db.Uuid
+  householdId      String            @db.Uuid
+  accountId        String            @db.Uuid
+  counterAccountId String?           @db.Uuid // for TRANSFER
+  cardId           String?           @db.Uuid
+  categoryId       String?           @db.Uuid
+  type             TransactionType
+  status           TransactionStatus @default(POSTED)
+  source           TransactionSource @default(MANUAL)
+  amount           Decimal           @db.Decimal(18, 2) // always positive; sign from type
+  currency         String            @db.Char(3)
+  fxRate           Decimal?          @db.Decimal(18, 8) // to household base currency
+  baseAmount       Decimal           @db.Decimal(18, 2) // amount in base currency
+  vatAmount        Decimal?          @db.Decimal(18, 2)
+  merchantName     String?
+  merchantMcc      String?           @db.VarChar(4)
+  descriptionI18n  Json              @default("{}")
+  occurredAt       DateTime          @db.Timestamptz(6)
+  createdById      String            @db.Uuid
+  spentById        String?           @db.Uuid // who actually spent (driver, child)
+  requestId        String?           @db.Uuid
+  vehicleId        String?           @db.Uuid // cost-centre tagging
+  propertyId       String?           @db.Uuid
+  reversalOfId     String?           @unique @db.Uuid
+  externalRef      String? // bank txn id — dedupe
+  tags             String[]
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+
+  household      Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  account        FinancialAccount   @relation("TxnAccount", fields: [accountId], references: [id])
+  counterAccount FinancialAccount?  @relation("TxnCounterAccount", fields: [counterAccountId], references: [id])
+  card           Card?              @relation(fields: [cardId], references: [id])
+  category       Category?          @relation(fields: [categoryId], references: [id])
+  createdBy      Membership         @relation("TxnCreatedBy", fields: [createdById], references: [id])
+  spentBy        Membership?        @relation("TxnSpentBy", fields: [spentById], references: [id])
+  request        Request?           @relation(fields: [requestId], references: [id])
+  vehicle        Vehicle?           @relation(fields: [vehicleId], references: [id])
+  property       Property?          @relation(fields: [propertyId], references: [id])
+  reversalOf     Transaction?       @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversedBy     Transaction?       @relation("Reversal")
+  receipts       Receipt[]
+  payrollLine    PayrollLine?
+  maintenance    MaintenanceRecord?
+  fuelLog        FuelLog?
+  rentPayment    RentPayment?
+  utilityBill    UtilityBill?
+  pettyCashLog   PettyCashLog?
+  tripBooking    TripBooking?
+
+  @@unique([householdId, accountId, externalRef])
+  @@index([householdId, occurredAt(sort: Desc)])
+  @@index([householdId, categoryId, occurredAt])
+  @@index([householdId, spentById, occurredAt])
+  @@index([cardId])
+  @@map("transactions")
+}
+
+/// Receipt images → OCR pipeline → suggested Transaction.
+model Receipt {
+  id            String        @id @default(uuid()) @db.Uuid
+  householdId   String        @db.Uuid
+  uploadedById  String        @db.Uuid
+  transactionId String?       @db.Uuid
+  status        ReceiptStatus @default(UPLOADED)
+  storageKey    String // s3/supabase-storage object key
+  mimeType      String
+  sha256        String // duplicate detection
+  ocrProvider   String? // textract | google-docai | claude-vision
+  ocrRaw        Json?
+  extracted     Json? // { merchant, date, total, vat, vatNumber, lineItems[] }
+  confidence    Float?
+  zatcaQr       String? // ZATCA e-invoice QR payload (TLV base64)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+  processedAt   DateTime?     @db.Timestamptz(6)
+
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  uploadedBy   Membership    @relation(fields: [uploadedById], references: [id])
+  transaction  Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  pettyCashLog PettyCashLog?
+
+  @@unique([householdId, sha256])
+  @@index([householdId, status])
+  @@map("receipts")
+}
+
+model Budget {
+  id          String       @id @default(uuid()) @db.Uuid
+  householdId String       @db.Uuid
+  categoryId  String?      @db.Uuid // null = overall
+  ownerId     String?      @db.Uuid // personal budget (e.g. teen)
+  nameI18n    Json         @default("{}")
+  period      BudgetPeriod @default(MONTHLY)
+  amount      Decimal      @db.Decimal(18, 2)
+  currency    String       @default("SAR") @db.Char(3)
+  alertAtPct  Int          @default(80)
+  rollover    Boolean      @default(false)
+  startsOn    DateTime     @db.Date
+  endsOn      DateTime?    @db.Date
+
+  household Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  category  Category?   @relation(fields: [categoryId], references: [id])
+  owner     Membership? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([householdId, period])
+  @@map("budgets")
+}
+
+/// Recurring bills, subscriptions, rent, salaries.
+model RecurringRule {
+  id          String              @id @default(uuid()) @db.Uuid
+  householdId String              @db.Uuid
+  template    Json // a Transaction-shaped payload
+  frequency   RecurrenceFrequency
+  interval    Int                 @default(1)
+  dayOfPeriod Int?
+  nextRunAt   DateTime            @db.Timestamptz(6)
+  endsAt      DateTime?           @db.Timestamptz(6)
+  autoPost    Boolean             @default(false) // false = create PENDING for review
+  isActive    Boolean             @default(true)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([nextRunAt, isActive])
+  @@map("recurring_rules")
+}
+
+/// Pocket money for dependents.
+model AllowancePlan {
+  id           String              @id @default(uuid()) @db.Uuid
+  householdId  String              @db.Uuid
+  dependentId  String              @db.Uuid
+  amount       Decimal             @db.Decimal(18, 2)
+  currency     String              @default("SAR") @db.Char(3)
+  frequency    RecurrenceFrequency @default(WEEKLY)
+  targetCardId String?             @db.Uuid
+  savingsGoal  Decimal?            @db.Decimal(18, 2)
+  savingsPct   Int                 @default(0) // auto-save portion
+  nextPayoutAt DateTime            @db.Timestamptz(6)
+  isActive     Boolean             @default(true)
+
+  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  dependent Membership @relation(fields: [dependentId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, dependentId])
+  @@map("allowance_plans")
+}
+
+// =============================================================================
+//  CROSS-MODULE — REQUESTS & APPROVAL WORKFLOW
+// =============================================================================
+
+/// One generic request entity drives purchases, reimbursements, advances,
+/// leave, allowance top-ups, vehicle use, maintenance. Type-specific data
+/// goes in `payload` (validated by Zod schema per RequestType).
+model Request {
+  id             String          @id @default(uuid()) @db.Uuid
+  householdId    String          @db.Uuid
+  requesterId    String          @db.Uuid
+  type           RequestType
+  status         RequestStatus   @default(SUBMITTED)
+  priority       RequestPriority @default(NORMAL)
+  titleI18n      Json            @default("{}") // original + machine translation
+  originalLocale Locale          @default(ar)
+  payload        Json            @default("{}")
+  amount         Decimal?        @db.Decimal(18, 2)
+  currency       String?         @db.Char(3)
+  neededBy       DateTime?       @db.Timestamptz(6)
+  currentStep    Int             @default(1)
+  resolvedAt     DateTime?       @db.Timestamptz(6)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
+
+  household    Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  requester    Membership     @relation("Requester", fields: [requesterId], references: [id])
+  approvals    Approval[]
+  transactions Transaction[]
+  advance      SalaryAdvance?
+  leave        LeaveRecord?
+  workOrders   WorkOrder[]
+
+  @@index([householdId, status, type])
+  @@index([requesterId, createdAt(sort: Desc)])
+  @@map("requests")
+}
+
+/// Configurable chains, e.g. PURCHASE > 500 SAR → Spouse then Head.
+model ApprovalPolicy {
+  id               String      @id @default(uuid()) @db.Uuid
+  householdId      String      @db.Uuid
+  requestType      RequestType
+  minAmount        Decimal?    @db.Decimal(18, 2)
+  maxAmount        Decimal?    @db.Decimal(18, 2)
+  steps            Json // [{ step: 1, approverRole: "SPOUSE" | membershipId, anyOf: true }]
+  autoApproveBelow Decimal?    @db.Decimal(18, 2)
+  isActive         Boolean     @default(true)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, requestType])
+  @@map("approval_policies")
+}
+
+model Approval {
+  id          String           @id @default(uuid()) @db.Uuid
+  householdId String           @db.Uuid
+  requestId   String           @db.Uuid
+  step        Int
+  approverId  String           @db.Uuid
+  decision    ApprovalDecision @default(PENDING)
+  comment     String?
+  decidedAt   DateTime?        @db.Timestamptz(6)
+
+  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  request   Request    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approver  Membership @relation("Approver", fields: [approverId], references: [id])
+
+  @@unique([requestId, step, approverId])
+  @@index([approverId, decision])
+  @@map("approvals")
+}
+
+// =============================================================================
+//  MODULE 3 — INVESTMENTS & ASSETS
+// =============================================================================
+
+model Portfolio {
+  id                  String   @id @default(uuid()) @db.Uuid
+  householdId         String   @db.Uuid
+  nameI18n            Json     @default("{}")
+  broker              String? // Al Rajhi Capital, Derayah, IBKR ...
+  baseCurrency        String   @default("SAR") @db.Char(3)
+  shariaCompliantOnly Boolean  @default(false)
+  ownerLabel          String? // "Joint", "Ahmed's education fund"
+  createdAt           DateTime @default(now()) @db.Timestamptz(6)
+
+  household Household               @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  holdings  Holding[]
+  txns      InvestmentTransaction[]
+
+  @@index([householdId])
+  @@map("portfolios")
+}
+
+/// Instrument or physical asset. Market instruments may be shared reference
+/// data in a future version; kept tenant-scoped for privacy & simplicity.
+model Asset {
+  id                String     @id @default(uuid()) @db.Uuid
+  householdId       String     @db.Uuid
+  assetClass        AssetClass
+  nameI18n          Json       @default("{}")
+  symbol            String? // 2222.SR, AAPL, XAU
+  exchange          String? // TADAWUL, NASDAQ
+  isin              String?
+  currency          String     @default("SAR") @db.Char(3)
+  isShariaCompliant Boolean?
+  propertyId        String?    @unique @db.Uuid // REAL_ESTATE links to Property
+  metadata          Json       @default("{}") // karat & grams for gold, wallet for crypto
+  zakatable         Boolean    @default(true)
+  createdAt         DateTime   @default(now()) @db.Timestamptz(6)
+
+  household  Household               @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property   Property?               @relation(fields: [propertyId], references: [id])
+  holdings   Holding[]
+  txns       InvestmentTransaction[]
+  valuations AssetValuation[]
+
+  @@unique([householdId, symbol, exchange])
+  @@index([householdId, assetClass])
+  @@map("assets")
+}
+
+/// Current position (materialised from InvestmentTransaction).
+model Holding {
+  id          String   @id @default(uuid()) @db.Uuid
+  householdId String   @db.Uuid
+  portfolioId String   @db.Uuid
+  assetId     String   @db.Uuid
+  quantity    Decimal  @db.Decimal(24, 8)
+  avgCost     Decimal  @db.Decimal(24, 8)
+  costBasis   Decimal  @db.Decimal(18, 2)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  asset     Asset     @relation(fields: [assetId], references: [id])
+
+  @@unique([portfolioId, assetId])
+  @@map("holdings")
+}
+
+model InvestmentTransaction {
+  id                 String            @id @default(uuid()) @db.Uuid
+  householdId        String            @db.Uuid
+  portfolioId        String            @db.Uuid
+  assetId            String            @db.Uuid
+  type               InvestmentTxnType
+  quantity           Decimal?          @db.Decimal(24, 8)
+  price              Decimal?          @db.Decimal(24, 8)
+  amount             Decimal           @db.Decimal(18, 2)
+  fees               Decimal           @default(0) @db.Decimal(18, 2)
+  currency           String            @db.Char(3)
+  fxRate             Decimal?          @db.Decimal(18, 8)
+  tradeDate          DateTime          @db.Date
+  purificationAmount Decimal?          @db.Decimal(18, 2) // Sharia income purification
+  notes              String?
+  createdAt          DateTime          @default(now()) @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  asset     Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([householdId, tradeDate])
+  @@index([portfolioId, assetId])
+  @@map("investment_transactions")
+}
+
+/// Time series of prices / appraisals (partition by month at scale).
+model AssetValuation {
+  id          String          @id @default(uuid()) @db.Uuid
+  householdId String          @db.Uuid
+  assetId     String          @db.Uuid
+  asOf        DateTime        @db.Timestamptz(6)
+  unitValue   Decimal         @db.Decimal(24, 8)
+  currency    String          @db.Char(3)
+  source      ValuationSource @default(MARKET_FEED)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  asset     Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, asOf, source])
+  @@map("asset_valuations")
+}
+
+// =============================================================================
+//  MODULE 4a — VEHICLE FLEET
+// =============================================================================
+
+model Vehicle {
+  id                 String        @id @default(uuid()) @db.Uuid
+  householdId        String        @db.Uuid
+  make               String
+  model              String
+  year               Int
+  color              String?
+  plateNumber        String
+  plateNumberAr      String? // Arabic letters on GCC plates
+  vin                String?
+  fuelType           FuelType      @default(PETROL_91)
+  status             VehicleStatus @default(ACTIVE)
+  ownership          OwnershipType @default(OWNED)
+  leaseContractRef   String?
+  odometerKm         Int           @default(0)
+  registrationExpiry DateTime?     @db.Date // Istimara
+  insuranceExpiry    DateTime?     @db.Date
+  insurancePolicy    String?
+  inspectionExpiry   DateTime?     @db.Date // Fahas
+  purchasePrice      Decimal?      @db.Decimal(18, 2)
+  purchaseDate       DateTime?     @db.Date
+  telematicsId       String? // GPS tracker device id
+  createdAt          DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?     @db.Timestamptz(6)
+
+  household     Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  assignments   VehicleAssignment[]
+  maintenance   MaintenanceRecord[]
+  fuelLogs      FuelLog[]
+  violations    TrafficViolation[]
+  trips         TripLog[]
+  transactions  Transaction[]
+  workOrders    WorkOrder[]
+  pettyCashLogs PettyCashLog[]
+
+  @@unique([householdId, plateNumber])
+  @@index([householdId, status])
+  @@map("vehicles")
+}
+
+model VehicleAssignment {
+  id            String    @id @default(uuid()) @db.Uuid
+  householdId   String    @db.Uuid
+  vehicleId     String    @db.Uuid
+  driverId      String    @db.Uuid // membership (driver or family member)
+  isPrimary     Boolean   @default(true)
+  startsAt      DateTime  @db.Timestamptz(6)
+  endsAt        DateTime? @db.Timestamptz(6)
+  startOdometer Int?
+  endOdometer   Int?
+
+  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driver    Membership @relation(fields: [driverId], references: [id])
+
+  @@index([vehicleId, startsAt])
+  @@index([driverId, endsAt])
+  @@map("vehicle_assignments")
+}
+
+model MaintenanceRecord {
+  id            String            @id @default(uuid()) @db.Uuid
+  householdId   String            @db.Uuid
+  vehicleId     String            @db.Uuid
+  type          MaintenanceType
+  status        MaintenanceStatus @default(SCHEDULED)
+  workshop      String?
+  scheduledAt   DateTime?         @db.Timestamptz(6)
+  completedAt   DateTime?         @db.Timestamptz(6)
+  odometerKm    Int?
+  nextDueKm     Int?
+  nextDueDate   DateTime?         @db.Date
+  cost          Decimal?          @db.Decimal(18, 2)
+  currency      String            @default("SAR") @db.Char(3)
+  notes         String?
+  transactionId String?           @unique @db.Uuid
+
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([vehicleId, scheduledAt])
+  @@index([householdId, nextDueDate])
+  @@map("maintenance_records")
+}
+
+model FuelLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  householdId   String   @db.Uuid
+  vehicleId     String   @db.Uuid
+  filledAt      DateTime @db.Timestamptz(6)
+  liters        Decimal  @db.Decimal(10, 2)
+  pricePerLiter Decimal  @db.Decimal(10, 3)
+  totalCost     Decimal  @db.Decimal(18, 2)
+  odometerKm    Int
+  station       String?
+  transactionId String?  @unique @db.Uuid
+
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([vehicleId, filledAt])
+  @@map("fuel_logs")
+}
+
+model TrafficViolation {
+  id              String          @id @default(uuid()) @db.Uuid
+  householdId     String          @db.Uuid
+  vehicleId       String          @db.Uuid
+  staffId         String?         @db.Uuid // responsible driver
+  violationNo     String // e.g. from Absher/Saher
+  occurredAt      DateTime        @db.Timestamptz(6)
+  descriptionI18n Json            @default("{}")
+  location        String?
+  amount          Decimal         @db.Decimal(18, 2)
+  status          ViolationStatus @default(UNPAID)
+  dueDate         DateTime?       @db.Date
+
+  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  staff     StaffProfile? @relation(fields: [staffId], references: [id])
+
+  @@unique([householdId, violationNo])
+  @@map("traffic_violations")
+}
+
+/// School runs, errands — driver logs trips from the mobile app.
+model TripLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  householdId String    @db.Uuid
+  vehicleId   String    @db.Uuid
+  driverId    String    @db.Uuid
+  purpose     String? // school_run, groceries, airport
+  passengers  String[]  @db.Uuid // membership ids
+  startedAt   DateTime  @db.Timestamptz(6)
+  endedAt     DateTime? @db.Timestamptz(6)
+  startKm     Int?
+  endKm       Int?
+  route       Json? // simplified polyline (opt-in)
+
+  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driver    Membership @relation(fields: [driverId], references: [id])
+
+  @@index([vehicleId, startedAt])
+  @@map("trip_logs")
+}
+
+// =============================================================================
+//  MODULE 4b — PROPERTY MANAGEMENT
+// =============================================================================
+
+model Property {
+  id                   String        @id @default(uuid()) @db.Uuid
+  householdId          String        @db.Uuid
+  nameI18n             Json          @default("{}")
+  type                 PropertyType
+  usage                PropertyUsage @default(PRIMARY_RESIDENCE)
+  addressI18n          Json          @default("{}")
+  nationalAddress      String? // SA short address e.g. RRRD2929
+  city                 String?
+  geo                  Json? // { lat, lng }
+  deedNumber           String? // sakk
+  areaSqm              Decimal?      @db.Decimal(12, 2)
+  purchasePrice        Decimal?      @db.Decimal(18, 2)
+  purchaseDate         DateTime?     @db.Date
+  electricityAccountNo String?
+  waterAccountNo       String?
+  createdAt            DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt            DateTime?     @db.Timestamptz(6)
+
+  household    Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  units        PropertyUnit[]
+  bills        UtilityBill[]
+  tickets      MaintenanceTicket[]
+  transactions Transaction[]
+  asset        Asset?
+  workOrders   WorkOrder[]
+
+  @@index([householdId, usage])
+  @@map("properties")
+}
+
+model PropertyUnit {
+  id           String   @id @default(uuid()) @db.Uuid
+  householdId  String   @db.Uuid
+  propertyId   String   @db.Uuid
+  label        String // "1st floor", "Roof annex", "Apt 3"
+  bedrooms     Int?
+  areaSqm      Decimal? @db.Decimal(12, 2)
+  meterNumbers Json     @default("{}") // { electricity: "...", water: "..." } sub-meters
+  isOccupied   Boolean  @default(false)
+
+  household  Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property   Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leases     Lease[]
+  bills      UtilityBill[]
+  tickets    MaintenanceTicket[]
+  workOrders WorkOrder[]
+
+  @@unique([propertyId, label])
+  @@map("property_units")
+}
+
+/// Household as landlord (renting out) OR as lessee (renting in): `direction`.
+model Lease {
+  id                       String              @id @default(uuid()) @db.Uuid
+  householdId              String              @db.Uuid
+  unitId                   String              @db.Uuid
+  direction                String              @default("LANDLORD") // LANDLORD | LESSEE
+  counterpartyName         String
+  counterpartyPhone        String?
+  counterpartyIdCiphertext String? // KMS envelope (national ID / iqama of tenant or landlord)
+  ejarContractNo           String? // Saudi Ejar platform
+  startDate                DateTime            @db.Date
+  endDate                  DateTime            @db.Date
+  rentAmount               Decimal             @db.Decimal(18, 2)
+  currency                 String              @default("SAR") @db.Char(3)
+  paymentFrequency         RecurrenceFrequency @default(QUARTERLY)
+  securityDeposit          Decimal?            @db.Decimal(18, 2)
+  utilitiesIncluded        Boolean             @default(false)
+  status                   LeaseStatus         @default(ACTIVE)
+  hijriDated               Boolean             @default(false)
+
+  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  unit      PropertyUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  payments  RentPayment[]
+
+  @@index([householdId, status, endDate])
+  @@map("leases")
+}
+
+model RentPayment {
+  id            String    @id @default(uuid()) @db.Uuid
+  householdId   String    @db.Uuid
+  leaseId       String    @db.Uuid
+  dueDate       DateTime  @db.Date
+  hijriDueDate  String? // e.g. "1448-06-15" when lease is Hijri-dated
+  amountDue     Decimal   @db.Decimal(18, 2)
+  amountPaid    Decimal   @default(0) @db.Decimal(18, 2)
+  paidAt        DateTime? @db.Timestamptz(6)
+  transactionId String?   @unique @db.Uuid
+
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  lease       Lease        @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@unique([leaseId, dueDate])
+  @@index([householdId, dueDate])
+  @@map("rent_payments")
+}
+
+/// Utility bills, with optional split across units (sub-metering).
+model UtilityBill {
+  id            String    @id @default(uuid()) @db.Uuid
+  householdId   String    @db.Uuid
+  propertyId    String    @db.Uuid
+  unitId        String?   @db.Uuid
+  type          BillType
+  provider      String? // SEC, NWC, STC
+  accountNo     String?
+  periodStart   DateTime  @db.Date
+  periodEnd     DateTime  @db.Date
+  consumption   Decimal?  @db.Decimal(14, 3) // kWh / m³
+  amount        Decimal   @db.Decimal(18, 2)
+  dueDate       DateTime? @db.Date
+  paidAt        DateTime? @db.Timestamptz(6)
+  allocation    Json? // [{ unitId, share, amount }] for split billing
+  transactionId String?   @unique @db.Uuid
+
+  household   Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property    Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit        PropertyUnit? @relation(fields: [unitId], references: [id])
+  transaction Transaction?  @relation(fields: [transactionId], references: [id])
+
+  @@index([propertyId, periodStart])
+  @@map("utility_bills")
+}
+
+model MaintenanceTicket {
+  id            String          @id @default(uuid()) @db.Uuid
+  householdId   String          @db.Uuid
+  propertyId    String          @db.Uuid
+  unitId        String?         @db.Uuid
+  reporterId    String          @db.Uuid
+  assigneeId    String?         @db.Uuid
+  titleI18n     Json            @default("{}")
+  category      String? // plumbing, AC, electrical, pest
+  priority      RequestPriority @default(NORMAL)
+  status        TicketStatus    @default(OPEN)
+  vendor        String?
+  estimatedCost Decimal?        @db.Decimal(18, 2)
+  actualCost    Decimal?        @db.Decimal(18, 2)
+  openedAt      DateTime        @default(now()) @db.Timestamptz(6)
+  resolvedAt    DateTime?       @db.Timestamptz(6)
+
+  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property  Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit      PropertyUnit? @relation(fields: [unitId], references: [id])
+  reporter  Membership    @relation("TicketReporter", fields: [reporterId], references: [id])
+  assignee  Membership?   @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  workOrder WorkOrder?
+
+  @@index([householdId, status])
+  @@map("maintenance_tickets")
+}
+
+// =============================================================================
+//  MODULE 5 — HR GOVERNANCE & POLICY (ZenHR / Jisr-style)
+// -----------------------------------------------------------------------------
+//  Policy            : job-specific standing / daily instructions, versioned.
+//  CodeOfEthics      : one household-wide code, versioned.
+//  PrivacyAgreement  : PDPL-grade NDA, surveillance (CCTV/GPS) and data-
+//                      processing terms, with lawful basis, purposes, retention.
+//  PolicyAcknowledgment : ONE evidence ledger for all three document kinds.
+//                      Stores the exact language shown and a SHA-256 of the
+//                      exact text, so "I agreed to X in Tagalog on date D" is
+//                      provable. Rows are never deleted; consent is withdrawn
+//                      by setting withdrawnAt (PDPL right to withdraw).
+// =============================================================================
+
+enum DocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AcknowledgmentFrequency {
+  ONCE // once, ever
+  ON_EACH_VERSION // again whenever a new version is published
+  DAILY // e.g. driver pre-trip safety checklist
+  SHIFT_START
+}
+
+enum AcknowledgmentMethod {
+  TAP_TO_ACCEPT
+  TYPED_NAME
+  DRAWN_SIGNATURE
+  OTP_CONFIRMED
+  VERBAL_WITNESSED // read aloud for low-literacy staff; witness recorded
+}
+
+enum AgreementType {
+  NON_DISCLOSURE
+  SURVEILLANCE_CONSENT // CCTV, dash-cam, GPS
+  DATA_PROCESSING_CONSENT // PDPL processing of the staff member's own data
+  CHILD_PRIVACY // nannies: no photos/posting of children
+  SOCIAL_MEDIA
+}
+
+enum LawfulBasis {
+  CONSENT
+  CONTRACT
+  LEGAL_OBLIGATION
+  LEGITIMATE_INTEREST
+  VITAL_INTEREST
+}
+
+model Policy {
+  id              String                  @id @default(uuid()) @db.Uuid
+  householdId     String                  @db.Uuid
+  code            String // stable key, e.g. "DRIVER-DAILY-SAFETY"
+  version         Int                     @default(1)
+  status          DocumentStatus          @default(DRAFT)
+  staffTypes      StaffType[] // audience; empty = all staff
+  titleI18n       Json                    @default("{}")
+  bodyI18n        Json                    @default("{}") // markdown per locale
+  originalLocale  Locale                  @default(ar)
+  translationMeta Json                    @default("{}") // { "tl": { status, engine, reviewedBy, at } }
+  ackFrequency    AcknowledgmentFrequency @default(ON_EACH_VERSION)
+  effectiveFrom   DateTime                @db.Date
+  effectiveTo     DateTime?               @db.Date
+  contentHash     String? // sha256 of bodyI18n frozen at publish
+  createdById     String                  @db.Uuid // audit reference
+  publishedAt     DateTime?               @db.Timestamptz(6)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime                @updatedAt @db.Timestamptz(6)
+
+  household       Household              @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  acknowledgments PolicyAcknowledgment[]
+
+  @@unique([householdId, code, version])
+  @@index([householdId, status])
+  @@map("policies")
+}
+
+model CodeOfEthics {
+  id              String         @id @default(uuid()) @db.Uuid
+  householdId     String         @db.Uuid
+  version         Int            @default(1)
+  status          DocumentStatus @default(DRAFT)
+  appliesToRoles  SystemRole[]   @default([STAFF, DRIVER])
+  titleI18n       Json           @default("{}")
+  bodyI18n        Json           @default("{}")
+  originalLocale  Locale         @default(ar)
+  translationMeta Json           @default("{}")
+  effectiveFrom   DateTime       @db.Date
+  contentHash     String?
+  createdById     String         @db.Uuid
+  publishedAt     DateTime?      @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+
+  household       Household              @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  acknowledgments PolicyAcknowledgment[]
+
+  @@unique([householdId, version])
+  @@map("codes_of_ethics")
+}
+
+model PrivacyAgreement {
+  id                String         @id @default(uuid()) @db.Uuid
+  householdId       String         @db.Uuid
+  type              AgreementType
+  version           Int            @default(1)
+  status            DocumentStatus @default(DRAFT)
+  appliesToRoles    SystemRole[]   @default([STAFF, DRIVER])
+  titleI18n         Json           @default("{}")
+  bodyI18n          Json           @default("{}")
+  originalLocale    Locale         @default(ar)
+  translationMeta   Json           @default("{}")
+  lawfulBasis       LawfulBasis    @default(CONSENT)
+  purposesI18n      Json           @default("{}") // why the data is processed, in plain language
+  dataCategories    String[] // e.g. cctv_video, gps_location, phone_number
+  /// { cctvZones: ["entrance","kitchen"], excludedZones: ["staff_quarters","bathrooms"],
+  ///   gps: "on-duty hours only", audio: false } — private spaces must be listed as excluded.
+  surveillanceScope Json?
+  retentionDays     Int            @default(30)
+  withdrawable      Boolean        @default(true) // false only for CONTRACT / LEGAL_OBLIGATION bases
+  effectiveFrom     DateTime       @db.Date
+  contentHash       String?
+  createdById       String         @db.Uuid
+  publishedAt       DateTime?      @db.Timestamptz(6)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+
+  household       Household              @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  acknowledgments PolicyAcknowledgment[]
+
+  @@unique([householdId, type, version])
+  @@map("privacy_agreements")
+}
+
+/// Exactly one of policyId / codeOfEthicsId / privacyAgreementId is set
+/// (CHECK constraint in migration 0002).
+model PolicyAcknowledgment {
+  id                  String               @id @default(uuid()) @db.Uuid
+  householdId         String               @db.Uuid
+  membershipId        String               @db.Uuid // the signer
+  policyId            String?              @db.Uuid
+  codeOfEthicsId      String?              @db.Uuid
+  privacyAgreementId  String?              @db.Uuid
+  documentVersion     Int
+  contentHash         String // sha256 of the exact text rendered to the signer
+  locale              Locale // language the signer actually read
+  method              AcknowledgmentMethod @default(TAP_TO_ACCEPT)
+  typedName           String?
+  signatureStorageKey String?
+  witnessId           String?              @db.Uuid
+  ackDate             DateTime             @default(dbgenerated("CURRENT_DATE")) @db.Date
+  acknowledgedAt      DateTime             @default(now()) @db.Timestamptz(6)
+  deviceInfo          Json?
+  ip                  String?              @db.Inet
+  withdrawnAt         DateTime?            @db.Timestamptz(6)
+  withdrawalReason    String?
+
+  household        Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  signer           Membership        @relation("AckSigner", fields: [membershipId], references: [id])
+  witness          Membership?       @relation("AckWitness", fields: [witnessId], references: [id])
+  policy           Policy?           @relation(fields: [policyId], references: [id])
+  codeOfEthics     CodeOfEthics?     @relation(fields: [codeOfEthicsId], references: [id])
+  privacyAgreement PrivacyAgreement? @relation(fields: [privacyAgreementId], references: [id])
+
+  // NULLs are distinct in Postgres, so this only bites policy rows: one per signer/version/day.
+  @@unique([membershipId, policyId, documentVersion, ackDate])
+  @@index([householdId, membershipId])
+  @@index([privacyAgreementId, withdrawnAt])
+  @@map("policy_acknowledgments")
+}
+
+// =============================================================================
+//  MODULE 6 — PETTY CASH (daily driver / staff floats, imprest model)
+// -----------------------------------------------------------------------------
+//  Balance is maintained by a DB trigger (prisma/rls.sql) under a row lock:
+//  TOP_UP +, EXPENSE −, RETURN −, ADJUSTMENT ± (only type allowed negative).
+//  Logs are immutable apart from review fields. A REJECTED expense still
+//  reduces cash (the money is gone) — recovery is a payroll deduction.
+// =============================================================================
+
+enum PettyCashLogType {
+  TOP_UP
+  EXPENSE
+  RETURN
+  ADJUSTMENT
+}
+
+enum PettyCashLogStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model PettyCashAccount {
+  id                  String    @id @default(uuid()) @db.Uuid
+  householdId         String    @db.Uuid
+  custodianId         String    @db.Uuid // driver / housekeeper holding the cash
+  financialAccountId  String?   @unique @db.Uuid // optional ledger mirror (CASH_BOX)
+  nameI18n            Json      @default("{}")
+  currency            String    @default("SAR") @db.Char(3)
+  floatLimit          Decimal   @db.Decimal(18, 2) // imprest amount
+  currentBalance      Decimal   @default(0) @db.Decimal(18, 2) // trigger-maintained
+  lowBalanceAlert     Decimal?  @db.Decimal(18, 2)
+  receiptRequiredOver Decimal   @default(0) @db.Decimal(18, 2)
+  allowNegative       Boolean   @default(false)
+  isActive            Boolean   @default(true)
+  lastReconciledAt    DateTime? @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
+
+  household        Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  custodian        Membership        @relation("PettyCashCustodian", fields: [custodianId], references: [id])
+  financialAccount FinancialAccount? @relation(fields: [financialAccountId], references: [id])
+  logs             PettyCashLog[]
+
+  @@index([householdId, custodianId])
+  @@map("petty_cash_accounts")
+}
+
+model PettyCashLog {
+  id              String             @id @default(uuid()) @db.Uuid
+  householdId     String             @db.Uuid
+  accountId       String             @db.Uuid
+  type            PettyCashLogType
+  status          PettyCashLogStatus @default(APPROVED)
+  amount          Decimal            @db.Decimal(18, 2)
+  balanceAfter    Decimal            @default(0) @db.Decimal(18, 2) // set by trigger
+  categoryId      String?            @db.Uuid
+  descriptionI18n Json               @default("{}")
+  originalLocale  Locale             @default(ar)
+  merchantName    String?
+  receiptId       String?            @unique @db.Uuid
+  transactionId   String?            @unique @db.Uuid
+  vehicleId       String?            @db.Uuid
+  workOrderId     String?            @db.Uuid
+  tripId          String?            @db.Uuid
+  recordedById    String             @db.Uuid
+  reviewedById    String?            @db.Uuid
+  reviewedAt      DateTime?          @db.Timestamptz(6)
+  occurredAt      DateTime           @default(now()) @db.Timestamptz(6)
+  geo             Json?
+  createdAt       DateTime           @default(now()) @db.Timestamptz(6)
+
+  household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  account     PettyCashAccount @relation(fields: [accountId], references: [id])
+  category    Category?        @relation(fields: [categoryId], references: [id])
+  receipt     Receipt?         @relation(fields: [receiptId], references: [id])
+  transaction Transaction?     @relation(fields: [transactionId], references: [id])
+  vehicle     Vehicle?         @relation(fields: [vehicleId], references: [id])
+  workOrder   WorkOrder?       @relation(fields: [workOrderId], references: [id])
+  trip        Trip?            @relation(fields: [tripId], references: [id])
+  recordedBy  Membership       @relation("PettyCashRecorder", fields: [recordedById], references: [id])
+
+  @@index([accountId, occurredAt(sort: Desc)])
+  @@index([householdId, status])
+  @@map("petty_cash_logs")
+}
+
+// =============================================================================
+//  MODULE 7 — WORK ORDERS (multilingual ticketing for staff & vendors)
+// -----------------------------------------------------------------------------
+//  Broader than MaintenanceTicket: any job ("prepare majlis for 20 guests",
+//  "school pickup 13:30", "fix kitchen tap"). A ticket can spawn one work
+//  order. Each instruction is stored in its original language and machine-
+//  translated into the assignee's locale; isSafetyCritical instructions
+//  (allergies, medication, child safety) need HUMAN_REVIEWED translation
+//  before the order may leave NEW status (enforced by trigger).
+// =============================================================================
+
+enum WorkOrderStatus {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  VERIFIED
+  CANCELLED
+}
+
+enum WorkOrderCategory {
+  CLEANING
+  COOKING
+  CHILDCARE
+  DRIVING
+  ERRAND
+  GARDENING
+  MAINTENANCE
+  EVENT_PREP
+  OTHER
+}
+
+enum TranslationStatus {
+  ORIGINAL_ONLY
+  PENDING
+  MACHINE_TRANSLATED
+  HUMAN_REVIEWED
+  FAILED
+}
+
+model WorkOrder {
+  id                  String               @id @default(uuid()) @db.Uuid
+  householdId         String               @db.Uuid
+  number              Int                  @default(0) // per-household sequence, set by trigger (WO-0001)
+  titleI18n           Json                 @default("{}")
+  descriptionI18n     Json                 @default("{}")
+  originalLocale      Locale               @default(ar)
+  category            WorkOrderCategory    @default(OTHER)
+  priority            RequestPriority      @default(NORMAL)
+  status              WorkOrderStatus      @default(NEW)
+  requesterId         String               @db.Uuid
+  assigneeId          String?              @db.Uuid
+  assigneeStaffType   StaffType? // pool assignment: "any driver"
+  vendorName          String?
+  propertyId          String?              @db.Uuid
+  unitId              String?              @db.Uuid
+  vehicleId           String?              @db.Uuid
+  maintenanceTicketId String?              @unique @db.Uuid
+  requestId           String?              @db.Uuid
+  tripId              String?              @db.Uuid
+  scheduledAt         DateTime?            @db.Timestamptz(6)
+  dueAt               DateTime?            @db.Timestamptz(6)
+  startedAt           DateTime?            @db.Timestamptz(6)
+  completedAt         DateTime?            @db.Timestamptz(6)
+  verifiedAt          DateTime?            @db.Timestamptz(6)
+  verifiedById        String?              @db.Uuid
+  recurrence          RecurrenceFrequency?
+  requiresPhotoProof  Boolean              @default(false)
+  estimatedCost       Decimal?             @db.Decimal(18, 2)
+  actualCost          Decimal?             @db.Decimal(18, 2)
+  currency            String               @default("SAR") @db.Char(3)
+  rating              Int? // 1..5 by requester on verification
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?            @db.Timestamptz(6)
+
+  household         Household              @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  requester         Membership             @relation("WorkOrderRequester", fields: [requesterId], references: [id])
+  assignee          Membership?            @relation("WorkOrderAssignee", fields: [assigneeId], references: [id])
+  property          Property?              @relation(fields: [propertyId], references: [id])
+  unit              PropertyUnit?          @relation(fields: [unitId], references: [id])
+  vehicle           Vehicle?               @relation(fields: [vehicleId], references: [id])
+  maintenanceTicket MaintenanceTicket?     @relation(fields: [maintenanceTicketId], references: [id])
+  request           Request?               @relation(fields: [requestId], references: [id])
+  trip              Trip?                  @relation(fields: [tripId], references: [id])
+  instructions      WorkOrderInstruction[]
+  pettyCashLogs     PettyCashLog[]
+
+  @@unique([householdId, number])
+  @@index([householdId, status, priority])
+  @@index([assigneeId, status])
+  @@map("work_orders")
+}
+
+model WorkOrderInstruction {
+  id                String            @id @default(uuid()) @db.Uuid
+  householdId       String            @db.Uuid
+  workOrderId       String            @db.Uuid
+  sequence          Int
+  textI18n          Json              @default("{}") // { "ar": original, "tl": translated, ... }
+  originalLocale    Locale            @default(ar)
+  translationStatus TranslationStatus @default(PENDING)
+  translationMeta   Json              @default("{}") // per locale: { engine, confidence, reviewedById, at }
+  isSafetyCritical  Boolean           @default(false)
+  requiresPhoto     Boolean           @default(false)
+  completedAt       DateTime?         @db.Timestamptz(6)
+  completedById     String?           @db.Uuid
+  photoStorageKey   String?
+  note              String?
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([workOrderId, sequence])
+  @@map("work_order_instructions")
+}
+
+// =============================================================================
+//  MODULE 8 — FAMILY TRAVEL (itineraries, passengers, bookings)
+// -----------------------------------------------------------------------------
+//  Not to be confused with TripLog (a single vehicle journey).
+//  Staff travelling with the family (nanny, driver) are passengers linked to
+//  their StaffProfile + passport, so the expiry engine can warn about
+//  passport validity and exit/re-entry visas before departure.
+// =============================================================================
+
+enum TravelTripStatus {
+  PLANNING
+  BOOKED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PassengerType {
+  ADULT
+  CHILD
+  INFANT
+}
+
+enum VisaStatus {
+  NOT_REQUIRED
+  REQUIRED
+  APPLIED
+  GRANTED
+  REFUSED
+}
+
+enum BookingType {
+  FLIGHT
+  HOTEL
+  CAR_RENTAL
+  TRAIN
+  TRANSFER
+  ACTIVITY
+  TRAVEL_INSURANCE
+  VISA
+  OTHER
+}
+
+enum BookingStatus {
+  HOLD
+  CONFIRMED
+  TICKETED
+  CHECKED_IN
+  CANCELLED
+  REFUNDED
+}
+
+model Trip {
+  id           String           @id @default(uuid()) @db.Uuid
+  householdId  String           @db.Uuid
+  organizerId  String           @db.Uuid
+  titleI18n    Json             @default("{}")
+  purpose      String? // vacation, umrah, medical, school, business
+  status       TravelTripStatus @default(PLANNING)
+  startDate    DateTime         @db.Date
+  endDate      DateTime         @db.Date
+  destinations Json             @default("[]") // [{ city, country, from, to }]
+  budget       Decimal?         @db.Decimal(18, 2)
+  currency     String           @default("SAR") @db.Char(3)
+  notes        String?
+  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(6)
+
+  household     Household       @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  organizer     Membership      @relation(fields: [organizerId], references: [id])
+  passengers    TripPassenger[]
+  bookings      TripBooking[]
+  workOrders    WorkOrder[]
+  pettyCashLogs PettyCashLog[]
+
+  @@index([householdId, startDate])
+  @@map("trips")
+}
+
+/// One of membershipId / staffId / guestNameI18n must be set (CHECK in migration 0002).
+model TripPassenger {
+  id                  String        @id @default(uuid()) @db.Uuid
+  householdId         String        @db.Uuid
+  tripId              String        @db.Uuid
+  membershipId        String?       @db.Uuid
+  staffId             String?       @db.Uuid
+  guestNameI18n       Json?
+  passengerType       PassengerType @default(ADULT)
+  passportDocumentId  String?       @db.Uuid
+  visaStatus          VisaStatus    @default(NOT_REQUIRED)
+  exitReentryRequired Boolean       @default(false)
+  specialNeeds        String? // wheelchair, infant bassinet, dietary
+  seatPreference      String?
+
+  household Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  trip      Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  member    Membership?       @relation(fields: [membershipId], references: [id])
+  staff     StaffProfile?     @relation(fields: [staffId], references: [id])
+  passport  IdentityDocument? @relation(fields: [passportDocumentId], references: [id])
+
+  @@unique([tripId, membershipId])
+  @@unique([tripId, staffId])
+  @@map("trip_passengers")
+}
+
+model TripBooking {
+  id                   String        @id @default(uuid()) @db.Uuid
+  householdId          String        @db.Uuid
+  tripId               String        @db.Uuid
+  type                 BookingType
+  status               BookingStatus @default(HOLD)
+  provider             String? // airline, hotel, agency
+  confirmationRef      String?
+  fromLocation         String?
+  toLocation           String?
+  startAt              DateTime      @db.Timestamptz(6)
+  endAt                DateTime?     @db.Timestamptz(6)
+  passengerIds         String[]      @db.Uuid // TripPassenger ids covered by this booking
+  details              Json          @default("{}") // flight no., seats, room type, address
+  amount               Decimal?      @db.Decimal(18, 2)
+  currency             String        @default("SAR") @db.Char(3)
+  cancellationDeadline DateTime?     @db.Timestamptz(6)
+  transactionId        String?       @unique @db.Uuid
+  createdById          String        @db.Uuid
+  createdAt            DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @db.Timestamptz(6)
+
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  trip        Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([tripId, startAt])
+  @@map("trip_bookings")
+}
+
+// =============================================================================
+//  ENCRYPTION KEYS (KMS envelope; see packages/crypto)
+// -----------------------------------------------------------------------------
+//  Per-tenant data key (DEK) and blind-index key, both stored only in
+//  KMS-wrapped form. Plaintext keys never touch the database. Deleting the
+//  row and destroying the KMS key version = crypto-shredding the tenant.
+// =============================================================================
+
+model TenantKey {
+  id              String    @id @default(uuid()) @db.Uuid
+  householdId     String    @db.Uuid
+  version         Int
+  kmsKeyName      String // projects/…/cryptoKeys/household-dek
+  wrappedDek      Bytes
+  wrappedIndexKey Bytes
+  algorithm       String    @default("AES-256-GCM")
+  status          String    @default("ACTIVE") // ACTIVE | DECRYPT_ONLY | DESTROYED
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  rotatedAt       DateTime? @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, version])
+  @@map("tenant_keys")
+}
+
+// =============================================================================
+//  CROSS-CUTTING — ATTACHMENTS, REMINDERS, NOTIFICATIONS, AUDIT
+// =============================================================================
+
+/// Polymorphic file attachment (FK enforced in service layer).
+model Attachment {
+  id           String           @id @default(uuid()) @db.Uuid
+  householdId  String           @db.Uuid
+  entityType   AttachmentEntity
+  entityId     String           @db.Uuid
+  storageKey   String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  isSensitive  Boolean          @default(false) // passports → short-lived signed URLs only
+  uploadedById String           @db.Uuid
+  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, entityType, entityId])
+  @@map("attachments")
+}
+
+/// Unified expiry/due-date engine: iqama, istimara, insurance, rent, bills.
+model Reminder {
+  id          String                @id @default(uuid()) @db.Uuid
+  householdId String                @db.Uuid
+  recipientId String?               @db.Uuid // null = household admins
+  entityType  AttachmentEntity
+  entityId    String                @db.Uuid
+  titleI18n   Json                  @default("{}")
+  dueAt       DateTime              @db.Timestamptz(6)
+  remindAt    DateTime              @db.Timestamptz(6)
+  status      ReminderStatus        @default(PENDING)
+  channels    NotificationChannel[] @default([IN_APP, PUSH])
+
+  household Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  recipient Membership? @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([remindAt, status])
+  @@index([householdId, dueAt])
+  @@map("reminders")
+}
+
+model Notification {
+  id          String              @id @default(uuid()) @db.Uuid
+  householdId String              @db.Uuid
+  userId      String              @db.Uuid
+  channel     NotificationChannel
+  templateKey String // rendered in user's preferredLocale at send time
+  params      Json                @default("{}")
+  deepLink    String?
+  readAt      DateTime?           @db.Timestamptz(6)
+  sentAt      DateTime?           @db.Timestamptz(6)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+/// Append-only. Postgres role used by the app has INSERT only (no UPDATE/DELETE).
+model AuditLog {
+  id          BigInt      @id @default(autoincrement())
+  householdId String?     @db.Uuid
+  actorUserId String?     @db.Uuid
+  action      AuditAction
+  entityType  String
+  entityId    String?
+  before      Json?
+  after       Json?
+  ip          String?     @db.Inet
+  userAgent   String?
+  requestId   String? // trace correlation
+  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+
+  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  actor     User?      @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([householdId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}

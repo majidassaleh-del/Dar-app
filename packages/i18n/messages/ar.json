@@ -1,0 +1,19 @@
+{
+  "app": { "name": "منصة إدارة المنزل", "tagline": "كل شؤون البيت في مكان واحد" },
+  "nav": { "dashboard": "الرئيسية", "staff": "العمالة", "finance": "المالية", "pettyCash": "العهدة النقدية", "workOrders": "أوامر العمل", "travel": "السفر", "policies": "السياسات" },
+  "dashboard": {
+    "greeting": "مرحباً {name}",
+    "pendingApprovals": "{count, plural, =0 {لا توجد طلبات بانتظار موافقتك} one {طلب واحد بانتظار موافقتك} two {طلبان بانتظار موافقتك} few {# طلبات بانتظار موافقتك} many {# طلباً بانتظار موافقتك} other {# طلب بانتظار موافقتك}}",
+    "expiringDocuments": "{count, plural, =0 {لا توجد وثائق قاربت على الانتهاء} one {وثيقة واحدة تنتهي خلال {days} يوماً} two {وثيقتان تنتهيان خلال {days} يوماً} few {# وثائق تنتهي خلال {days} يوماً} many {# وثيقة تنتهي خلال {days} يوماً} other {# وثيقة تنتهي خلال {days} يوماً}}",
+    "today": "اليوم {date}"
+  },
+  "pettyCash": { "balance": "رصيد العهدة: {amount}", "logExpense": "تسجيل مصروف", "pendingReview": "بانتظار المراجعة" },
+  "workOrder": {
+    "status": { "NEW": "جديد", "ASSIGNED": "مُسند", "IN_PROGRESS": "قيد التنفيذ", "COMPLETED": "مكتمل", "VERIFIED": "تم التحقق" },
+    "translatedBadge": "مترجم آلياً من {language}",
+    "showOriginal": "عرض النص الأصلي"
+  },
+  "policy": { "acknowledge": "قرأت وأوافق", "acknowledgedOn": "تم الإقرار في {date}" },
+  "receipt": { "scanned": "تمت قراءة الفاتورة", "zatcaVerified": "رمز ZATCA صالح", "total": "الإجمالي {amount}" },
+  "common": { "language": "اللغة", "save": "حفظ", "cancel": "إلغاء" }
+}

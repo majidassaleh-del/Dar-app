@@ -1,0 +1,19 @@
+{
+  "app": { "name": "የቤት ኢአርፒ", "tagline": "የቤቱ ጉዳይ ሁሉ በአንድ ቦታ" },
+  "nav": { "dashboard": "መነሻ", "staff": "ሠራተኞች", "finance": "ፋይናንስ", "pettyCash": "አነስተኛ ገንዘብ", "workOrders": "የሥራ ትዕዛዞች", "travel": "ጉዞ", "policies": "መመሪያዎች" },
+  "dashboard": {
+    "greeting": "ሰላም {name}",
+    "pendingApprovals": "{count, plural, =0 {ፈቃድዎን የሚጠብቅ ጥያቄ የለም} one {# ጥያቄ ፈቃድዎን እየጠበቀ ነው} other {# ጥያቄዎች ፈቃድዎን እየጠበቁ ነው}}",
+    "expiringDocuments": "{count, plural, =0 {በቅርቡ የሚያልፍ ሰነድ የለም} one {# ሰነድ በ{days} ቀናት ውስጥ ያልፋል} other {# ሰነዶች በ{days} ቀናት ውስጥ ያልፋሉ}}",
+    "today": "ዛሬ {date} ነው"
+  },
+  "pettyCash": { "balance": "ቀሪ ገንዘብ፦ {amount}", "logExpense": "ወጪ መዝግብ", "pendingReview": "ግምገማ በመጠባበቅ ላይ" },
+  "workOrder": {
+    "status": { "NEW": "አዲስ", "ASSIGNED": "ተመድቧል", "IN_PROGRESS": "በሂደት ላይ", "COMPLETED": "ተጠናቋል", "VERIFIED": "ተረጋግጧል" },
+    "translatedBadge": "ከ{language} በማሽን የተተረጎመ",
+    "showOriginal": "ዋናውን አሳይ"
+  },
+  "policy": { "acknowledge": "አንብቤ ተስማምቻለሁ", "acknowledgedOn": "በ{date} ተቀብለዋል" },
+  "receipt": { "scanned": "ደረሰኙ ተቃኝቷል", "zatcaVerified": "ትክክለኛ የZATCA QR", "total": "ጠቅላላ {amount}" },
+  "common": { "language": "ቋንቋ", "save": "አስቀምጥ", "cancel": "ሰርዝ" }
+}

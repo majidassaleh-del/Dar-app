@@ -1,0 +1,19 @@
+{
+  "app": { "name": "Household ERP", "tagline": "Lahat ng tungkol sa tahanan, sa iisang lugar" },
+  "nav": { "dashboard": "Home", "staff": "Mga kasambahay", "finance": "Pananalapi", "pettyCash": "Petty cash", "workOrders": "Mga gawain", "travel": "Biyahe", "policies": "Mga patakaran" },
+  "dashboard": {
+    "greeting": "Kumusta {name}",
+    "pendingApprovals": "{count, plural, =0 {Walang request na naghihintay sa iyo} one {# request ang naghihintay ng iyong pag-apruba} other {# na request ang naghihintay ng iyong pag-apruba}}",
+    "expiringDocuments": "{count, plural, =0 {Walang dokumentong malapit nang mag-expire} one {# dokumento ang mag-e-expire sa loob ng {days} araw} other {# na dokumento ang mag-e-expire sa loob ng {days} araw}}",
+    "today": "Ngayon ay {date}"
+  },
+  "pettyCash": { "balance": "Natitirang pera: {amount}", "logExpense": "Itala ang gastos", "pendingReview": "Hinihintay ang pagsusuri" },
+  "workOrder": {
+    "status": { "NEW": "Bago", "ASSIGNED": "Naitalaga", "IN_PROGRESS": "Ginagawa", "COMPLETED": "Tapos na", "VERIFIED": "Na-verify" },
+    "translatedBadge": "Isinalin ng makina mula sa {language}",
+    "showOriginal": "Ipakita ang orihinal"
+  },
+  "policy": { "acknowledge": "Nabasa ko at sumasang-ayon ako", "acknowledgedOn": "Kinilala noong {date}" },
+  "receipt": { "scanned": "Na-scan ang resibo", "zatcaVerified": "Wastong ZATCA QR", "total": "Kabuuan {amount}" },
+  "common": { "language": "Wika", "save": "I-save", "cancel": "Kanselahin" }
+}

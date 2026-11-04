@@ -1,0 +1,12 @@
+{
+  "name": "@herp/i18n",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./messages/*": "./messages/*"
+  },
+  "scripts": { "test": "vitest run", "typecheck": "tsc -p ." },
+  "devDependencies": { "intl-messageformat": "10.7.18", "vitest": "3.2.7", "typescript": "5.9.3", "@types/node": "22.20.5" }
+}

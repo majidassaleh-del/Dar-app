@@ -1,0 +1,6 @@
+# apps/mobile is source-only for now: add "apps/mobile" here once the Expo
+# toolchain (EAS, native SDKs) is set up in CI. Its i18n layer reuses
+# @herp/i18n and use-intl (the framework-agnostic core of next-intl).
+packages:
+  - "packages/*"
+  - "apps/web"

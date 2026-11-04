@@ -1,0 +1,11 @@
+{
+  "name": "@herp/crypto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "test": "vitest run", "typecheck": "tsc -p ." },
+  "peerDependencies": { "@google-cloud/kms": "^5.0.0" },
+  "peerDependenciesMeta": { "@google-cloud/kms": { "optional": true } },
+  "devDependencies": { "vitest": "3.2.7", "typescript": "5.9.3", "@types/node": "22.20.5" }
+}

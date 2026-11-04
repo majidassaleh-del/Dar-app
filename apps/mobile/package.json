@@ -1,0 +1,14 @@
+{
+  "name": "@herp/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "//": "Not yet in pnpm-workspace.yaml; versions to be aligned with the Expo SDK chosen at setup (npx expo install).",
+  "dependencies": {
+    "@herp/i18n": "workspace:*",
+    "use-intl": "4.14.9",
+    "expo-localization": "*",
+    "expo-updates": "*",
+    "react": "19.1.10",
+    "react-native": "*"
+  }
+}

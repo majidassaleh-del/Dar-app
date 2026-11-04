@@ -1,0 +1,29 @@
+{
+  "name": "household-erp",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:validate": "prisma validate",
+    "db:test": "tests/apply.sh"
+  },
+  "devDependencies": {
+    "prisma": "6.16.2",
+    "turbo": "2.11.10",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7",
+    "@types/node": "22.20.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "prisma",
+      "@prisma/engines"
+    ]
+  }
+}
