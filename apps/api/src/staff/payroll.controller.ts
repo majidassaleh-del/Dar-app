@@ -8,6 +8,7 @@ import { ZodBody, ZodQuery } from '../common/zod.pipe';
 import { assertWritten, money } from '../common/rls-write';
 import type { RequestContext } from '../tenancy/request-context';
 import { PAYOUT_CHANNELS } from './staff.schemas';
+import { monthlyWage, unpaidLeaveDeduction } from '../hr/esb';
 
 const CreateRun = z.object({ year: z.number().int().min(2000).max(2100), month: z.number().int().min(1).max(12) }).strict();
 const AddLine = z.object({
@@ -44,15 +45,20 @@ export function buildLines(input: {
     if (a.amount > 0) lines.push({ staffId: input.staffId, type: 'ALLOWANCE', amount: round2(a.amount * factor),
       descriptionI18n: { en: `Allowance: ${a.code}${prorated}`, ar: `بدل: ${a.code}${prorated}` } });
   }
+  // Unpaid leave: (monthly wage / 30) × unpaid days, wage = basic + fixed allowances, exact to the halala.
   if (input.unpaidLeaveDays > 0) {
-    lines.push({ staffId: input.staffId, type: 'DEDUCTION', amount: -round2((input.basic / 30) * input.unpaidLeaveDays),
-      descriptionI18n: { en: `Unpaid leave: ${input.unpaidLeaveDays} day(s)`, ar: `إجازة بدون راتب: ${input.unpaidLeaveDays} يوم` } });
+    const wage = monthlyWage({ basicSalary: input.basic, allowances: input.allowances });
+    const h = unpaidLeaveDeduction(wage, input.unpaidLeaveDays);
+    lines.push({ staffId: input.staffId, type: 'UNPAID_LEAVE', amount: -h / 100,
+      descriptionI18n: { en: `Unpaid leave: ${input.unpaidLeaveDays} day(s) × ${(wage / 3000).toFixed(2)}`, ar: `إجازة بدون راتب: ${input.unpaidLeaveDays} يوم × ${(wage / 3000).toFixed(2)}` } });
   }
-  let headroom = lines.reduce((s, l) => s + Number(l.amount), 0);
+  // Domestic Workers Regulation Art. 9: deductions (advance recovery included) never take more than half the wage earned.
+  const earned = lines.reduce((s, l) => s + Number(l.amount), 0);
+  let headroom = round2(Math.max(0, earned) * 0.5);
   for (const adv of input.advances) {
     const take = round2(Math.min(adv.installment, adv.outstanding, Math.max(0, headroom)));
     if (take <= 0) continue;
-    headroom -= take;
+    headroom = round2(headroom - take);
     lines.push({ staffId: input.staffId, type: 'ADVANCE_RECOVERY', amount: -take, advanceId: adv.id,
       descriptionI18n: { en: 'Salary advance recovery', ar: 'استرداد سلفة' } });
   }

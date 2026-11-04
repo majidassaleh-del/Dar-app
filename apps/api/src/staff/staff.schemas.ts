@@ -100,6 +100,8 @@ export const CreateContract = z.object({
   annualLeaveDays: z.number().int().min(0).max(60).default(30),
   ticketEntitlement: z.boolean().default(true),
   workingHoursPerDay: z.number().int().min(1).max(24).optional(),
+  /** End-of-service strategy (see hr/esb.ts). Default: Domestic Workers Regulation Art. 16, one month per 4 years. */
+  endOfServiceRule: z.enum(['SA_DOMESTIC', 'SA_DOMESTIC_SINGLE', 'SA_LABOR_LAW']).default('SA_DOMESTIC'),
 }).strict();
 
 export const RecordSalaryPayment = z.object({

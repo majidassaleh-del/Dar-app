@@ -131,6 +131,7 @@ enum PayrollLineType {
   DEDUCTION
   ADVANCE_RECOVERY
   END_OF_SERVICE
+  UNPAID_LEAVE // (monthly wage / 30) × unpaid days
 }
 
 enum AttendanceStatus {
@@ -392,6 +393,7 @@ enum TicketStatus {
 enum AttachmentEntity {
   RECEIPT
   MAINTENANCE_PLAN
+  SALARY_PAYMENT
   TRANSACTION
   STAFF_DOCUMENT
   REQUEST
@@ -564,6 +566,7 @@ model Household {
   attachments           Attachment[]
   reminders             Reminder[]
   syncOperations        SyncOperation[]
+  esbAccruals           EsbAccrual[]
   maintenancePlans      MaintenancePlan[]
   odometerReadings      OdometerReading[]
   notifications         Notification[]
@@ -771,6 +774,7 @@ model StaffProfile {
   handovers       AssetHandover[]
   evaluations     StaffEvaluation[]
   trainings       StaffTraining[]
+  esbAccruals     EsbAccrual[]
 
   @@index([householdId, status])
   @@index([householdId, staffType])
@@ -946,6 +950,33 @@ model SalaryPayment {
   @@index([staffId, periodYear, periodMonth])
   @@index([householdId, status])
   @@map("salary_payments")
+}
+
+/// Monthly end-of-service snapshot per worker (written by the worker job `esb:accrue`).
+/// `vested` is what would be owed if the contract ended at month end; `provision`
+/// is the accrual for the books (pro rata towards the next entitlement).
+model EsbAccrual {
+  id          String   @id @default(uuid()) @db.Uuid
+  householdId String   @db.Uuid
+  staffId     String   @db.Uuid
+  periodYear  Int
+  periodMonth Int
+  rule        String
+  serviceDays Int
+  monthlyWage Decimal  @db.Decimal(18, 2)
+  vested      Decimal  @db.Decimal(18, 2)
+  provision   Decimal  @db.Decimal(18, 2)
+  delta       Decimal  @db.Decimal(18, 2) // provision change vs the previous snapshot
+  currency    String   @default("SAR") @db.Char(3)
+  detail      Json     @default("{}")
+  computedAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, periodYear, periodMonth])
+  @@index([householdId, periodYear, periodMonth])
+  @@map("esb_accruals")
 }
 
 // ---- Staff HR extension: health, medical checkups, handovers, evaluations, training ----

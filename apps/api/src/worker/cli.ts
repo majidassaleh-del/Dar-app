@@ -3,7 +3,7 @@ import { createKms } from '../crypto/kms';
 import { ServiceDb } from './service-db';
 import { dispatchNotifications } from '../notifications/dispatch';
 import { HttpSender, OutboxSender } from '../notifications/senders';
-import { provisionTenantKeys, runRecurringBills, syncDocumentReminders, syncFleetReminders, syncStaffComplianceReminders } from './jobs';
+import { accrueEndOfService, provisionTenantKeys, runRecurringBills, syncDocumentReminders, syncFleetReminders, syncStaffComplianceReminders } from './jobs';
 
 /** node dist/worker.js <keys:provision | reminders:documents> — run by Cloud Scheduler / cron. */
 void (async () => {
@@ -15,6 +15,11 @@ void (async () => {
       case 'keys:provision': console.log(`provisioned keys for ${await provisionTenantKeys(db, await createKms(env))} household(s)`); break;
       case 'reminders:documents': // kept as an alias of reminders:sync
       case 'reminders:sync': console.log(JSON.stringify({ documents: await syncDocumentReminders(db), compliance: await syncStaffComplianceReminders(db), fleet: await syncFleetReminders(db) })); break;
+      case 'esb:accrue': { // esb:accrue [YYYY-MM], default: last month
+        const arg = process.argv[3]; const now = new Date();
+        const [y, m] = arg ? arg.split('-').map(Number) : [now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear(), now.getUTCMonth() === 0 ? 12 : now.getUTCMonth()];
+        console.log(JSON.stringify(await accrueEndOfService(db, y!, m!))); break;
+      }
       case 'recurring:run': console.log(JSON.stringify(await runRecurringBills(db))); break;
       case 'notifications:dispatch': {
         const configured = (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_TOKEN) || (env.FCM_PROJECT_ID && env.FCM_ACCESS_TOKEN);
@@ -23,7 +28,7 @@ void (async () => {
         console.log(JSON.stringify(await dispatchNotifications(db, sender)));
         break;
       }
-      default: console.error('usage: worker <keys:provision | reminders:sync | recurring:run | notifications:dispatch>'); process.exitCode = 2;
+      default: console.error('usage: worker <keys:provision | reminders:sync | recurring:run | notifications:dispatch | esb:accrue [YYYY-MM]>'); process.exitCode = 2;
     }
   } finally { await db.close(); }
 })();

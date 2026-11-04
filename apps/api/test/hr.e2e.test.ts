@@ -115,19 +115,19 @@ describe('payroll runs and payslips', () => {
     expect((await http().post(`/v1/requests/${adv.body.id}/approve`).set(await as(USERS.efa)).send({}).expect(201)).body.status).toBe('FULFILLED');
   });
 
-  it('buildLines: pro-rating, unpaid leave at basic/30, advance recovery capped by pay', () => {
+  it('buildLines: pro-rating; advance recovery capped at half the wage earned (Art. 9)', () => {
     const lines = buildLines({ staffId: 's', year: 2026, month: 1, basic: 1500, allowances: [{ code: 'FOOD', amount: 200 }],
       employedFrom: new Date('2026-01-10T00:00:00Z'), employedTo: null, unpaidLeaveDays: 0, advances: [{ id: 'a', outstanding: 5000, installment: 5000 }] });
-    expect(lines.map((l) => [l.type, l.amount])).toEqual([['BASIC_SALARY', 1064.52], ['ALLOWANCE', 141.94], ['ADVANCE_RECOVERY', -1206.46]]);
+    expect(lines.map((l) => [l.type, l.amount])).toEqual([['BASIC_SALARY', 1064.52], ['ALLOWANCE', 141.94], ['ADVANCE_RECOVERY', -603.23]]);
   });
 
-  it('generates December: basic + allowance − unpaid leave (2 × 50) − advance instalment (200)', async () => {
+  it('generates December: basic + allowance − unpaid leave ((1500 + 200) / 30 × 2) − advance instalment (200)', async () => {
     const r = await http().post('/v1/payroll-runs').set(await as(USERS.head)).send({ year: 2026, month: 12 }).expect(201);
     runId = r.body.id;
     const maid = r.body.staff.find((s: { staffId: string }) => s.staffId === workerStaffId);
     expect(maid.lines.map((l: { type: string; amount: string }) => [l.type, l.amount])).toEqual(expect.arrayContaining([
-      ['BASIC_SALARY', '1500.00'], ['ALLOWANCE', '200.00'], ['DEDUCTION', '-100.00'], ['ADVANCE_RECOVERY', '-200.00']]));
-    expect(maid.net).toBe('1400.00');
+      ['BASIC_SALARY', '1500.00'], ['ALLOWANCE', '200.00'], ['UNPAID_LEAVE', '-113.33'], ['ADVANCE_RECOVERY', '-200.00']]));
+    expect(maid.net).toBe('1386.67');
     expect(r.body.status).toBe('DRAFT');
   });
 
@@ -140,10 +140,10 @@ describe('payroll runs and payslips', () => {
     await http().get(`/v1/payroll-runs/${runId}`).set(await as(USERS.nanny)).expect(404);
   });
 
-  it('DRAFT is editable: a 50 SAR bonus raises net to 1450 and the run total follows', async () => {
+  it('DRAFT is editable: a 50 SAR bonus raises net to 1436.67 and the run total follows', async () => {
     const before = (await http().get(`/v1/payroll-runs/${runId}`).set(await as(USERS.head)).expect(200)).body.totalAmount;
     const r = await http().post(`/v1/payroll-runs/${runId}/lines`).set(await as(USERS.head)).send({ staffId: workerStaffId, type: 'BONUS', amount: 50, description: 'National Day' }).expect(201);
-    expect(r.body.staff.find((s: { staffId: string }) => s.staffId === workerStaffId).net).toBe('1450.00');
+    expect(r.body.staff.find((s: { staffId: string }) => s.staffId === workerStaffId).net).toBe('1436.67');
     expect(Number(r.body.totalAmount) - Number(before)).toBeCloseTo(50, 2);
   });
 
@@ -155,7 +155,7 @@ describe('payroll runs and payslips', () => {
   it('the worker now sees only her own payslip, in her language, without anyone else\'s pay', async () => {
     const r = await http().get('/v1/payslips').query({ year: 2026, month: 12 }).set(await as(USERS.nanny, undefined, 'ar')).expect(200);
     expect(r.body.data).toHaveLength(1);
-    expect(r.body.data[0]).toMatchObject({ staffId: workerStaffId, runStatus: 'APPROVED', net: '1450.00' });
+    expect(r.body.data[0]).toMatchObject({ staffId: workerStaffId, runStatus: 'APPROVED', net: '1436.67' });
     expect(r.body.data[0].lines.map((l: { description: string }) => l.description)).toContain('الراتب الأساسي');
     expect(JSON.stringify(r.body)).not.toContain('totalAmount');
   });
@@ -177,7 +177,7 @@ describe('payroll runs and payslips', () => {
     expect(r.body.status).toBe('PAID');
     expect(r.body.paymentsRecorded).toBe(payments.length);
     const slip = (await http().get('/v1/payslips').query({ year: 2026, month: 12 }).set(await as(USERS.nanny)).expect(200)).body.data[0];
-    expect(slip.payments).toEqual([expect.objectContaining({ amount: '1450.00', channel: 'BANK_TRANSFER', externalRef: 'ALRAJHI-DEC-0001', status: 'RECORDED' })]);
+    expect(slip.payments).toEqual([expect.objectContaining({ amount: '1436.67', channel: 'BANK_TRANSFER', externalRef: 'ALRAJHI-DEC-0001', status: 'RECORDED' })]);
     const [adv] = await worker.run((tx) => tx.$queryRaw<Array<{ o: string }>>`SELECT outstanding::text AS o FROM salary_advances WHERE "staffId" = ${workerStaffId}::uuid`);
     expect(adv!.o).toBe('400.00');
     await http().post(`/v1/payroll-runs/${runId}/pay`).set(await as(USERS.head)).send({ payments }).expect(422);

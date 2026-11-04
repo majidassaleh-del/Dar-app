@@ -752,4 +752,18 @@ SELECT pg_temp.expect('other household cannot attach a plan to an H1 vehicle', p
      VALUES (gen_random_uuid(), %s, '20000000-0000-0000-0000-000000000001', 'OIL_CHANGE', 5000)$q$, pg_temp.q('h2'))), -3);
 SELECT pg_temp.expect('…nor see its odometer history', (SELECT count(*) FROM odometer_readings), 0);
 
+-- ---- 15. labor compliance ----
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');  -- head
+SELECT pg_temp.expect('ESB snapshots are written by the accrual job only (not even the Head)',
+  pg_temp.try_rows(format($q$INSERT INTO esb_accruals (id,"householdId","staffId","periodYear","periodMonth",rule,"serviceDays","monthlyWage",vested,provision,delta)
+     VALUES (gen_random_uuid(), %s, %s, 2026, 1, 'SA_DOMESTIC', 1, 1, 1, 1, 1)$q$, pg_temp.q('h1'), pg_temp.q('maidStaff'))), -1);
+RESET ROLE;
+INSERT INTO salary_payments (id,"householdId","staffId","periodYear","periodMonth",amount,channel,"paidAt","recordedById")
+VALUES ('d5000000-0000-0000-0000-000000000001', (SELECT v FROM ids WHERE k='h1'), (SELECT v FROM ids WHERE k='maidStaff'), 2026, 1, 1500, 'CASH', now(), (SELECT v FROM ids WHERE k='head1'));
+SELECT pg_temp.expect('a recorded salary schedules three acknowledgment reminders for the worker',
+  (SELECT count(*) FROM reminders WHERE "entityId" = 'd5000000-0000-0000-0000-000000000001' AND "recipientId" = (SELECT v FROM ids WHERE k='maid')), 3);
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
+SELECT pg_temp.expect('other household cannot see them', (SELECT count(*) FROM reminders WHERE "entityId" = 'd5000000-0000-0000-0000-000000000001'), 0);
+
 ROLLBACK;

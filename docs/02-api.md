@@ -143,6 +143,44 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
   * training refreshers at 60/30/15 days;
   * item returns at 7 and 1 days, then overdue.
 
+## 3b. Saudi domestic labour compliance (لائحة عمال الخدمة المنزلية ومن في حكمهم)
+
+> **Status: implemented** in `apps/api/src/hr/esb.ts`, `hr/labor.controller.ts` and `staff/payroll.controller.ts`, plus DB rules in `prisma/rls.sql` (section *SAUDI DOMESTIC LABOR COMPLIANCE*). Tests: `apps/api/test/labor.e2e.test.ts` and DB-suite section 15.
+>
+> **Legal note:** the rules follow Council of Ministers Decision 310 of 7/9/1434H as summarised in published sources; the official text could not be retrieved while building this. The Art. 16 wording is read two ways (see below), so the end-of-service rule is configurable per contract. Have the household's legal adviser confirm the chosen rule.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/staff/{id}/end-of-service?asOf=` | `staff.payroll.read` (workers: their own) | Service start/end, unpaid days excluded, completed 4-year periods, `monthlyWage`, `vested` (owed if the contract ended that day), `provision` (accrual), `nextVestingDate`, monthly snapshots |
+| GET | `/hr/end-of-service?asOf=` | Head / EFA | Every current worker, with `totalVested` and `totalProvision` (the household's ESB liability) |
+| GET | `/me/advances` | the worker | `totalGranted`, `totalRepaid`, `currentOutstanding`, `openAdvances`. Per advance: instalment, installments left, `recoveries` (paid runs) and `scheduled` (approved runs) |
+| GET | `/staff/{id}/advances` | `staff.payroll.read` | The same, for the office |
+| — | worker `esb:accrue [YYYY-MM]` | service | Monthly `esb_accruals` snapshot per worker (idempotent): vested, provision, and the change since the previous month (`delta`, for the books). Users cannot write it (DB) |
+
+**End-of-service (Art. 16):**
+* **Strategy.** Set per contract with `endOfServiceRule`:
+  * `SA_DOMESTIC` (default): one month's wage for every completed period of 4 consecutive years.
+  * `SA_DOMESTIC_SINGLE`: one month's wage, once, after 4 consecutive years.
+  * `SA_LABOR_LAW`: for contracts that grant the general Labor Law formula. That is half a month per year for the first 5 years and a month per year after, pro rata. The Art. 85 resignation reductions are not applied.
+* **Wage basis.** The last contractual monthly wage: basic salary plus fixed allowances.
+* **Service.**
+  * Counted along the latest unbroken chain of contracts; a gap of more than one day breaks it.
+  * Unpaid leave is not service, so it moves the vesting date.
+  * A 4-year period completes at the end of the day before the anniversary.
+
+**Payroll rules:**
+* **Unpaid leave.** Its own `UNPAID_LEAVE` line of (monthly wage / 30) × unpaid days, where the monthly wage is basic plus allowances. It is computed in halalas and rounded half-up, whatever the month's length. Half days are supported.
+* **Art. 9 cap.** Deductions (manual `DEDUCTION` lines plus salary-advance recovery) may not exceed half of the wage earned that month; the wage earned is earnings less unpaid leave.
+  * Payroll generation limits advance recovery to that headroom.
+  * The database refuses any line that breaks the cap (422, a statement-level trigger on `payroll_lines`).
+* **Art. 11 sick leave.** At most 30 days of paid sick leave in any 12 months, with a medical report; the report is already required above one day. A sick leave that goes beyond is split automatically: the paid part stays, and the excess becomes unpaid leave, which payroll deducts.
+
+**Salary acknowledgment:**
+* Recording a salary payment (single or from a payroll run) schedules three reminders to the worker: when paid, after 3 days and after 7 days. Each goes on WhatsApp (template `herp_salary_acknowledge`), push and in-app, in the worker's language, with a deep link to `POST /salary-payments/{id}/acknowledge`.
+* Acknowledging, disputing or reversing the payment removes the outstanding reminders.
+* A worker without an app account gets none.
+* **Not yet modelled:** the paid month of leave after two years (Art. 10), working-hour and rest-day limits, and posting ESB provisions to the ledger.
+
 ## 4. Household accounting
 
 > **Status: implemented** in `apps/api/src/banking/`: accounts, cards, categories, transactions, budgets, recurring bills, plus funding-clearing reconciliation (below). E2E tests are in `apps/api/test/banking.e2e.test.ts`; the attack tests are in the DB suite.

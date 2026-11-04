@@ -2158,7 +2158,7 @@ INSERT INTO app.entity_tables VALUES
   ('reminder','STAFF_DOCUMENT','identity_documents'), ('reminder','MEDICAL_CHECKUP','staff_profiles'), ('reminder','TRAINING','staff_trainings'),
   ('reminder','ASSET_HANDOVER','asset_handovers'), ('reminder','VEHICLE','vehicles'), ('reminder','LEASE','leases'),
   ('reminder','BILL','utility_bills'), ('reminder','STAFF','staff_profiles'), ('reminder','WORK_ORDER','work_orders'),
-  ('reminder','MAINTENANCE_PLAN','maintenance_plans');
+  ('reminder','MAINTENANCE_PLAN','maintenance_plans'), ('reminder','SALARY_PAYMENT','salary_payments');
 
 CREATE OR REPLACE FUNCTION app.validate_entity_ref() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -2506,6 +2506,93 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
+
+-- ============================================ SAUDI DOMESTIC LABOR COMPLIANCE ==
+-- لائحة عمال الخدمة المنزلية ومن في حكمهم (Decision 310/1434H).
+
+-- Art. 9: deductions from the wage (manual deductions + salary-advance recovery) may not
+-- exceed half of the wage earned that month (earnings less unpaid leave). Checked per
+-- worker per run after every statement that touches the lines.
+CREATE OR REPLACE FUNCTION app.check_payroll_deduction_cap() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_earned numeric; v_ded numeric; r record;
+BEGIN
+  FOR r IN SELECT DISTINCT "payrollRunId" AS run, "staffId" AS staff FROM new_rows LOOP
+    SELECT COALESCE(sum(amount) FILTER (WHERE type IN ('BASIC_SALARY', 'ALLOWANCE', 'OVERTIME', 'BONUS', 'UNPAID_LEAVE')), 0),
+           COALESCE(-sum(amount) FILTER (WHERE type IN ('DEDUCTION', 'ADVANCE_RECOVERY')), 0)
+      INTO v_earned, v_ded
+      FROM payroll_lines WHERE "payrollRunId" = r.run AND "staffId" = r.staff;
+    IF v_ded > round(GREATEST(v_earned, 0) * 0.5, 2) THEN
+      RAISE EXCEPTION 'deductions of % SAR exceed half of the % SAR wage earned (Domestic Workers Regulation, Art. 9)', v_ded, v_earned
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END LOOP;
+  RETURN NULL;
+END $$;
+DROP TRIGGER IF EXISTS payroll_lines_deduction_cap_ins ON payroll_lines;
+DROP TRIGGER IF EXISTS payroll_lines_deduction_cap_upd ON payroll_lines;
+CREATE TRIGGER payroll_lines_deduction_cap_ins AFTER INSERT ON payroll_lines REFERENCING NEW TABLE AS new_rows
+  FOR EACH STATEMENT EXECUTE FUNCTION app.check_payroll_deduction_cap();
+CREATE TRIGGER payroll_lines_deduction_cap_upd AFTER UPDATE ON payroll_lines REFERENCING NEW TABLE AS new_rows
+  FOR EACH STATEMENT EXECUTE FUNCTION app.check_payroll_deduction_cap();
+
+-- Art. 11: up to 30 days of paid sick leave (with a medical report) per 12 months. A sick
+-- leave that goes beyond is split: the paid part stays paid, the excess becomes unpaid
+-- leave, which payroll deducts at (monthly wage / 30) per day.
+CREATE OR REPLACE FUNCTION app.cap_paid_sick_leave() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_used numeric; v_left int;
+BEGIN
+  IF NEW.type <> 'SICK' OR NOT NEW.paid THEN RETURN NEW; END IF;
+  SELECT COALESCE(sum(days), 0) INTO v_used FROM leave_records
+   WHERE "staffId" = NEW."staffId" AND type = 'SICK' AND paid AND id <> NEW.id
+     AND "startDate" > NEW."startDate" - 365 AND "startDate" <= NEW."startDate";
+  v_left := GREATEST(0, 30 - floor(v_used)::int);
+  IF NEW.days <= v_left THEN RETURN NEW; END IF;
+  IF v_left = 0 THEN NEW.paid := false; RETURN NEW; END IF;
+  INSERT INTO leave_records (id, "householdId", "staffId", "requestId", type, "startDate", "endDate", days, paid)
+  VALUES (gen_random_uuid(), NEW."householdId", NEW."staffId", NULL, 'SICK', NEW."startDate" + v_left, NEW."endDate", NEW.days - v_left, false);
+  NEW."endDate" := NEW."startDate" + v_left - 1;
+  NEW.days := v_left;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS leave_records_sick_cap ON leave_records;
+CREATE TRIGGER leave_records_sick_cap BEFORE INSERT ON leave_records FOR EACH ROW EXECUTE FUNCTION app.cap_paid_sick_leave();
+
+-- Payroll acknowledgment: a recorded salary payment asks the worker to confirm receipt
+-- (now, after 3 days, after 7 days) on WhatsApp, push and in-app; acknowledging,
+-- disputing or reversing it withdraws the outstanding reminders.
+CREATE OR REPLACE FUNCTION app.salary_ack_reminders() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_member uuid; d int;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.status <> 'RECORDED' AND OLD.status = 'RECORDED' THEN
+      DELETE FROM reminders WHERE "entityType" = 'SALARY_PAYMENT' AND "entityId" = NEW.id AND status = 'PENDING';
+    END IF;
+    RETURN NULL;
+  END IF;
+  IF NEW.status <> 'RECORDED' THEN RETURN NULL; END IF;
+  SELECT "membershipId" INTO v_member FROM staff_profiles WHERE id = NEW."staffId";
+  IF v_member IS NULL THEN RETURN NULL; END IF; -- worker has no app account: nothing to send
+  FOREACH d IN ARRAY ARRAY[0, 3, 7] LOOP
+    INSERT INTO reminders (id, "householdId", "recipientId", "entityType", "entityId", "titleI18n", "dueAt", "remindAt", status, channels)
+    VALUES (gen_random_uuid(), NEW."householdId", v_member, 'SALARY_PAYMENT', NEW.id,
+            jsonb_build_object('tier', d, 'period', format('%s-%s', NEW."periodYear", lpad(NEW."periodMonth"::text, 2, '0')),
+                               'ar', 'يرجى تأكيد استلام الراتب', 'en', 'Please confirm you received your salary'),
+            NEW."paidAt" + interval '7 days', NEW."paidAt" + make_interval(days => d), 'PENDING',
+            ARRAY['IN_APP', 'PUSH', 'WHATSAPP']::"NotificationChannel"[])
+    ON CONFLICT DO NOTHING;
+  END LOOP;
+  RETURN NULL;
+END $$;
+DROP TRIGGER IF EXISTS salary_payments_ack_reminders ON salary_payments;
+CREATE TRIGGER salary_payments_ack_reminders AFTER INSERT OR UPDATE OF status ON salary_payments FOR EACH ROW EXECUTE FUNCTION app.salary_ack_reminders();
+
+-- ESB snapshots: computed by the worker (app_service); members read them like payroll data.
+CREATE POLICY esb_read ON esb_accruals AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('staff.payroll.read')), app.staff_member("staffId")));
+REVOKE INSERT, UPDATE, DELETE ON esb_accruals FROM app_user;
 
 -- ================================================================ FLEET ==
 -- Vehicles: only fleet managers edit the profile. (veh_upd also admits assigned
