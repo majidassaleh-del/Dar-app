@@ -935,6 +935,168 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 $$;
 GRANT EXECUTE ON FUNCTION app.my_households() TO app_user;
 
+-- ================================================ STAFF HR: SALARY PAYMENTS ==
+-- Domestic-worker pay log (Musaned / bank / cash / wallet; no WPS rules).
+-- Managers record and reverse; ONLY the worker acknowledges or disputes,
+-- because that acknowledgment is the evidence in a labour dispute.
+CREATE POLICY salpay_read ON salary_payments AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('staff.payroll.read')), app.staff_member("staffId")));
+CREATE POLICY salpay_ins ON salary_payments AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('staff.payroll.manage')) = 'ALL' AND "recordedById" = app.current_membership_id());
+CREATE POLICY salpay_upd ON salary_payments AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('staff.payroll.manage')) = 'ALL'
+         OR app.current_membership_id() = ANY (app.staff_member("staffId")));
+CREATE POLICY salpay_no_delete ON salary_payments AS RESTRICTIVE FOR DELETE TO app_user USING (false);
+REVOKE UPDATE ON salary_payments FROM app_user;
+GRANT UPDATE (status, "acknowledgedAt", "ackMethod", "disputeReason", "reversedAt", "reversalReason", "transactionId")
+  ON salary_payments TO app_user;
+
+CREATE OR REPLACE FUNCTION app.salary_payment_rules() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_worker boolean; v_manager boolean;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- Staff must belong to the same household (FKs do not check tenancy).
+    IF (SELECT "householdId" FROM staff_profiles WHERE id = NEW."staffId") IS DISTINCT FROM NEW."householdId" THEN
+      RAISE EXCEPTION 'staff member not found in this household' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    NEW.status := 'RECORDED'; NEW."acknowledgedAt" := NULL; NEW."ackMethod" := NULL;
+    NEW."reversedAt" := NULL; NEW."disputeReason" := NULL;
+    IF NEW."paidAt" > now() + interval '1 day' THEN
+      RAISE EXCEPTION 'paidAt cannot be in the future' USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF NOT app.caller_is_restricted() THEN RETURN NEW; END IF;   -- workers / migrations
+  v_worker  := COALESCE(app.current_membership_id() = ANY (app.staff_member(OLD."staffId")), false);
+  v_manager := COALESCE(app.perm_scope('staff.payroll.manage') = 'ALL', false);
+
+  IF OLD.status = 'REVERSED' THEN
+    RAISE EXCEPTION 'a reversed payment is final; record a new one' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."transactionId" IS DISTINCT FROM OLD."transactionId" AND NOT v_manager THEN
+    RAISE EXCEPTION 'only payroll managers can link ledger entries' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    CASE NEW.status
+      WHEN 'ACKNOWLEDGED', 'DISPUTED' THEN
+        IF NOT v_worker THEN
+          RAISE EXCEPTION 'only the worker can acknowledge or dispute their own salary' USING ERRCODE = 'insufficient_privilege';
+        END IF;
+        IF NEW.status = 'DISPUTED' AND length(trim(coalesce(NEW."disputeReason", ''))) = 0 THEN
+          RAISE EXCEPTION 'a dispute needs a reason' USING ERRCODE = 'check_violation';
+        END IF;
+        IF NEW.status = 'ACKNOWLEDGED' THEN
+          NEW."acknowledgedAt" := now(); NEW."ackMethod" := COALESCE(NEW."ackMethod", 'TAP_TO_ACCEPT');
+        END IF;
+      WHEN 'REVERSED' THEN
+        IF NOT v_manager THEN
+          RAISE EXCEPTION 'only payroll managers can reverse a payment' USING ERRCODE = 'insufficient_privilege';
+        END IF;
+        IF length(trim(coalesce(NEW."reversalReason", ''))) = 0 THEN
+          RAISE EXCEPTION 'a reversal needs a reason' USING ERRCODE = 'check_violation';
+        END IF;
+        NEW."reversedAt" := now();
+      ELSE
+        RAISE EXCEPTION 'invalid status transition % → %', OLD.status, NEW.status USING ERRCODE = 'check_violation';
+    END CASE;
+  ELSIF (NEW."acknowledgedAt", NEW."ackMethod", NEW."disputeReason", NEW."reversedAt", NEW."reversalReason")
+        IS DISTINCT FROM (OLD."acknowledgedAt", OLD."ackMethod", OLD."disputeReason", OLD."reversedAt", OLD."reversalReason") THEN
+    RAISE EXCEPTION 'acknowledgment fields change only with a status transition' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER salary_payments_rules BEFORE INSERT OR UPDATE ON salary_payments
+  FOR EACH ROW EXECUTE FUNCTION app.salary_payment_rules();
+
+-- ======================================== STAFF HR: DOCUMENT EXPIRY ALERTS ==
+-- Tier of a document for dashboards: EXPIRED, or the smallest alert tier
+-- (default 60/30/15 days) that the remaining days fall within.
+CREATE OR REPLACE FUNCTION app.document_alert_tier(p_days_left int, p_tiers int[]) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE WHEN p_days_left < 0 THEN 'EXPIRED'
+              ELSE (SELECT min(t)::text FROM unnest(p_tiers) t WHERE p_days_left <= t) END
+$$;
+
+-- Idempotent reminder sweep, run daily by the scheduler (app_service).
+-- For every document with an expiry date it keeps exactly one PENDING
+-- reminder per alert tier at a deterministic time (09:00 household-local on
+-- expiry − tier):
+--   * tiers still ahead are scheduled;
+--   * the tier the document is in now is due immediately (its time is past);
+--   * tiers already overtaken are skipped (no 60-day alert at 10 days);
+--   * expired documents get one EXPIRED reminder.
+-- When a document is renewed (expiry changes), pending reminders for the old
+-- date are deleted and the new date's tiers are scheduled.
+-- Recipient NULL = household admins (Head / EFA).
+CREATE OR REPLACE FUNCTION app.sync_document_reminders(p_household uuid DEFAULT NULL)
+RETURNS TABLE (inserted int, removed int)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_ins int; v_del int;
+BEGIN
+  WITH docs AS (
+    SELECT d.id, d."householdId",
+           ((d."expiryDate" + time '09:00') AT TIME ZONE h.timezone) AS due_at
+    FROM identity_documents d
+    JOIN staff_profiles s ON s.id = d."staffId"
+    JOIN households h ON h.id = d."householdId"
+    WHERE d."expiryDate" IS NOT NULL AND s."deletedAt" IS NULL AND h."deletedAt" IS NULL
+      AND s.status NOT IN ('TERMINATED', 'FINAL_EXIT')
+      AND (p_household IS NULL OR d."householdId" = p_household))
+  DELETE FROM reminders r
+  WHERE r."entityType" = 'STAFF_DOCUMENT' AND r.status = 'PENDING'
+    AND (p_household IS NULL OR r."householdId" = p_household)
+    AND NOT EXISTS (SELECT 1 FROM docs WHERE docs.id = r."entityId" AND docs.due_at = r."dueAt");
+  GET DIAGNOSTICS v_del = ROW_COUNT;
+
+  WITH docs AS (
+    SELECT d.id, d."householdId", d.type, d."alertDays", s."fullNameI18n" AS name,
+           ((d."expiryDate" + time '09:00') AT TIME ZONE h.timezone) AS due_at,
+           d."expiryDate", h.timezone,
+           (d."expiryDate" - (now() AT TIME ZONE h.timezone)::date) AS days_left
+    FROM identity_documents d
+    JOIN staff_profiles s ON s.id = d."staffId"
+    JOIN households h ON h.id = d."householdId"
+    WHERE d."expiryDate" IS NOT NULL AND s."deletedAt" IS NULL AND h."deletedAt" IS NULL
+      AND s.status NOT IN ('TERMINATED', 'FINAL_EXIT')
+      AND (p_household IS NULL OR d."householdId" = p_household)),
+  wanted AS (
+    SELECT docs.*, t AS tier FROM docs, unnest(docs."alertDays") t
+    WHERE docs.days_left >= 0
+      AND (docs.days_left > t OR t = (SELECT min(x) FROM unnest(docs."alertDays") x WHERE docs.days_left <= x))
+    UNION ALL
+    SELECT docs.*, 0 FROM docs WHERE docs.days_left < 0),
+  labels AS (
+    SELECT w.*,
+      CASE w.type WHEN 'IQAMA' THEN 'الإقامة' WHEN 'PASSPORT' THEN 'جواز السفر' WHEN 'VISA' THEN 'التأشيرة'
+                  WHEN 'EXIT_REENTRY_VISA' THEN 'تأشيرة الخروج والعودة' WHEN 'DRIVING_LICENSE' THEN 'رخصة القيادة'
+                  WHEN 'MEDICAL_INSURANCE' THEN 'التأمين الطبي' WHEN 'WORK_PERMIT' THEN 'رخصة العمل' ELSE 'الوثيقة' END AS type_ar,
+      initcap(replace(lower(w.type::text), '_', ' ')) AS type_en,
+      COALESCE(w.name->>'ar', w.name->>'en', w.name->>(SELECT k FROM jsonb_object_keys(w.name) k LIMIT 1), '') AS name_ar,
+      COALESCE(w.name->>'en', w.name->>(SELECT k FROM jsonb_object_keys(w.name) k LIMIT 1), '') AS name_en
+    FROM wanted w)
+  INSERT INTO reminders (id, "householdId", "recipientId", "entityType", "entityId", "titleI18n", "dueAt", "remindAt", status, channels)
+  SELECT gen_random_uuid(), l."householdId", NULL, 'STAFF_DOCUMENT', l.id,
+         CASE WHEN l.tier = 0
+           THEN jsonb_build_object('ar', format('انتهت صلاحية %s للعامل %s', l.type_ar, l.name_ar),
+                                   'en', format('%s of %s has expired', l.type_en, l.name_en))
+           ELSE jsonb_build_object('ar', format('تنتهي %s للعامل %s خلال %s يوماً', l.type_ar, l.name_ar, l.tier),
+                                   'en', format('%s of %s expires within %s days', l.type_en, l.name_en, l.tier)) END
+           || jsonb_build_object('tier', l.tier),
+         l.due_at,
+         ((l."expiryDate" - l.tier + time '09:00') AT TIME ZONE l.timezone),
+         'PENDING',
+         CASE WHEN l.tier <= 15 THEN ARRAY['IN_APP','PUSH','WHATSAPP']::"NotificationChannel"[]
+              ELSE ARRAY['IN_APP','PUSH']::"NotificationChannel"[] END
+  FROM labels l
+  ON CONFLICT ("householdId", "entityType", "entityId", "dueAt", "remindAt") DO NOTHING;
+  GET DIAGNOSTICS v_ins = ROW_COUNT;
+  RETURN QUERY SELECT v_ins, v_del;
+END $$;
+REVOKE ALL ON FUNCTION app.sync_document_reminders(uuid) FROM PUBLIC, app_user;
+GRANT EXECUTE ON FUNCTION app.sync_document_reminders(uuid) TO app_service;
+
 -- ============================================================ PROVISIONING =
 -- Creates a household, its default roles + permission matrix, and the owner
 -- membership in one call. Exposed as POST /v1/households.

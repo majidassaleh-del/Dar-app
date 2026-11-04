@@ -2,6 +2,10 @@ import { Inject, Injectable, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { Prisma, PrismaClient } from '@prisma/client';
 import { ENV, type Env } from '../config/env';
 import type { RequestContext } from '../tenancy/request-context';
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+/** The transaction of the unit of work in progress (used by the tenant keyring to read wrapped keys under RLS). */
+export const currentTx = new AsyncLocalStorage<Prisma.TransactionClient>();
 
 export type Tx = Prisma.TransactionClient;
 
@@ -31,7 +35,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       await tx.$executeRawUnsafe(`SET LOCAL ROLE ${this.env.DB_REQUEST_ROLE}`);
       await tx.$queryRaw`SELECT set_config('app.user_id', ${ctx.userId}, true),
                                 set_config('app.household_id', ${ctx.householdId ?? ''}, true)`;
-      return fn(tx);
+      return currentTx.run(tx, () => fn(tx));
     }, { timeout: opts.timeoutMs ?? 10_000 });
   }
 }

@@ -1,29 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { SignJWT } from 'jose';
 import type { INestApplication } from '@nestjs/common';
 import { createApp } from '../src/app.factory';
 import { PrismaService } from '../src/db/prisma.service';
 
-const H1 = 'b0000000-0000-0000-0000-000000000001';
-const H2 = 'b0000000-0000-0000-0000-000000000002';
-const HEAD = 'a0000000-0000-0000-0000-000000000001';
-const EFA = 'a0000000-0000-0000-0000-000000000002';
-const MAID = 'a0000000-0000-0000-0000-000000000003';
-const MAID_MEMBERSHIP = 'c0000000-0000-0000-0000-000000000003';
+import { H1, H2, MEMBERSHIPS, USERS, as as asLang, testEnv, token } from './helpers';
+
+const HEAD = USERS.head, EFA = USERS.efa, MAID = USERS.maid;
+const MAID_MEMBERSHIP = MEMBERSHIPS.maid;
+const as = (sub: string, household = H1, lang = 'ar') => asLang(sub, household, lang);
 
 let app: INestApplication;
-const token = (sub: string, secret = process.env.AUTH_JWT_SECRET!) =>
-  new SignJWT({}).setProtectedHeader({ alg: 'HS256' }).setSubject(sub).setIssuedAt().setExpirationTime('5m')
-    .sign(new TextEncoder().encode(secret));
-const as = async (sub: string, household = H1, lang = 'ar') => ({
-  Authorization: `Bearer ${await token(sub)}`, 'X-Household-Id': household, 'Accept-Language': lang,
-});
 
 beforeAll(async () => {
-  process.env.NODE_ENV = 'test';
-  process.env.DATABASE_URL = 'postgresql://herp_api:herp_api_dev@localhost:5432/herp_api_test';
-  process.env.AUTH_JWT_SECRET = 'test-secret-test-secret-test-secret-0123';
+  testEnv();
   app = await createApp();
   await app.init();
 });
@@ -58,7 +48,7 @@ describe('platform', () => {
 describe('tenancy', () => {
   it('head lists their household; role names are localised (official EFA label)', async () => {
     const r = await request(app.getHttpServer()).get('/v1/members').set(await as(HEAD)).expect(200);
-    expect(r.body.data).toHaveLength(3);
+    expect(r.body.data).toHaveLength(4);
     expect(r.body.data.map((m: { role: { name: string } }) => m.role.name)).toContain('مكتب EFA - الإدارة التشغيلية');
   });
 

@@ -34,12 +34,15 @@ export function isValidIban(v: string): boolean {
 }
 
 /**
- * Which columns hold which secret (mirrors prisma/schema.prisma).
- * `plain` is the API-level field name; the DB never stores it.
+ * Which columns hold which secret (mirrors prisma/schema.prisma), keyed by
+ * "<table>.<apiField>". The DB never stores the plaintext field.
  */
 export const SENSITIVE_FIELDS = {
-  identity_documents: { plain: 'number', ciphertext: 'numberCiphertext', blindIndex: 'numberBlindIndex', last4: 'numberLast4', normalize: normalizeAlnumUpper },
-  financial_accounts: { plain: 'iban', ciphertext: 'ibanCiphertext', blindIndex: 'ibanBlindIndex', last4: 'ibanLast4', normalize: normalizeAlnumUpper },
-  leases:             { plain: 'counterpartyIdNo', ciphertext: 'counterpartyIdCiphertext', normalize: normalizeDigitsOnly },
-  staff_profiles:     { plain: 'borderNumber', ciphertext: 'borderNumberCiphertext', normalize: normalizeDigitsOnly },
+  'identity_documents.number':        { table: 'identity_documents', ciphertext: 'numberCiphertext', blindIndex: 'numberBlindIndex', last4: 'numberLast4', normalize: normalizeAlnumUpper },
+  'financial_accounts.iban':          { table: 'financial_accounts', ciphertext: 'ibanCiphertext', blindIndex: 'ibanBlindIndex', last4: 'ibanLast4', normalize: normalizeAlnumUpper },
+  'leases.counterpartyIdNo':          { table: 'leases', ciphertext: 'counterpartyIdCiphertext', normalize: normalizeDigitsOnly },
+  'staff_profiles.borderNumber':      { table: 'staff_profiles', ciphertext: 'borderNumberCiphertext', normalize: normalizeDigitsOnly },
+  'staff_profiles.payoutIban':        { table: 'staff_profiles', ciphertext: 'payoutIbanCiphertext', blindIndex: 'payoutIbanBlindIndex', last4: 'payoutIbanLast4', normalize: normalizeAlnumUpper },
 } as const;
+
+export type SensitiveField = keyof typeof SENSITIVE_FIELDS;

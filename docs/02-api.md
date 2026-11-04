@@ -57,20 +57,24 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 
 ## 3. Staff HR
 
+> **Status: implemented** in `apps/api/src/staff/` (profiles, documents, alerts, contracts, salary payments) with e2e tests in `apps/api/test/staff.e2e.test.ts`. Attendance, leave, payroll runs and tasks are next.
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/staff` | `staff.profile.read` | Filters: `staffType`, `status`. Staff see only themselves |
 | POST | `/staff` | `staff.profile.manage` | |
 | GET | `/staff/{id}` | `staff.profile.read` | |
 | PATCH | `/staff/{id}` | `staff.profile.manage` | |
-| POST | `/staff/{id}/status` | `staff.profile.manage` | `{ status: ACTIVE\|ON_LEAVE\|ABSCONDED\|TERMINATED\|FINAL_EXIT, effectiveDate, reason }` |
+| POST | `/staff/{id}/status` | `staff.profile.manage` | `{ status, effectiveDate?, reason? }`. Transitions are enforced (for example, FINAL_EXIT is final and ABSCONDED can return to ACTIVE); `422` otherwise. Audited |
+| | *(on POST/PATCH `/staff`)* | | `borderNumber` and `payoutIban` (mod-97 checked) are accepted in plaintext and stored encrypted. Responses show only `hasBorderNumber` and `payout.ibanLast4`. `defaultPayoutChannel`: `MUSANED \| BANK_TRANSFER \| CASH \| DIGITAL_WALLET`; BANK_TRANSFER needs an IBAN |
 | POST | `/staff/{id}/app-access` | `admin.members.manage` | Creates or links a Membership (STAFF/DRIVER role) and sends an OTP invite in the staff member's language |
 | GET | `/staff/{id}/documents` | `staff.documents.read` | Passport, iqama, visa, licence (number masked) |
 | POST | `/staff/{id}/documents` | `staff.profile.manage` | |
 | PATCH | `/staff/{id}/documents/{docId}` | **Head / EFA only** | Renewals, custody flag (protected table) |
 | GET | `/staff/{id}/documents/{docId}/reveal` | `staff.documents.read` | Decrypts via the tenant DEK (KMS). Audited `VIEW_SENSITIVE` |
 | GET | `/staff/documents/lookup?type=IQAMA&number=` | `staff.documents.read` | Exact match through the blind index; no decryption |
-| GET | `/staff/documents/expiring?withinDays=60` | `staff.documents.read` | Dashboard widget |
+| GET | `/staff/documents/expiring?withinDays=60` | `staff.documents.read` | Expired documents, plus those inside the window (default = largest tier). Each has `daysLeft` and `alertTier` (`EXPIRED`, `15`, `30`, `60`), and `summary` counts per tier. Days are counted in the household's time zone |
+| | *(on POST `/staff/{id}/documents`)* | | `number` is validated per type (Iqama: 10 digits starting with 2 plus a Luhn check digit; national ID: starting with 1; passport: 6–12 alphanumeric). It is encrypted, with last-4 and a blind index stored beside it. A duplicate number in the household returns `409`. `alertDays` defaults to `households.settings.documentAlertDays`, else `[60, 30, 15]` |
 | GET | `/staff/{id}/contracts` | `staff.payroll.read` | |
 | POST | `/staff/{id}/contracts` | `staff.profile.manage` | A new active contract supersedes the previous one |
 | GET | `/staff/{id}/end-of-service?asOf=` | `staff.payroll.read` | Calculated entitlement |
@@ -88,6 +92,13 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 | POST | `/payroll-runs/{id}/pay` | `staff.payroll.manage` | `{ fromAccountId }` posts ledger transactions and sends payslips |
 | GET | `/payslips` | `staff.payroll.read` | Staff see their own; `?format=pdf` renders in the staff member's locale |
 | GET | `/salary-advances` | `staff.payroll.read` | |
+| POST | `/staff/{id}/salary-payments` | `staff.payroll.manage` | Domestic-worker pay log, **outside WPS/Mudad** (no SIF file, no Saudi-bank IBAN rule, cash allowed). `{ periodYear, periodMonth, amount?, channel?, externalRef?, paidAt?, note?, proofFileId? }`. `amount` defaults to the active contract (basic + allowances) and `channel` to the worker's default. MUSANED and BANK_TRANSFER require `externalRef`. The response includes the period summary and an over-payment warning |
+| GET | `/salary-payments?year=&month=&staffId=&status=` · `/staff/{id}/salary-payments` | `staff.payroll.read` | Workers see only their own |
+| POST | `/salary-payments/{id}/acknowledge` | **the worker only** | `{ method? }`. The Head cannot acknowledge on the worker's behalf (`403`); this is the dispute evidence |
+| POST | `/salary-payments/{id}/dispute` | **the worker only** | `{ reason }` |
+| POST | `/salary-payments/{id}/reverse` | `staff.payroll.manage` | `{ reason }`. REVERSED is final; a correction is a new row. Rows can't be edited (no route; DB column grants) |
+| GET | `/staff/{id}/salary-statement?year=` | `staff.payroll.read` | Per month: due under the contract, paid, confirmed by the worker, outstanding, and status (`UNPAID`, `PARTIAL`, `PAID_UNCONFIRMED`, `PAID_CONFIRMED`, `DISPUTED`) |
+| *(worker)* | `node dist/worker.js reminders:documents` | `app_service` | Daily idempotent sweep. One reminder per tier at 09:00 local on expiry − tier. The current tier fires immediately and overtaken tiers are skipped. Renewal reschedules. Expired documents get one EXPIRED reminder. Tier ≤ 15 also goes to WhatsApp |
 | GET | `/tasks` | `staff.tasks.manage` / assignee | `?assignee=me&status=TODO` |
 | POST | `/tasks` | `staff.tasks.manage` | Auto-translated to the assignee's language |
 | PATCH | `/tasks/{id}` | `staff.tasks.manage` / assignee | Assignees may only change `status` and `proofPhoto` |

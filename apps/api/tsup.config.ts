@@ -4,7 +4,7 @@ import { defineConfig } from 'tsup';
 // TypeScript source. tsup switches to SWC because emitDecoratorMetadata is on,
 // which Nest's dependency injection needs.
 export default defineConfig({
-  entry: ['src/main.ts'],
+  entry: { main: 'src/main.ts', worker: 'src/worker/cli.ts' },
   format: ['cjs'],
   target: 'node22',
   platform: 'node',

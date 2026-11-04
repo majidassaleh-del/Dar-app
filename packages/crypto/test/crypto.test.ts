@@ -75,23 +75,33 @@ describe('envelope encryption', () => {
 
 describe('blind index', () => {
   it('is deterministic within a tenant and normalised', async () => {
-    const a = await lookupIndex(cipher, 'identity_documents', H1, 'a12 345-67');
-    const b = await lookupIndex(cipher, 'identity_documents', H1, 'A1234567');
+    const a = await lookupIndex(cipher, 'identity_documents.number', H1, 'a12 345-67');
+    const b = await lookupIndex(cipher, 'identity_documents.number', H1, 'A1234567');
     expect(a).toBe(b);
   });
   it('differs across tenants (no cross-household correlation)', async () => {
-    expect(await lookupIndex(cipher, 'identity_documents', H1, 'A1234567'))
-      .not.toBe(await lookupIndex(cipher, 'identity_documents', H2, 'A1234567'));
+    expect(await lookupIndex(cipher, 'identity_documents.number', H1, 'A1234567'))
+      .not.toBe(await lookupIndex(cipher, 'identity_documents.number', H2, 'A1234567'));
   });
 });
 
 describe('seal / unseal', () => {
   it('produces exactly the DB columns, then reverses', async () => {
-    const cols = await seal(cipher, 'identity_documents', H1, '2123 456 789');
+    const cols = await seal(cipher, 'identity_documents.number', H1, '2123 456 789');
     expect(Object.keys(cols).sort()).toEqual(['numberBlindIndex', 'numberCiphertext', 'numberLast4']);
     expect(cols.numberLast4).toBe('6789');
     expect(JSON.stringify(cols)).not.toContain('2123456789');
-    expect(await unseal(cipher, 'identity_documents', H1, cols)).toBe('2123456789');
+    expect(await unseal(cipher, 'identity_documents.number', H1, cols)).toBe('2123456789');
+  });
+});
+
+describe('two encrypted fields on one table', () => {
+  it('border number and payout IBAN on staff_profiles do not share a context', async () => {
+    const iban = await seal(cipher, 'staff_profiles.payoutIban', H1, 'SA03 8000 0000 6080 1016 7519');
+    expect(Object.keys(iban).sort()).toEqual(['payoutIbanBlindIndex', 'payoutIbanCiphertext', 'payoutIbanLast4']);
+    // Same table, different column ⇒ different AAD ⇒ cannot be read as a border number.
+    await expect(unseal(cipher, 'staff_profiles.borderNumber', H1, { borderNumberCiphertext: iban.payoutIbanCiphertext })).rejects.toThrow();
+    expect(await unseal(cipher, 'staff_profiles.payoutIban', H1, iban)).toBe('SA0380000000608010167519');
   });
 });
 

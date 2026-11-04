@@ -502,6 +502,7 @@ model Household {
   identityDocs          IdentityDocument[]
   contracts             EmploymentContract[]
   payrollRuns           PayrollRun[]
+  salaryPayments        SalaryPayment[]
   payrollLines          PayrollLine[]
   salaryAdvances        SalaryAdvance[]
   leaves                LeaveRecord[]
@@ -677,42 +678,50 @@ model MembershipPermission {
 // =============================================================================
 
 model StaffProfile {
-  id                     String           @id @default(uuid()) @db.Uuid
-  householdId            String           @db.Uuid
-  membershipId           String?          @unique @db.Uuid // null until staff gets app access
+  id                     String                @id @default(uuid()) @db.Uuid
+  householdId            String                @db.Uuid
+  membershipId           String?               @unique @db.Uuid // null until staff gets app access
   staffType              StaffType
-  status                 EmploymentStatus @default(RECRUITING)
-  fullNameI18n           Json             @default("{}") // name as in passport + Arabic transliteration
-  nationality            String           @db.Char(2)
+  status                 EmploymentStatus      @default(RECRUITING)
+  fullNameI18n           Json                  @default("{}") // name as in passport + Arabic transliteration
+  nationality            String                @db.Char(2)
   gender                 String?
-  dateOfBirth            DateTime?        @db.Date
+  dateOfBirth            DateTime?             @db.Date
   religion               String?
-  preferredLocale        Locale           @default(en)
+  preferredLocale        Locale                @default(en)
   phone                  String?
   emergencyContact       Json? // { name, phone, relation, country }
   recruitmentAgency      String?
   musanedRef             String? // government domestic-labour platform reference
   borderNumberCiphertext String? // KMS envelope
-  hireDate               DateTime?        @db.Date
-  probationEndsAt        DateTime?        @db.Date
-  terminationDate        DateTime?        @db.Date
+  /// How salary is normally paid. Domestic workers are outside WPS/Mudad:
+  /// Musaned salary transfer, bank transfer, cash and wallets are all legal.
+  defaultPayoutChannel   SalaryPaymentChannel?
+  payoutIbanCiphertext   String? // KMS envelope (direct bank transfer)
+  payoutIbanBlindIndex   String?
+  payoutIbanLast4        String?               @db.VarChar(4)
+  payoutWalletRef        String? // Musaned / wallet account reference (not secret, display only)
+  hireDate               DateTime?             @db.Date
+  probationEndsAt        DateTime?             @db.Date
+  terminationDate        DateTime?             @db.Date
   weeklyDayOff           Int? // 0..6
-  livesIn                Boolean          @default(true)
+  livesIn                Boolean               @default(true)
   notes                  String?
-  createdAt              DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt              DateTime         @updatedAt @db.Timestamptz(6)
-  deletedAt              DateTime?        @db.Timestamptz(6)
+  createdAt              DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime              @updatedAt @db.Timestamptz(6)
+  deletedAt              DateTime?             @db.Timestamptz(6)
 
-  household    Household            @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  membership   Membership?          @relation(fields: [membershipId], references: [id], onDelete: SetNull)
-  documents    IdentityDocument[]
-  contracts    EmploymentContract[]
-  payrollLines PayrollLine[]
-  advances     SalaryAdvance[]
-  leaves       LeaveRecord[]
-  attendance   Attendance[]
-  violations   TrafficViolation[]
-  tripSeats    TripPassenger[]
+  household      Household            @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  membership     Membership?          @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  documents      IdentityDocument[]
+  contracts      EmploymentContract[]
+  payrollLines   PayrollLine[]
+  advances       SalaryAdvance[]
+  leaves         LeaveRecord[]
+  attendance     Attendance[]
+  violations     TrafficViolation[]
+  tripSeats      TripPassenger[]
+  salaryPayments SalaryPayment[]
 
   @@index([householdId, status])
   @@index([householdId, staffType])
@@ -732,7 +741,8 @@ model IdentityDocument {
   issueDate        DateTime?            @db.Date
   expiryDate       DateTime?            @db.Date
   heldByEmployer   Boolean              @default(false) // passport custody tracking
-  remindDaysBefore Int                  @default(60)
+  /// Alert tiers in days before expiry (default 60 / 30 / 15). Household default in households.settings.documentAlertDays.
+  alertDays        Int[]                @default([60, 30, 15])
   createdAt        DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt        DateTime             @updatedAt @db.Timestamptz(6)
 
@@ -784,8 +794,9 @@ model PayrollRun {
   paidAt       DateTime?     @db.Timestamptz(6)
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
 
-  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  household Household       @relation(fields: [householdId], references: [id], onDelete: Cascade)
   lines     PayrollLine[]
+  payments  SalaryPayment[]
 
   @@unique([householdId, periodYear, periodMonth])
   @@map("payroll_runs")
@@ -832,6 +843,60 @@ model SalaryAdvance {
 
   @@index([staffId, settledAt])
   @@map("salary_advances")
+}
+
+enum SalaryPaymentChannel {
+  MUSANED // salary transfer through the Musaned platform / its wallet
+  BANK_TRANSFER // direct transfer to the worker's own account
+  CASH // hand-paid; the worker's acknowledgment is the evidence
+  DIGITAL_WALLET // STC Pay, urpay, etc.
+}
+
+enum SalaryPaymentStatus {
+  RECORDED // employer logged the payment
+  ACKNOWLEDGED // worker confirmed receipt in the app
+  DISPUTED // worker says it was not (fully) received
+  REVERSED // employer voided it (wrong entry); corrections are a new row
+}
+
+/// Domestic-worker salary log. Deliberately NOT a WPS/Mudad file: household
+/// employers are outside WPS, so there is no IBAN-at-Saudi-bank or SIF
+/// constraint. What matters for a labour dispute is evidence: period, amount,
+/// channel, the transfer reference, and the worker's own acknowledgment.
+/// Immutable after insert apart from status transitions (DB trigger).
+model SalaryPayment {
+  id             String                @id @default(uuid()) @db.Uuid
+  householdId    String                @db.Uuid
+  staffId        String                @db.Uuid
+  payrollRunId   String?               @db.Uuid
+  periodYear     Int
+  periodMonth    Int
+  amount         Decimal               @db.Decimal(18, 2)
+  currency       String                @default("SAR") @db.Char(3)
+  channel        SalaryPaymentChannel
+  status         SalaryPaymentStatus   @default(RECORDED)
+  externalRef    String? // Musaned transfer no. / bank reference; required for MUSANED and BANK_TRANSFER
+  payoutLast4    String?               @db.VarChar(4) // last 4 of the IBAN/wallet paid into
+  paidAt         DateTime              @db.Timestamptz(6)
+  note           String?
+  proofFileId    String?               @db.Uuid // Attachment (transfer slip, signed cash voucher)
+  recordedById   String                @db.Uuid
+  acknowledgedAt DateTime?             @db.Timestamptz(6)
+  ackMethod      AcknowledgmentMethod?
+  disputeReason  String?
+  reversedAt     DateTime?             @db.Timestamptz(6)
+  reversalReason String?
+  transactionId  String?               @unique @db.Uuid
+  createdAt      DateTime              @default(now()) @db.Timestamptz(6)
+
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff       StaffProfile @relation(fields: [staffId], references: [id])
+  payrollRun  PayrollRun?  @relation(fields: [payrollRunId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([staffId, periodYear, periodMonth])
+  @@index([householdId, status])
+  @@map("salary_payments")
 }
 
 model LeaveRecord {
@@ -1032,6 +1097,7 @@ model Transaction {
   rentPayment    RentPayment?
   utilityBill    UtilityBill?
   pettyCashLog   PettyCashLog?
+  salaryPayment  SalaryPayment?
   tripBooking    TripBooking?
 
   @@unique([householdId, accountId, externalRef])
@@ -2209,6 +2275,7 @@ model Reminder {
   household Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
   recipient Membership? @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
+  @@unique([householdId, entityType, entityId, dueAt, remindAt]) // idempotent sweeps
   @@index([remindAt, status])
   @@index([householdId, dueAt])
   @@map("reminders")

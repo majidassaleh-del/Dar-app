@@ -17,7 +17,7 @@ Multi-tenant household ERP (web + mobile), Arabic-first with 6 languages.
 | `packages/receipt-parser` | OCR text parser (Arabic/English), ZATCA merge, QR detection, `processReceiptImage` |
 | `packages/crypto` | KMS envelope encryption (Cloud KMS / local), blind index, Saudi ID and IBAN validators |
 | `apps/web` | Next.js 15 + next-intl 4: `/ar /en /hi /tl /am /bn`, RTL/LTR |
-| `apps/api` | NestJS 11 API foundation: RLS request context, JWT and household guards, problem+json errors, reference `members` module, e2e tests |
+| `apps/api` | NestJS 11 API: RLS request context, JWT and household guards, problem+json errors, field encryption (`CryptoModule`), **Staff HR** (`src/staff/`), worker jobs (`src/worker/`), e2e tests |
 | `scripts/dev-db.sh` · `scripts/dev-fixtures.sql` | Local DB with the `herp_api` login role and demo households |
 | `apps/mobile` | Expo i18n root (`use-intl`); source only, not yet in the workspace |
 
@@ -43,4 +43,6 @@ Every module follows the reference `src/members/members.controller.ts`:
 3. **Context.** Guards run in order (`JwtGuard`, then `HouseholdGuard`) and attach `@Ctx()`: `userId`, `householdId`, `membershipId`, the negotiated `locale` and `requestId`. Use `@Public()` for health and webhooks, and `@NoHousehold()` for `/me` and `POST /households`.
 4. **Validation.** Use a Zod schema per body with `new ZodBody(schema)`, and `.strict()` to reject unknown fields.
 5. **Localisation.** Resolve `*I18n` columns with `resolveI18n(value, { locale: ctx.locale })`.
-6. **Workers** (OCR, receipt confirmation, key rotation, reminders) connect as `app_service` (BYPASSRLS) and must always filter by `householdId` explicitly.
+6. **Encrypted fields.** Pass plaintext through `seal(crypto.cipher, 'table.field', householdId, value)` before writing and `unseal(…)` to read, inside `withRls`. Keys are loaded through the request's own RLS transaction. Never return `*Ciphertext` or `*BlindIndex` columns; map rows to DTOs.
+7. **Audit.** Use `audit(tx, ctx, {...})` (no RETURNING), so a caller can log their own action without reading the audit log.
+8. **Workers** (OCR, receipt confirmation, key provisioning, reminders) log in as `herp_worker`, act as `app_service` (BYPASSRLS) through `ServiceDb.run`, and must always filter by `householdId` explicitly. `node dist/worker.js keys:provision | reminders:documents`.

@@ -8,7 +8,7 @@ import type { RequestContext } from '../tenancy/request-context';
 
 const UpdateMember = z.object({
   displayName: z.string().trim().min(1).max(80).optional(),
-  roleId: z.string().uuid().optional(),
+  roleId: z.guid().optional(),
   status: z.enum(['ACTIVE', 'SUSPENDED', 'REVOKED']).optional(),
 }).strict();
 

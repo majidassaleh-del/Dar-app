@@ -44,6 +44,13 @@ export class ProblemFilter implements ExceptionFilter {
         return { type: `https://errors.herp.app/${code.toLowerCase()}`, title: code, status, code, detail };
       }
     }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return { type: 'https://errors.herp.app/conflict', title: 'CONFLICT', status: 409, code: 'CONFLICT',
+               detail: `already exists (${([] as string[]).concat((err.meta?.target as string[] | string | undefined) ?? []).join(', ')})` };
+    }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+      return { type: 'https://errors.herp.app/invalid_reference', title: 'INVALID_REFERENCE', status: 422, code: 'INVALID_REFERENCE', detail: 'referenced record does not exist' };
+    }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
       return { type: 'about:blank', title: 'Not Found', status: 404, code: 'NOT_FOUND' };
     }

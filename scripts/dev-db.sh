@@ -19,7 +19,14 @@ DO $$ BEGIN
   END IF;
 END $$;
 GRANT app_user TO herp_api;
-SELECT 1;
+-- Background worker (OCR, reminders, key provisioning): acts only via SET ROLE app_service (BYPASSRLS).
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'herp_worker') THEN
+    CREATE ROLE herp_worker LOGIN PASSWORD 'herp_worker_dev' NOBYPASSRLS NOINHERIT;
+  END IF;
+END $$;
+GRANT app_service TO herp_worker;
 SQL
 [[ " $* " == *" --fixtures "* ]] && psql_ < scripts/dev-fixtures.sql
-echo "ready: postgresql://herp_api:herp_api_dev@localhost:5432/$DB"
+echo "ready: api    postgresql://herp_api:herp_api_dev@localhost:5432/$DB"
+echo "       worker postgresql://herp_worker:herp_worker_dev@localhost:5432/$DB"
