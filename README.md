@@ -17,6 +17,8 @@ Multi-tenant household ERP (web + mobile), Arabic-first with 6 languages.
 | `packages/receipt-parser` | OCR text parser (Arabic/English), ZATCA merge, QR detection, `processReceiptImage` |
 | `packages/crypto` | KMS envelope encryption (Cloud KMS / local), blind index, Saudi ID and IBAN validators |
 | `apps/web` | Next.js 15 + next-intl 4: `/ar /en /hi /tl /am /bn`, RTL/LTR |
+| `apps/api` | NestJS 11 API foundation: RLS request context, JWT and household guards, problem+json errors, reference `members` module, e2e tests |
+| `scripts/dev-db.sh` · `scripts/dev-fixtures.sql` | Local DB with the `herp_api` login role and demo households |
 | `apps/mobile` | Expo i18n root (`use-intl`); source only, not yet in the workspace |
 
 ```bash
@@ -25,6 +27,20 @@ pnpm -r --filter "./packages/*" test        # unit tests
 pnpm --filter @herp/web build               # web build (type-checks too)
 cp .env.example .env && npx prisma validate   # needs DATABASE_URL / DIRECT_URL set
 tests/apply.sh                              # DB: migrations + seed + RLS + security suite (needs local Postgres)
+pnpm db:generate                            # Prisma client
+pnpm --filter @herp/api test                # API e2e against a fresh Postgres DB
+scripts/dev-db.sh herp_dev --fixtures       # then: cd apps/api && cp .env.example .env && pnpm build && pnpm start
 ```
 
 `rls.sql` must be applied by a role with BYPASSRLS (it checks and aborts otherwise).
+
+## Building API modules (`apps/api`)
+
+Every module follows the reference `src/members/members.controller.ts`:
+
+1. **All database work goes through `db.withRls(ctx, tx => …)`.** It opens one transaction, runs `SET LOCAL ROLE app_user`, and sets `app.user_id` / `app.household_id`. Don't write tenant `WHERE` clauses or repeat permission checks in TypeScript: RLS and the triggers decide. The login role `herp_api` has no table privileges, so a query outside `withRls` fails (an e2e test enforces this).
+2. **Let the database refuse.** `ProblemFilter` maps Postgres errors to RFC 9457 responses: `42501` → 403, `23514` (trigger rule) → 422, `23505` → 409. Under RLS, a row that is invisible to an update is "0 rows", so return 404 for it.
+3. **Context.** Guards run in order (`JwtGuard`, then `HouseholdGuard`) and attach `@Ctx()`: `userId`, `householdId`, `membershipId`, the negotiated `locale` and `requestId`. Use `@Public()` for health and webhooks, and `@NoHousehold()` for `/me` and `POST /households`.
+4. **Validation.** Use a Zod schema per body with `new ZodBody(schema)`, and `.strict()` to reject unknown fields.
+5. **Localisation.** Resolve `*I18n` columns with `resolveI18n(value, { locale: ctx.locale })`.
+6. **Workers** (OCR, receipt confirmation, key rotation, reminders) connect as `app_service` (BYPASSRLS) and must always filter by `householdId` explicitly.

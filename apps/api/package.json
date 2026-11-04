@@ -1,0 +1,40 @@
+{
+  "name": "@herp/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prisma:generate": "prisma generate --schema ../../prisma/schema.prisma",
+    "build": "tsup",
+    "start": "node dist/main.js",
+    "dev": "tsup --watch --onSuccess \"node dist/main.js\"",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@herp/crypto": "workspace:*",
+    "@herp/i18n": "workspace:*",
+    "@herp/receipt-parser": "workspace:*",
+    "@herp/zatca": "workspace:*",
+    "@nestjs/common": "11.2.8",
+    "@nestjs/core": "11.2.8",
+    "@nestjs/platform-express": "11.2.8",
+    "@prisma/client": "6.16.2",
+    "jose": "6.2.15",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "11.2.8",
+    "@swc/core": "1.16.21",
+    "@types/express": "5.0.6",
+    "@types/node": "22.20.5",
+    "@types/supertest": "7.2.1",
+    "prisma": "6.16.2",
+    "supertest": "7.3.1",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
+    "unplugin-swc": "2.0.0",
+    "vitest": "3.2.7"
+  }
+}

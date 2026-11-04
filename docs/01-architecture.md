@@ -133,6 +133,7 @@ sequenceDiagram
   S-->>C: 200, localized JSON (i18n fields resolved to "ar" with fallback)
 ```
 
+* **Database roles.** The API logs in as `herp_api` (LOGIN, NOBYPASSRLS, no table privileges, member of `app_user`). `PrismaService.withRls()` runs `SET LOCAL ROLE app_user` and the two `set_config` calls at the start of each request transaction, so forgetting the context fails closed. Implementation: `apps/api/src/db/prisma.service.ts`.
 * **Defence in depth.** The guard checks the permission and returns 403 early. RLS guarantees isolation even if a query is buggy. Tests (`tests/rls_test.sql`) assert both layers.
 * Prisma integration uses a `$extends` client wrapper that opens an interactive transaction per request and issues the two `set_config` calls. A connection pooler (PgBouncer, transaction mode) is compatible because the settings are `LOCAL`.
 * **Background workers** connect as `app_service` (`BYPASSRLS`). They must pass `householdId` explicitly. A lint rule bans un-scoped queries in worker code.

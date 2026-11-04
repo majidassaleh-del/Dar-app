@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Build a local database for the API: migrations + seed + RLS, the API login
+# role, and (optionally) demo fixtures.
+#   scripts/dev-db.sh [dbname] [--fixtures]
+# Needs a local Postgres reachable as the `postgres` OS user.
+set -euo pipefail
+DB=${1:-herp_dev}
+cd "$(dirname "$0")/.."
+psql_() { su postgres -c "psql -q -v ON_ERROR_STOP=1 -d $DB"; }
+su postgres -c "psql -q -c 'DROP DATABASE IF EXISTS $DB' -c 'CREATE DATABASE $DB'" 2>&1 | grep -v NOTICE || true
+for f in prisma/migrations/*/migration.sql prisma/seed.sql prisma/rls.sql; do psql_ < "$f" 2>&1 | grep -vE 'NOTICE|^$' || true; done
+
+# The API logs in as herp_api: LOGIN, no BYPASSRLS, no table privileges of its
+# own. It can only act by SET ROLE app_user inside a request transaction.
+psql_ <<'SQL'
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'herp_api') THEN
+    CREATE ROLE herp_api LOGIN PASSWORD 'herp_api_dev' NOBYPASSRLS NOINHERIT;
+  END IF;
+END $$;
+GRANT app_user TO herp_api;
+SELECT 1;
+SQL
+[[ " $* " == *" --fixtures "* ]] && psql_ < scripts/dev-fixtures.sql
+echo "ready: postgresql://herp_api:herp_api_dev@localhost:5432/$DB"
