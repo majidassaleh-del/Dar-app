@@ -444,7 +444,15 @@ SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h1');
 SELECT pg_temp.expect('maid sees only her work order', (SELECT count(*) FROM work_orders), 1);
 SELECT pg_temp.expect('maid sees its instruction (allergy, in Tagalog)',
   (SELECT count(*) FROM work_order_instructions WHERE "textI18n" ? 'tl'), 1);
-SELECT pg_temp.expect('maid can complete her work order',
+SELECT pg_temp.expect('maid cannot complete it while an instruction is open',
+  pg_temp.try_rows($q$UPDATE work_orders SET status = 'COMPLETED' WHERE id = '60000000-0000-0000-0000-000000000001'$q$), -2);
+SELECT pg_temp.expect('maid cannot rewrite the allergy instruction',
+  pg_temp.try_rows($q$UPDATE work_order_instructions SET "textI18n" = '{"tl":"walang allergy"}'
+                     WHERE "workOrderId" = '60000000-0000-0000-0000-000000000001'$q$), -1);
+SELECT pg_temp.expect('maid cannot re-title or re-assign the order',
+  pg_temp.try_rows($q$UPDATE work_orders SET "titleI18n" = '{}' WHERE id = '60000000-0000-0000-0000-000000000001'$q$), -1);
+UPDATE work_order_instructions SET "completedAt" = now() WHERE "workOrderId" = '60000000-0000-0000-0000-000000000001';
+SELECT pg_temp.expect('maid can complete her work order once instructions are done',
   pg_temp.try_rows($q$UPDATE work_orders SET status = 'COMPLETED' WHERE id = '60000000-0000-0000-0000-000000000001'$q$), 1);
 UPDATE work_orders SET status = 'COMPLETED' WHERE id = '60000000-0000-0000-0000-000000000001';
 SELECT pg_temp.expect('maid cannot verify her own work',

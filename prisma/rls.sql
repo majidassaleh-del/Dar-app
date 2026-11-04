@@ -838,7 +838,16 @@ BEGIN
     RAISE EXCEPTION 'safety-critical instruction needs a human-reviewed translation before dispatch'
       USING ERRCODE = 'check_violation';
   END IF;
-  IF TG_OP = 'UPDATE' AND NEW.status = 'COMPLETED' AND OLD.status <> 'COMPLETED' THEN NEW."completedAt" := now(); END IF;
+  IF TG_OP = 'UPDATE' AND NEW.status = 'IN_PROGRESS' AND OLD."startedAt" IS NULL THEN NEW."startedAt" := now(); END IF;
+  IF TG_OP = 'UPDATE' AND NEW.status = 'COMPLETED' AND OLD.status <> 'COMPLETED' THEN
+    IF EXISTS (SELECT 1 FROM work_order_instructions i WHERE i."workOrderId" = NEW.id AND i."completedAt" IS NULL) THEN
+      RAISE EXCEPTION 'complete every instruction before completing the work order' USING ERRCODE = 'check_violation';
+    END IF;
+    NEW."completedAt" := now();
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.status = 'VERIFIED' AND OLD.status <> 'COMPLETED' THEN
+    RAISE EXCEPTION 'only a COMPLETED work order can be verified' USING ERRCODE = 'check_violation';
+  END IF;
   IF TG_OP = 'UPDATE' AND NEW.status = 'VERIFIED' AND OLD.status <> 'VERIFIED' THEN
     NEW."verifiedAt" := now(); NEW."verifiedById" := app.current_membership_id();
   END IF;
@@ -850,7 +859,24 @@ CREATE TRIGGER work_orders_1_rules BEFORE INSERT OR UPDATE ON work_orders
 -- Only the requester (or a manager) can mark VERIFIED; assignees stop at COMPLETED.
 CREATE OR REPLACE FUNCTION app.authorize_work_order() RETURNS trigger
 LANGUAGE plpgsql AS $$
+DECLARE v_me uuid := app.current_membership_id();
 BEGIN
+  -- Assignee (not requester, not manager): progress, hold, complete, actual cost. Nothing else.
+  IF app.caller_is_restricted() AND OLD."assigneeId" = v_me AND OLD."requesterId" IS DISTINCT FROM v_me
+     AND NOT COALESCE(app.perm_scope('workorders.manage') = 'ALL', false) THEN
+    IF (NEW."titleI18n", NEW."descriptionI18n", NEW.category, NEW.priority, NEW."requesterId", NEW."assigneeId",
+        NEW."assigneeStaffType", NEW."dueAt", NEW."scheduledAt", NEW."estimatedCost", NEW.rating, NEW."vendorName",
+        NEW."propertyId", NEW."unitId", NEW."vehicleId", NEW."tripId", NEW."requiresPhotoProof")
+       IS DISTINCT FROM
+       (OLD."titleI18n", OLD."descriptionI18n", OLD.category, OLD.priority, OLD."requesterId", OLD."assigneeId",
+        OLD."assigneeStaffType", OLD."dueAt", OLD."scheduledAt", OLD."estimatedCost", OLD.rating, OLD."vendorName",
+        OLD."propertyId", OLD."unitId", OLD."vehicleId", OLD."tripId", OLD."requiresPhotoProof") THEN
+      RAISE EXCEPTION 'assignees can only update progress and actual cost' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NEW.status IS DISTINCT FROM OLD.status AND NEW.status NOT IN ('IN_PROGRESS', 'ON_HOLD', 'COMPLETED') THEN
+      RAISE EXCEPTION 'assignees can move a work order to IN_PROGRESS, ON_HOLD or COMPLETED only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
   IF app.caller_is_restricted() AND NEW.status = 'VERIFIED' AND OLD.status <> 'VERIFIED'
      AND NOT COALESCE(OLD."requesterId" = app.current_membership_id()
                       OR app.perm_scope('workorders.manage') = 'ALL', false) THEN
@@ -876,6 +902,29 @@ BEGIN
 END $$;
 CREATE TRIGGER work_order_instructions_rules BEFORE INSERT OR UPDATE ON work_order_instructions
   FOR EACH ROW EXECUTE FUNCTION app.instruction_rules();
+
+-- Assignees tick instructions off (with photo when required); they never edit the text.
+CREATE OR REPLACE FUNCTION app.authorize_instruction() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_parties uuid[];
+BEGIN
+  IF NEW."completedAt" IS NOT NULL AND NEW."requiresPhoto" AND NEW."photoStorageKey" IS NULL THEN
+    RAISE EXCEPTION 'this instruction needs a photo to be completed' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NOT app.caller_is_restricted() OR COALESCE(app.perm_scope('workorders.manage') = 'ALL', false) THEN RETURN NEW; END IF;
+  v_parties := app.work_order_parties(NEW."workOrderId");   -- [requester, assignee]
+  IF TG_OP = 'UPDATE' AND v_parties[1] IS DISTINCT FROM app.current_membership_id()
+     AND (NEW."textI18n", NEW."originalLocale", NEW."translationStatus", NEW."translationMeta", NEW."isSafetyCritical",
+          NEW."requiresPhoto", NEW.sequence)
+         IS DISTINCT FROM
+         (OLD."textI18n", OLD."originalLocale", OLD."translationStatus", OLD."translationMeta", OLD."isSafetyCritical",
+          OLD."requiresPhoto", OLD.sequence) THEN
+    RAISE EXCEPTION 'assignees can only complete instructions, not edit them' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER work_order_instructions_0_authorize BEFORE INSERT OR UPDATE ON work_order_instructions
+  FOR EACH ROW EXECUTE FUNCTION app.authorize_instruction();
 
 -- ============================================================ MODULE 8: TRAVEL ==
 -- Passengers (including a travelling nanny) see the trip they are on and

@@ -265,6 +265,10 @@ Request `payload` schemas by `type`:
 
 ## 10. Petty cash
 
+> **Status: implemented** in `apps/api/src/petty-cash/`, with e2e tests in `apps/api/test/ops.e2e.test.ts`. Every endpoint in this table exists. The database enforces balance, float limit, overdraft, the receipt threshold, custodian-only logging, and review by managers only. Responses include `lowBalance`.
+>
+> Not yet implemented: posting approved expenses to the ledger, and turning a rejected expense into a payroll deduction. Both wait for the accounting module.
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/petty-cash` | `finance.pettycash.read` | Custodians see their own float |
@@ -279,6 +283,19 @@ Request `payload` schemas by `type`:
 | POST | `/petty-cash/{id}/reconcile` | `finance.pettycash.manage` | `{ countedCash }` → variance, then an ADJUSTMENT |
 
 ## 11. Work orders
+
+> **Status: implemented** in `apps/api/src/work-orders/`, except `POST /maintenance-tickets/{id}/work-order`, which waits for the property module.
+>
+> Translation rules:
+> * Instructions are stored in the creator's language. Their status is computed from the assignee's (or the staff pool's) preferred language: `ORIGINAL_ONLY`, `PENDING`, or `HUMAN_REVIEWED` when the creator supplies `translations`.
+> * A safety-critical instruction that still needs translation **defers the assignment**. The response carries a warning naming the instructions and languages.
+>
+> Assignee rules (database-enforced):
+> * Assignees may only move the order to IN_PROGRESS, ON_HOLD or COMPLETED, set `actualCost`, and tick instructions off.
+> * Instructions marked `requiresPhoto` need a photo.
+> * COMPLETED requires every instruction done, and only the requester or a manager can VERIFY.
+>
+> No machine-translation engine is wired in yet. PENDING instructions are shown in the original language until a translation is added.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
