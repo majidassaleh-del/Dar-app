@@ -2139,6 +2139,326 @@ BEGIN
 END $$;
 CREATE TRIGGER bank_statement_lines_0_validate BEFORE INSERT OR UPDATE ON bank_statement_lines FOR EACH ROW EXECUTE FUNCTION app.validate_statement_line();
 
+-- ================================== STAFF FILES, HEALTH, HANDOVER, TRAINING ==
+
+-- ---- polymorphic references (attachments.entityId, reminders.entityId) ---------
+-- These columns point at different tables depending on entityType, so no FK
+-- exists. This trigger closes the gap: the target must exist in the SAME
+-- household, and a staff file must belong to the same worker as its target.
+CREATE TABLE IF NOT EXISTS app.entity_tables (kind text, entity_type text, tbl text, PRIMARY KEY (kind, entity_type));
+TRUNCATE app.entity_tables;
+INSERT INTO app.entity_tables VALUES
+  ('attachment','RECEIPT','receipts'), ('attachment','TRANSACTION','transactions'), ('attachment','STAFF_DOCUMENT','identity_documents'),
+  ('attachment','REQUEST','requests'), ('attachment','VEHICLE','vehicles'), ('attachment','MAINTENANCE','maintenance_records'),
+  ('attachment','PROPERTY','properties'), ('attachment','LEASE','leases'), ('attachment','BILL','utility_bills'),
+  ('attachment','TICKET','maintenance_tickets'), ('attachment','ASSET','assets'), ('attachment','POLICY','policies'),
+  ('attachment','WORK_ORDER','work_orders'), ('attachment','TRIP','trips'), ('attachment','PETTY_CASH','petty_cash_logs'),
+  ('attachment','STAFF','staff_profiles'), ('attachment','MEDICAL_CHECKUP','medical_checkups'), ('attachment','TRAINING','staff_trainings'),
+  ('attachment','ASSET_HANDOVER','asset_handovers'), ('attachment','EVALUATION','staff_evaluations'),
+  ('reminder','STAFF_DOCUMENT','identity_documents'), ('reminder','MEDICAL_CHECKUP','staff_profiles'), ('reminder','TRAINING','staff_trainings'),
+  ('reminder','ASSET_HANDOVER','asset_handovers'), ('reminder','VEHICLE','vehicles'), ('reminder','LEASE','leases'),
+  ('reminder','BILL','utility_bills'), ('reminder','STAFF','staff_profiles'), ('reminder','WORK_ORDER','work_orders');
+
+CREATE OR REPLACE FUNCTION app.validate_entity_ref() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_tbl text; v_ok boolean; v_staff uuid;
+        -- shared by attachments and reminders; only attachments have "staffId" (read via jsonb)
+        v_new_staff uuid := (to_jsonb(NEW) ->> 'staffId')::uuid;
+        v_old_staff uuid := CASE WHEN TG_OP = 'UPDATE' THEN (to_jsonb(OLD) ->> 'staffId')::uuid END;
+BEGIN
+  IF TG_OP = 'UPDATE' AND (NEW."entityType", NEW."entityId", NEW."householdId") IS NOT DISTINCT FROM (OLD."entityType", OLD."entityId", OLD."householdId")
+     AND v_new_staff IS NOT DISTINCT FROM v_old_staff THEN RETURN NEW; END IF;
+  SELECT tbl INTO v_tbl FROM app.entity_tables WHERE kind = TG_ARGV[0] AND entity_type = NEW."entityType"::text;
+  IF v_tbl IS NULL THEN
+    IF NEW."entityType"::text = 'OTHER' THEN RETURN NEW; END IF;
+    RAISE EXCEPTION 'entity type % cannot be used here', NEW."entityType" USING ERRCODE = 'check_violation';
+  END IF;
+  EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I WHERE id = $1 AND "householdId" = $2)', v_tbl) INTO v_ok USING NEW."entityId", NEW."householdId";
+  IF NOT v_ok THEN RAISE EXCEPTION 'entityId does not exist in this household' USING ERRCODE = 'foreign_key_violation'; END IF;
+  IF TG_ARGV[0] = 'attachment' AND v_new_staff IS NOT NULL THEN
+    IF v_tbl = 'staff_profiles' THEN v_staff := NEW."entityId";
+    ELSIF v_tbl IN ('identity_documents', 'medical_checkups', 'staff_trainings', 'asset_handovers', 'staff_evaluations') THEN
+      EXECUTE format('SELECT "staffId" FROM %I WHERE id = $1', v_tbl) INTO v_staff USING NEW."entityId";
+    ELSE v_staff := v_new_staff;  -- e.g. a request: the worker is whoever filed it; checked by its own rules
+    END IF;
+    IF v_staff IS DISTINCT FROM v_new_staff THEN
+      RAISE EXCEPTION 'the file belongs to another worker than its target' USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER attachments_0_entity BEFORE INSERT OR UPDATE ON attachments FOR EACH ROW EXECUTE FUNCTION app.validate_entity_ref('attachment');
+CREATE TRIGGER reminders_0_entity BEFORE INSERT OR UPDATE ON reminders FOR EACH ROW EXECUTE FUNCTION app.validate_entity_ref('reminder');
+
+-- ---- attachments: who may read staff / health files ---------------------------
+DROP POLICY attach_sensitive ON attachments;
+CREATE POLICY attach_read ON attachments AS RESTRICTIVE FOR SELECT TO app_user
+  USING ("uploadedById" = app.current_membership_id() OR CASE
+    WHEN category IN ('MEDICAL_REPORT', 'SICK_LEAVE_CERTIFICATE')
+      THEN app.can_access((SELECT app.perm_scope('staff.health.read')), app.staff_member("staffId"))
+    WHEN "staffId" IS NOT NULL OR "isSensitive"
+      THEN app.can_access((SELECT app.perm_scope('staff.documents.read')), app.staff_member("staffId"))
+    ELSE true END);
+-- A worker may only file documents about herself; managers file for anyone.
+CREATE POLICY attach_ins_staff ON attachments AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ("staffId" IS NULL OR (SELECT app.perm_scope('staff.profile.manage')) = 'ALL'
+              OR app.current_membership_id() = ANY (app.staff_member("staffId")));
+REVOKE UPDATE ON attachments FROM app_user;
+GRANT UPDATE (status, sha256, "uploadedAt", encrypted, "storageKey", "sizeBytes") ON attachments TO app_user;
+CREATE OR REPLACE FUNCTION app.guard_attachment() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.status = 'UPLOADED' AND (NEW.sha256, NEW."storageKey", NEW."sizeBytes", NEW.encrypted) IS DISTINCT FROM (OLD.sha256, OLD."storageKey", OLD."sizeBytes", OLD.encrypted) THEN
+    RAISE EXCEPTION 'an uploaded file is immutable; upload a new one' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.status = 'UPLOADED' AND OLD.status <> 'UPLOADED' THEN NEW."uploadedAt" := now(); END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER attachments_1_guard BEFORE UPDATE ON attachments FOR EACH ROW EXECUTE FUNCTION app.guard_attachment();
+
+-- ---- medical checkups & health profile -----------------------------------------
+CREATE POLICY med_read ON medical_checkups AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('staff.health.read')), app.staff_member("staffId")));
+CREATE POLICY med_ins ON medical_checkups AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('staff.health.manage')) = 'ALL' AND "recordedById" = app.current_membership_id());
+CREATE POLICY med_upd ON medical_checkups AS RESTRICTIVE FOR UPDATE TO app_user USING ((SELECT app.perm_scope('staff.health.manage')) = 'ALL');
+CREATE POLICY med_del ON medical_checkups AS RESTRICTIVE FOR DELETE TO app_user USING ((SELECT app.is_household_admin()));
+
+CREATE POLICY health_read ON staff_health_profiles AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('staff.health.read')), app.staff_member("staffId")));
+CREATE POLICY health_ins ON staff_health_profiles AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK (app.can_access((SELECT app.perm_scope('staff.health.manage')), app.staff_member("staffId")));
+CREATE POLICY health_upd ON staff_health_profiles AS RESTRICTIVE FOR UPDATE TO app_user
+  USING (app.can_access((SELECT app.perm_scope('staff.health.manage')), app.staff_member("staffId")));
+CREATE POLICY health_del ON staff_health_profiles AS RESTRICTIVE FOR DELETE TO app_user USING ((SELECT app.is_household_admin()));
+
+-- ---- asset handover ------------------------------------------------------------
+CREATE POLICY ho_read ON asset_handovers AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('staff.profile.read')), app.staff_member("staffId")));
+CREATE POLICY ho_ins ON asset_handovers AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' AND "issuedById" = app.current_membership_id());
+CREATE POLICY ho_upd ON asset_handovers AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' OR app.current_membership_id() = ANY (app.staff_member("staffId")));
+CREATE POLICY ho_del ON asset_handovers AS RESTRICTIVE FOR DELETE TO app_user
+  USING ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' AND status = 'PENDING_ACK');
+
+CREATE OR REPLACE FUNCTION app.guard_handover() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_worker boolean; v_manager boolean;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.status := 'PENDING_ACK'; NEW."ackAt" := NULL; NEW."returnedAt" := NULL; NEW."issuedAt" := now();
+    RETURN NEW;
+  END IF;
+  IF NOT app.caller_is_restricted() THEN RETURN NEW; END IF;
+  v_worker := COALESCE(app.current_membership_id() = ANY (app.staff_member(OLD."staffId")), false);
+  v_manager := COALESCE(app.perm_scope('staff.profile.manage') = 'ALL', false);
+  IF OLD.status IN ('RETURNED', 'LOST') THEN RAISE EXCEPTION 'this handover is closed (%)', OLD.status USING ERRCODE = 'check_violation'; END IF;
+  IF OLD.status <> 'PENDING_ACK' AND (NEW."itemType", NEW."descriptionI18n", NEW."serialOrTag", NEW.quantity, NEW."vehicleId", NEW."cardId", NEW."conditionOut", NEW."staffId")
+       IS DISTINCT FROM (OLD."itemType", OLD."descriptionI18n", OLD."serialOrTag", OLD.quantity, OLD."vehicleId", OLD."cardId", OLD."conditionOut", OLD."staffId") THEN
+    RAISE EXCEPTION 'issued items are frozen once the worker has signed' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF NEW.status = 'ISSUED' THEN
+      IF NOT v_worker OR OLD.status <> 'PENDING_ACK' THEN
+        RAISE EXCEPTION 'only the worker signs for items issued to them' USING ERRCODE = 'insufficient_privilege';
+      END IF;
+      NEW."ackAt" := now(); NEW."ackMethod" := COALESCE(NEW."ackMethod", 'TAP_TO_ACCEPT');
+      NEW."ackContentHash" := encode(digest(concat_ws('|', NEW."itemType", NEW."descriptionI18n"::text, NEW."serialOrTag", NEW.quantity, NEW."conditionOut"), 'sha256'), 'hex');
+    ELSIF NEW.status IN ('RETURNED', 'LOST') THEN
+      IF NOT v_manager THEN RAISE EXCEPTION 'returns are received by a manager' USING ERRCODE = 'insufficient_privilege'; END IF;
+      IF NEW.status = 'RETURNED' THEN NEW."returnedAt" := now(); NEW."returnReceivedById" := app.current_membership_id(); END IF;
+      IF NEW.status = 'LOST' AND length(trim(coalesce(NEW."lostNote", ''))) = 0 THEN
+        RAISE EXCEPTION 'a lost item needs a note' USING ERRCODE = 'check_violation';
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'handover % → % is not allowed', OLD.status, NEW.status USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF v_worker AND NOT v_manager THEN
+    RAISE EXCEPTION 'workers can only sign for items' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER asset_handovers_0_guard BEFORE INSERT OR UPDATE ON asset_handovers FOR EACH ROW EXECUTE FUNCTION app.guard_handover();
+
+-- ---- evaluations ---------------------------------------------------------------
+CREATE POLICY ev_read ON staff_evaluations AS RESTRICTIVE FOR SELECT TO app_user
+  USING ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL'
+         OR (status <> 'DRAFT' AND app.can_access((SELECT app.perm_scope('staff.profile.read')), app.staff_member("staffId"))));
+CREATE POLICY ev_ins ON staff_evaluations AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' AND "evaluatorId" = app.current_membership_id());
+CREATE POLICY ev_upd ON staff_evaluations AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' OR app.current_membership_id() = ANY (app.staff_member("staffId")));
+CREATE POLICY ev_del ON staff_evaluations AS RESTRICTIVE FOR DELETE TO app_user
+  USING ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' AND status = 'DRAFT');
+CREATE OR REPLACE FUNCTION app.guard_evaluation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_worker boolean;
+BEGIN
+  IF NOT app.caller_is_restricted() THEN RETURN NEW; END IF;
+  v_worker := COALESCE(app.current_membership_id() = ANY (app.staff_member(OLD."staffId")), false)
+              AND NOT COALESCE(app.perm_scope('staff.profile.manage') = 'ALL', false);
+  IF OLD.status <> 'DRAFT' AND (NEW.scores, NEW.overall, NEW."commentsI18n", NEW."periodStart", NEW."periodEnd", NEW."evaluatorId")
+       IS DISTINCT FROM (OLD.scores, OLD.overall, OLD."commentsI18n", OLD."periodStart", OLD."periodEnd", OLD."evaluatorId") THEN
+    RAISE EXCEPTION 'a shared evaluation is final' USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_worker THEN
+    IF NOT (OLD.status = 'SHARED' AND NEW.status = 'ACKNOWLEDGED') THEN
+      RAISE EXCEPTION 'workers can only acknowledge a shared evaluation' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    NEW."acknowledgedAt" := now();
+  ELSE
+    IF NEW.status = 'ACKNOWLEDGED' AND OLD.status <> 'ACKNOWLEDGED' THEN
+      RAISE EXCEPTION 'only the worker acknowledges their evaluation' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NEW."workerComment" IS DISTINCT FROM OLD."workerComment" THEN
+      RAISE EXCEPTION 'the worker''s comment is theirs to write' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NEW.status = 'SHARED' AND OLD.status = 'DRAFT' THEN NEW."sharedAt" := now(); END IF;
+    IF NEW.status = 'DRAFT' AND OLD.status <> 'DRAFT' THEN RAISE EXCEPTION 'a shared evaluation cannot return to draft' USING ERRCODE = 'check_violation'; END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER staff_evaluations_0_guard BEFORE UPDATE ON staff_evaluations FOR EACH ROW EXECUTE FUNCTION app.guard_evaluation();
+
+-- ---- trainings -----------------------------------------------------------------
+CREATE POLICY tr_read ON staff_trainings AS RESTRICTIVE FOR SELECT TO app_user
+  USING (app.can_access((SELECT app.perm_scope('staff.profile.read')), app.staff_member("staffId")));
+CREATE POLICY tr_ins ON staff_trainings AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' AND "recordedById" = app.current_membership_id());
+CREATE POLICY tr_upd ON staff_trainings AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL' OR app.current_membership_id() = ANY (app.staff_member("staffId")));
+CREATE POLICY tr_del ON staff_trainings AS RESTRICTIVE FOR DELETE TO app_user USING ((SELECT app.perm_scope('staff.profile.manage')) = 'ALL');
+CREATE OR REPLACE FUNCTION app.guard_training() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT app.caller_is_restricted() OR COALESCE(app.perm_scope('staff.profile.manage') = 'ALL', false) THEN RETURN NEW; END IF;
+  IF (NEW.category, NEW."titleI18n", NEW.provider, NEW."completedAt", NEW."validUntil", NEW.hours, NEW."certificateAttachmentId", NEW."staffId")
+     IS DISTINCT FROM (OLD.category, OLD."titleI18n", OLD.provider, OLD."completedAt", OLD."validUntil", OLD.hours, OLD."certificateAttachmentId", OLD."staffId")
+     OR OLD."workerAckAt" IS NOT NULL THEN
+    RAISE EXCEPTION 'workers can only acknowledge a training once' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  NEW."workerAckAt" := now();
+  RETURN NEW;
+END $$;
+CREATE TRIGGER staff_trainings_0_guard BEFORE UPDATE ON staff_trainings FOR EACH ROW EXECUTE FUNCTION app.guard_training();
+
+-- ---- staff lifecycle: medical clearance in, asset clearance out -----------------
+CREATE OR REPLACE FUNCTION app.has_valid_medical(p_staff uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT EXISTS (SELECT 1 FROM medical_checkups c JOIN staff_profiles s ON s.id = c."staffId"
+                 WHERE c."staffId" = p_staff AND c.result IN ('FIT', 'FIT_WITH_RESTRICTIONS')
+                   AND c."validUntil" >= app.household_today(s."householdId"))
+$$;
+CREATE OR REPLACE FUNCTION app.has_outstanding_items(p_staff uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT EXISTS (SELECT 1 FROM asset_handovers WHERE "staffId" = p_staff AND status IN ('PENDING_ACK', 'ISSUED'))
+$$;
+-- SECURITY INVOKER on purpose: on INSERT the rule applies to interactive users
+-- (caller_is_restricted), while migrations / seed fixtures may load ACTIVE staff.
+CREATE OR REPLACE FUNCTION app.staff_lifecycle_rules() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  -- Mandatory annual medical checkup for ALL staff roles, whatever the job title.
+  IF NEW.status = 'ACTIVE'
+     AND ((TG_OP = 'UPDATE' AND OLD.status IN ('RECRUITING', 'ON_PROBATION', 'ABSCONDED')) OR (TG_OP = 'INSERT' AND app.caller_is_restricted()))
+     AND NOT app.has_valid_medical(NEW.id) THEN
+    RAISE EXCEPTION 'a valid annual medical checkup (FIT) is required before a worker becomes ACTIVE' USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.status IN ('TERMINATED', 'FINAL_EXIT') AND OLD.status NOT IN ('TERMINATED', 'FINAL_EXIT')
+     AND app.has_outstanding_items(NEW.id) THEN
+    RAISE EXCEPTION 'exit clearance: items are still issued to this worker (return or mark them lost first)' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER staff_profiles_1_lifecycle BEFORE INSERT OR UPDATE OF status ON staff_profiles FOR EACH ROW EXECUTE FUNCTION app.staff_lifecycle_rules();
+
+-- ---- sick leave over one day needs a medical certificate -------------------------
+CREATE OR REPLACE FUNCTION app.check_sick_leave() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_days int; v_staff uuid; v_att uuid;
+BEGIN
+  IF NEW.type <> 'LEAVE' OR NEW.payload->>'leaveType' <> 'SICK' THEN RETURN NEW; END IF;
+  v_days := (NEW.payload->>'endDate')::date - (NEW.payload->>'startDate')::date + 1;
+  IF v_days <= 1 THEN RETURN NEW; END IF;
+  v_staff := COALESCE((NEW.payload->>'staffId')::uuid,
+                      (SELECT id FROM staff_profiles WHERE "membershipId" = NEW."requesterId" AND "householdId" = NEW."householdId"));
+  BEGIN v_att := (NEW.payload->>'certificateAttachmentId')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_att := NULL; END;
+  IF v_att IS NULL OR NOT EXISTS (SELECT 1 FROM attachments WHERE id = v_att AND "householdId" = NEW."householdId"
+                                   AND category = 'SICK_LEAVE_CERTIFICATE' AND "staffId" = v_staff) THEN
+    RAISE EXCEPTION 'sick leave of % days needs a medical certificate (SICK_LEAVE_CERTIFICATE attachment of this worker)', v_days
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER requests_1_sick_leave BEFORE INSERT OR UPDATE OF payload ON requests FOR EACH ROW EXECUTE FUNCTION app.check_sick_leave();
+
+-- ---- compliance reminders: medical (ALL staff), trainings, handover returns ------
+CREATE OR REPLACE FUNCTION app.reminder_tiers(p_days_left int, p_tiers int[]) RETURNS SETOF int
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT 0 WHERE p_days_left < 0
+  UNION ALL
+  SELECT t FROM unnest(p_tiers) t
+  WHERE p_days_left >= 0 AND (p_days_left > t OR t = (SELECT min(x) FROM unnest(p_tiers) x WHERE p_days_left <= x))
+$$;
+
+CREATE OR REPLACE FUNCTION app.sync_staff_compliance_reminders(p_household uuid DEFAULT NULL)
+RETURNS TABLE (inserted int, removed int)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_ins int; v_del int;
+BEGIN
+  CREATE TEMP TABLE IF NOT EXISTS _want (hh uuid, et "AttachmentEntity", eid uuid, due_at timestamptz, remind_at timestamptz, tier int, title jsonb) ON COMMIT DROP;
+  TRUNCATE _want;
+  -- Annual medical checkup: every worker, no job-type exemption. Due = last valid checkup's
+  -- validUntil, or 30 days after hire for someone never examined.
+  INSERT INTO _want
+  SELECT s."householdId", 'MEDICAL_CHECKUP', s.id, (d.due + time '09:00') AT TIME ZONE h.timezone,
+         (d.due - t + time '09:00') AT TIME ZONE h.timezone, t,
+         CASE WHEN t = 0 THEN jsonb_build_object('ar', format('الفحص الطبي السنوي للعامل %s متأخر', n.ar), 'en', format('Annual medical checkup for %s is overdue', n.en))
+              ELSE jsonb_build_object('ar', format('الفحص الطبي السنوي للعامل %s مستحق خلال %s يوماً', n.ar, t), 'en', format('Annual medical checkup for %s is due within %s days', n.en, t)) END
+  FROM staff_profiles s JOIN households h ON h.id = s."householdId"
+  CROSS JOIN LATERAL (SELECT COALESCE((SELECT max(c."validUntil") FROM medical_checkups c WHERE c."staffId" = s.id AND c.result IN ('FIT', 'FIT_WITH_RESTRICTIONS')),
+                                      COALESCE(s."hireDate", s."createdAt"::date) + 30) AS due) d
+  CROSS JOIN LATERAL (SELECT COALESCE(s."fullNameI18n"->>'ar', s."fullNameI18n"->>'en', '') AS ar, COALESCE(s."fullNameI18n"->>'en', s."fullNameI18n"->>'ar', '') AS en) n
+  CROSS JOIN LATERAL app.reminder_tiers(d.due - (now() AT TIME ZONE h.timezone)::date, ARRAY[60, 30, 15]) t
+  WHERE s."deletedAt" IS NULL AND s.status NOT IN ('TERMINATED', 'FINAL_EXIT') AND (p_household IS NULL OR s."householdId" = p_household);
+  -- Safety trainings: the latest per worker and category.
+  INSERT INTO _want
+  SELECT tr."householdId", 'TRAINING', tr.id, (tr."validUntil" + time '09:00') AT TIME ZONE h.timezone,
+         (tr."validUntil" - t + time '09:00') AT TIME ZONE h.timezone, t,
+         jsonb_build_object('ar', format('تجديد تدريب %s للعامل %s', tr.category, COALESCE(s."fullNameI18n"->>'ar', s."fullNameI18n"->>'en')),
+                            'en', format('%s training for %s %s', initcap(replace(lower(tr.category::text), '_', ' ')), COALESCE(s."fullNameI18n"->>'en', s."fullNameI18n"->>'ar'),
+                                         CASE WHEN t = 0 THEN 'has expired' ELSE format('expires within %s days', t) END))
+  FROM staff_trainings tr JOIN staff_profiles s ON s.id = tr."staffId" JOIN households h ON h.id = tr."householdId"
+  CROSS JOIN LATERAL app.reminder_tiers(tr."validUntil" - (now() AT TIME ZONE h.timezone)::date, ARRAY[60, 30, 15]) t
+  WHERE tr."validUntil" IS NOT NULL AND s."deletedAt" IS NULL AND s.status NOT IN ('TERMINATED', 'FINAL_EXIT')
+    AND tr."completedAt" = (SELECT max(x."completedAt") FROM staff_trainings x WHERE x."staffId" = tr."staffId" AND x.category = tr.category)
+    AND (p_household IS NULL OR tr."householdId" = p_household);
+  -- Items due back (7 days and 1 day before, then overdue).
+  INSERT INTO _want
+  SELECT a."householdId", 'ASSET_HANDOVER', a.id, a."expectedReturnAt", a."expectedReturnAt" - make_interval(days => t), t,
+         jsonb_build_object('ar', format('إرجاع %s من العامل %s', a."itemType", COALESCE(s."fullNameI18n"->>'ar', s."fullNameI18n"->>'en')),
+                            'en', format('%s due back from %s', initcap(replace(lower(a."itemType"::text), '_', ' ')), COALESCE(s."fullNameI18n"->>'en', s."fullNameI18n"->>'ar')))
+  FROM asset_handovers a JOIN staff_profiles s ON s.id = a."staffId" JOIN households h ON h.id = a."householdId"
+  CROSS JOIN LATERAL app.reminder_tiers(((a."expectedReturnAt" AT TIME ZONE h.timezone)::date - (now() AT TIME ZONE h.timezone)::date), ARRAY[7, 1]) t
+  WHERE a.status IN ('PENDING_ACK', 'ISSUED') AND a."expectedReturnAt" IS NOT NULL AND (p_household IS NULL OR a."householdId" = p_household);
+
+  DELETE FROM reminders r
+  WHERE r."entityType" IN ('MEDICAL_CHECKUP', 'TRAINING', 'ASSET_HANDOVER') AND r.status = 'PENDING'
+    AND (p_household IS NULL OR r."householdId" = p_household)
+    AND NOT EXISTS (SELECT 1 FROM _want w WHERE w.eid = r."entityId" AND w.et = r."entityType" AND w.due_at = r."dueAt");
+  GET DIAGNOSTICS v_del = ROW_COUNT;
+  INSERT INTO reminders (id, "householdId", "recipientId", "entityType", "entityId", "titleI18n", "dueAt", "remindAt", status, channels)
+  SELECT gen_random_uuid(), hh, NULL, et, eid, title || jsonb_build_object('tier', tier), due_at, remind_at, 'PENDING',
+         CASE WHEN tier <= 15 THEN ARRAY['IN_APP','PUSH','WHATSAPP']::"NotificationChannel"[] ELSE ARRAY['IN_APP','PUSH']::"NotificationChannel"[] END
+  FROM _want
+  ON CONFLICT ("householdId", "entityType", "entityId", "dueAt", "remindAt") DO NOTHING;
+  GET DIAGNOSTICS v_ins = ROW_COUNT;
+  RETURN QUERY SELECT v_ins, v_del;
+END $$;
+REVOKE ALL ON FUNCTION app.sync_staff_compliance_reminders(uuid) FROM PUBLIC, app_user;
+GRANT EXECUTE ON FUNCTION app.sync_staff_compliance_reminders(uuid) TO app_service;
+
 -- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
 -- Foreign keys prove a referenced row EXISTS, not that it belongs to the same
 -- household. Without this, a request that guessed another household's UUID
@@ -2213,7 +2533,17 @@ INSERT INTO app.tenant_refs VALUES
   ('journal_entries',         'postedById',         'memberships',        false),
   ('recurring_rules',         'createdById',        'memberships',        false),
   ('funding_matches',         'matchedById',        'memberships',        false),
-  ('bank_statement_imports',  'importedById',       'memberships',        false)
+  ('bank_statement_imports',  'importedById',       'memberships',        false),
+  ('medical_checkups',        'recordedById',       'memberships',        false),
+  ('medical_checkups',        'reportAttachmentId', 'attachments',        false),
+  ('staff_health_profiles',   'disclosedById',      'memberships',        false),
+  ('asset_handovers',         'issuedById',         'memberships',        false),
+  ('asset_handovers',         'returnReceivedById', 'memberships',        false),
+  ('asset_handovers',         'vehicleId',          'vehicles',           false),
+  ('asset_handovers',         'cardId',             'cards',              false),
+  ('staff_evaluations',       'evaluatorId',        'memberships',        false),
+  ('staff_trainings',         'recordedById',       'memberships',        false),
+  ('staff_trainings',         'certificateAttachmentId', 'attachments',   false)
 ON CONFLICT DO NOTHING;
 
 DO $$

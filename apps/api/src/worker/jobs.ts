@@ -17,6 +17,14 @@ export async function provisionTenantKeys(db: ServiceDb, kms: KmsProvider): Prom
 }
 
 /** Daily: keep 60/30/15-day (per-document) expiry reminders in sync. Idempotent. */
+/** Medical checkups (every worker), training refreshers and item returns. Idempotent. */
+export async function syncStaffComplianceReminders(db: ServiceDb, householdId?: string) {
+  const [r] = await db.run((tx) => householdId
+    ? tx.$queryRaw<Array<{ inserted: number; removed: number }>>`SELECT * FROM app.sync_staff_compliance_reminders(${householdId}::uuid)`
+    : tx.$queryRaw<Array<{ inserted: number; removed: number }>>`SELECT * FROM app.sync_staff_compliance_reminders()`);
+  return r ?? { inserted: 0, removed: 0 };
+}
+
 export async function syncDocumentReminders(db: ServiceDb, householdId?: string) {
   const [r] = await db.run((tx) => householdId
     ? tx.$queryRaw<Array<{ inserted: number; removed: number }>>`SELECT * FROM app.sync_document_reminders(${householdId}::uuid)`

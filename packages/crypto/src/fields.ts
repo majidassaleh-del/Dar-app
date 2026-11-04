@@ -46,6 +46,29 @@ export class FieldCipher {
     return this.encrypt(await this.decrypt(token, ctx), ctx);
   }
 
+  /**
+   * Binary envelope for files (passport scans, medical reports):
+   *   "HB1" ‖ keyVersion(u32 BE) ‖ iv(12) ‖ ciphertext ‖ tag(16), AAD as for fields.
+   * Bind ctx.column to the attachment id so a blob cannot be swapped between files.
+   */
+  async encryptBytes(plain: Buffer, ctx: FieldContext): Promise<Buffer> {
+    const { dek, version } = await this.keyring.get(ctx.householdId);
+    const iv = randomBytes(12);
+    const c = createCipheriv('aes-256-gcm', dek, iv).setAAD(aad(ctx, version));
+    const ct = Buffer.concat([c.update(plain), c.final()]);
+    const v = Buffer.alloc(4); v.writeUInt32BE(version);
+    return Buffer.concat([Buffer.from('HB1'), v, iv, ct, c.getAuthTag()]);
+  }
+
+  async decryptBytes(blob: Buffer, ctx: FieldContext): Promise<Buffer> {
+    if (blob.subarray(0, 3).toString() !== 'HB1' || blob.length < 3 + 4 + 12 + 16) throw new Error('not an HB1 envelope');
+    const version = blob.readUInt32BE(3);
+    const { dek } = await this.keyring.get(ctx.householdId, version);
+    const d = createDecipheriv('aes-256-gcm', dek, blob.subarray(7, 19)).setAAD(aad(ctx, version));
+    d.setAuthTag(blob.subarray(blob.length - 16));
+    return Buffer.concat([d.update(blob.subarray(19, blob.length - 16)), d.final()]);
+  }
+
   async blindIndex(value: string, ctx: FieldContext, normalize: (v: string) => string = (v) => v): Promise<string> {
     // Always the ACTIVE index key: on rotation, the worker recomputes indexes too.
     const { indexKey } = await this.keyring.get(ctx.householdId);

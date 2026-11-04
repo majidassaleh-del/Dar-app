@@ -16,13 +16,18 @@ const Env = z.object({
   HERP_KMS: z.enum(['local', 'gcp']).default('local'),
   HERP_LOCAL_KEK: z.string().optional(),
   HERP_KMS_KEY: z.string().optional(),
+  /** Local file storage root (dev / single node). Production swaps StorageService for a GCS adapter. */
+  STORAGE_DIR: z.string().default('.storage'),
+  /** HMAC key for short-lived download links (≥ 32 chars). Random per process when unset outside production. */
+  FILE_SIGNING_SECRET: z.string().min(32).optional(),
   /** Worker only: login role that may SET ROLE app_service. */
   WORKER_DATABASE_URL: z.string().url().optional(),
 }).refine((e) => e.AUTH_JWKS_URL || e.AUTH_JWT_SECRET, { message: 'set AUTH_JWKS_URL or AUTH_JWT_SECRET' })
   .refine((e) => e.NODE_ENV !== 'production' || e.AUTH_JWKS_URL, { message: 'production requires AUTH_JWKS_URL (asymmetric keys)' })
   .refine((e) => e.HERP_KMS !== 'local' || e.HERP_LOCAL_KEK, { message: 'HERP_KMS=local needs HERP_LOCAL_KEK (32 bytes, base64)' })
   .refine((e) => e.HERP_KMS !== 'gcp' || e.HERP_KMS_KEY, { message: 'HERP_KMS=gcp needs HERP_KMS_KEY' })
-  .refine((e) => e.NODE_ENV !== 'production' || e.HERP_KMS === 'gcp', { message: 'production requires HERP_KMS=gcp' });
+  .refine((e) => e.NODE_ENV !== 'production' || e.HERP_KMS === 'gcp', { message: 'production requires HERP_KMS=gcp' })
+  .refine((e) => e.NODE_ENV !== 'production' || e.FILE_SIGNING_SECRET, { message: 'production requires FILE_SIGNING_SECRET' });
 
 export type Env = z.infer<typeof Env>;
 export const ENV = Symbol('ENV');

@@ -14,7 +14,8 @@ const common = { title: z.string().trim().min(1).max(200).optional(), reason: z.
 export const CreateRequest = z.discriminatedUnion('type', [
   z.object({ type: z.literal('LEAVE'), leaveType: z.enum(['ANNUAL', 'SICK', 'EMERGENCY', 'UNPAID', 'HAJJ_UMRAH', 'VACATION_TRAVEL']),
              startDate: ymd, endDate: ymd, needsExitReentry: z.boolean().default(false),
-             /** Managers may file on a worker's behalf. */ staffId: z.guid().optional(), ...common }).strict()
+             /** Managers may file on a worker's behalf. */ staffId: z.guid().optional(),
+             /** SICK leave over one day: a SICK_LEAVE_CERTIFICATE file of the worker (DB-enforced). */ certificateAttachmentId: z.guid().optional(), ...common }).strict()
     .refine((r) => r.endDate >= r.startDate, { message: 'endDate must be on or after startDate', path: ['endDate'] }),
   z.object({ type: z.literal('SALARY_ADVANCE'), amount: z.number().positive().max(100_000), currency: z.string().regex(/^[A-Z]{3}$/).default('SAR'),
              installments: z.number().int().min(1).max(12).default(1), ...common }).strict(),
@@ -60,7 +61,8 @@ export class RequestsController {
           throw new BadRequestException('staffId: required when the requester is not a staff member');
         }
         payload = { leaveType: b.leaveType, startDate: b.startDate, endDate: b.endDate, needsExitReentry: b.needsExitReentry,
-                    ...(b.staffId ? { staffId: b.staffId } : {}), ...(b.reason ? { reason: b.reason } : {}) };
+                    ...(b.staffId ? { staffId: b.staffId } : {}), ...(b.reason ? { reason: b.reason } : {}),
+                    ...(b.certificateAttachmentId ? { certificateAttachmentId: b.certificateAttachmentId } : {}) };
       } else if (b.type === 'SALARY_ADVANCE') {
         payload = { installments: b.installments, ...(b.reason ? { reason: b.reason } : {}) };
         amount = b.amount; currency = b.currency;

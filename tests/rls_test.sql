@@ -627,7 +627,62 @@ SELECT pg_temp.expect('a recurring bill template cannot point at another househo
      VALUES (gen_random_uuid(), %s, '{"accountId":"10000000-0000-0000-0000-000000000002","type":"EXPENSE","amount":50}', 'MONTHLY', now(), %s)$q$,
      pg_temp.q('h1'), pg_temp.q('head1'))), -3);
 
--- ---- 11. tenant keys ----
+-- ---- 11. staff files, health, handover ----
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+INSERT INTO staff_profiles (id,"householdId","staffType",status,nationality,"fullNameI18n","updatedAt")
+VALUES ('b1000000-0000-0000-0000-000000000001', (SELECT v FROM ids WHERE k='h1'), 'GARDENER', 'ON_PROBATION', 'EG', '{"en":"Samir"}', now());
+SELECT pg_temp.expect('a worker without a medical checkup cannot become ACTIVE (any job type)',
+  pg_temp.try_rows($q$UPDATE staff_profiles SET status = 'ACTIVE' WHERE id = 'b1000000-0000-0000-0000-000000000001'$q$), -2);
+SELECT pg_temp.expect('…nor can a manager insert one ACTIVE directly',
+  pg_temp.try_rows(format($q$INSERT INTO staff_profiles (id,"householdId","staffType",status,nationality,"updatedAt")
+     VALUES (gen_random_uuid(), %s, 'NURSE', 'ACTIVE', 'IN', now())$q$, pg_temp.q('h1'))), -2);
+INSERT INTO medical_checkups (id,"householdId","staffId","checkupDate","validUntil",result,"recordedById")
+VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), 'b1000000-0000-0000-0000-000000000001', CURRENT_DATE, CURRENT_DATE + 365, 'FIT', (SELECT v FROM ids WHERE k='head1'));
+SELECT pg_temp.expect('…with a FIT checkup the activation goes through',
+  pg_temp.try_rows($q$UPDATE staff_profiles SET status = 'ACTIVE' WHERE id = 'b1000000-0000-0000-0000-000000000001'$q$), 1);
+SELECT pg_temp.expect('an attachment cannot point at another household''s record',
+  pg_temp.try_rows(format($q$INSERT INTO attachments (id,"householdId","entityType","entityId","storageKey","fileName","mimeType","sizeBytes","uploadedById")
+     VALUES (gen_random_uuid(), %s, 'TRANSACTION', (SELECT id FROM transactions WHERE "householdId" = %s LIMIT 1), 'k', 'f', 'x', 1, %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('h2'), pg_temp.q('head1'))), -3);
+SELECT pg_temp.expect('…nor label one worker''s file as another worker''s',
+  pg_temp.try_rows(format($q$INSERT INTO attachments (id,"householdId","entityType","entityId","staffId","category","storageKey","fileName","mimeType","sizeBytes","uploadedById")
+     VALUES (gen_random_uuid(), %s, 'STAFF', %s, %s, 'PASSPORT', 'k', 'f', 'x', 1, %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('driverStaff'), pg_temp.q('maidStaff'), pg_temp.q('head1'))), -2);
+SELECT pg_temp.expect('a reminder cannot point at another household''s record',
+  pg_temp.try_rows(format($q$INSERT INTO reminders (id,"householdId","entityType","entityId","dueAt","remindAt")
+     VALUES (gen_random_uuid(), %s, 'STAFF', (SELECT id FROM staff_profiles WHERE "householdId" = %s LIMIT 1), now(), now())$q$,
+     pg_temp.q('h1'), pg_temp.q('h2'))), -3);
+INSERT INTO asset_handovers (id,"householdId","staffId","itemType","descriptionI18n","issuedById")
+VALUES ('b2000000-0000-0000-0000-000000000001', (SELECT v FROM ids WHERE k='h1'), (SELECT v FROM ids WHERE k='maidStaff'), 'HOUSE_KEY', '{"en":"Front door key"}', (SELECT v FROM ids WHERE k='head1'));
+SELECT pg_temp.expect('the Head cannot sign for items on the worker''s behalf',
+  pg_temp.try_rows($q$UPDATE asset_handovers SET status = 'ISSUED' WHERE id = 'b2000000-0000-0000-0000-000000000001'$q$), -1);
+SELECT pg_temp.expect('exit clearance: no FINAL_EXIT while items are still out',
+  pg_temp.try_rows(format($q$UPDATE staff_profiles SET status = 'FINAL_EXIT' WHERE id = %s$q$, pg_temp.q('maidStaff'))), -2);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h1');
+SELECT pg_temp.expect('the maid signs for her key',
+  pg_temp.try_rows($q$UPDATE asset_handovers SET status = 'ISSUED', "ackMethod" = 'OTP_CONFIRMED' WHERE id = 'b2000000-0000-0000-0000-000000000001'$q$), 1);
+SELECT pg_temp.expect('the maid may disclose her own health information',
+  pg_temp.try_rows(format($q$INSERT INTO staff_health_profiles (id,"householdId","staffId","bloodType","updatedAt") VALUES (gen_random_uuid(), %s, %s, 'O_POS', now())$q$,
+     pg_temp.q('h1'), pg_temp.q('maidStaff'))), 1);
+SELECT pg_temp.expect('…but not the driver''s',
+  pg_temp.try_rows(format($q$INSERT INTO staff_health_profiles (id,"householdId","staffId","bloodType","updatedAt") VALUES (gen_random_uuid(), %s, %s, 'O_POS', now())$q$,
+     pg_temp.q('h1'), pg_temp.q('driverStaff'))), -1);
+RESET ROLE;
+INSERT INTO staff_health_profiles (id,"householdId","staffId","bloodType","updatedAt") VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), (SELECT v FROM ids WHERE k='driverStaff'), 'A_NEG', now());
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000f','h1');
+SELECT pg_temp.expect('the spouse cannot read health records (need-to-know)', (SELECT count(*) FROM staff_health_profiles) + (SELECT count(*) FROM medical_checkups), 0);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-000000000010','h1');
+SELECT pg_temp.expect('the EFA office can', (SELECT count(*) FROM staff_health_profiles), 1);
+RESET ROLE;
+SELECT pg_temp.expect('compliance sweep schedules medical-checkup reminders for every worker',
+  (SELECT count(*) FROM (SELECT * FROM app.sync_staff_compliance_reminders((SELECT v FROM ids WHERE k='h1'))) x WHERE inserted > 0), 1);
+SELECT pg_temp.expect('…including the gardener and the driver (no job-type exemption)',
+  (SELECT count(DISTINCT "entityId") FROM reminders WHERE "entityType" = 'MEDICAL_CHECKUP'
+     AND "entityId" IN ('b1000000-0000-0000-0000-000000000001', (SELECT v FROM ids WHERE k='driverStaff'))), 2);
+SET LOCAL ROLE app_user;
+
+-- ---- 12. tenant keys ----
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
 SELECT pg_temp.expect('API can read its own wrapped tenant key', (SELECT count(*) FROM tenant_keys), 1);
 SELECT pg_temp.expect('…but never write one', pg_temp.try_rows($q$UPDATE tenant_keys SET status = 'DESTROYED'$q$), -1);

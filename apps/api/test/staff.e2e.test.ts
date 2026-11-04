@@ -67,7 +67,10 @@ describe('staff profiles', () => {
     await http().patch(`/v1/staff/${maidStaffId}`).set(await as(USERS.maid)).send({ phone: '+639171234567' }).expect(403);
   });
 
-  it('status lifecycle is enforced and audited', async () => {
+  it('status lifecycle is enforced and audited (activation needs the annual medical)', async () => {
+    const blocked = await http().post(`/v1/staff/${maidStaffId}/status`).set(await as(USERS.head)).send({ status: 'ACTIVE' }).expect(422);
+    expect(blocked.body.detail).toMatch(/medical checkup/);
+    await http().post(`/v1/staff/${maidStaffId}/medical-checkups`).set(await as(USERS.head)).send({ checkupDate: riyadhDate(0), result: 'FIT' }).expect(201);
     await http().post(`/v1/staff/${maidStaffId}/status`).set(await as(USERS.head)).send({ status: 'ACTIVE' }).expect(201);
     const bad = await http().post(`/v1/staff/${maidStaffId}/status`).set(await as(USERS.head)).send({ status: 'RECRUITING' }).expect(422);
     expect(bad.body.detail).toMatch(/cannot move from ACTIVE to RECRUITING/);

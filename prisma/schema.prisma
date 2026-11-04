@@ -405,7 +405,29 @@ enum AttachmentEntity {
   WORK_ORDER
   TRIP
   PETTY_CASH
+  STAFF
+  MEDICAL_CHECKUP
+  TRAINING
+  ASSET_HANDOVER
+  EVALUATION
   OTHER
+}
+
+enum StaffAttachmentCategory {
+  PASSPORT
+  IQAMA
+  DRIVING_LICENSE
+  ACADEMIC_CERTIFICATE
+  EMPLOYMENT_CONTRACT
+  MEDICAL_REPORT
+  SICK_LEAVE_CERTIFICATE
+  TRAINING_CERTIFICATE
+  OTHER
+}
+
+enum AttachmentStatus {
+  PENDING_UPLOAD
+  UPLOADED
 }
 
 enum NotificationChannel {
@@ -549,6 +571,11 @@ model Household {
   fundingMatches        FundingMatch[]
   statementImports      BankStatementImport[]
   statementLines        BankStatementLine[]
+  medicalCheckups       MedicalCheckup[]
+  healthProfiles        StaffHealthProfile[]
+  assetHandovers        AssetHandover[]
+  staffEvaluations      StaffEvaluation[]
+  staffTrainings        StaffTraining[]
   policies              Policy[]
   codesOfEthics         CodeOfEthics[]
   privacyAgreements     PrivacyAgreement[]
@@ -719,18 +746,24 @@ model StaffProfile {
   updatedAt              DateTime              @updatedAt @db.Timestamptz(6)
   deletedAt              DateTime?             @db.Timestamptz(6)
 
-  household      Household            @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  membership     Membership?          @relation(fields: [membershipId], references: [id], onDelete: SetNull)
-  documents      IdentityDocument[]
-  contracts      EmploymentContract[]
-  payrollLines   PayrollLine[]
-  advances       SalaryAdvance[]
-  leaves         LeaveRecord[]
-  attendance     Attendance[]
-  violations     TrafficViolation[]
-  tripSeats      TripPassenger[]
-  salaryPayments SalaryPayment[]
-  journalLines   JournalLine[]
+  household       Household            @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  membership      Membership?          @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  documents       IdentityDocument[]
+  contracts       EmploymentContract[]
+  payrollLines    PayrollLine[]
+  advances        SalaryAdvance[]
+  leaves          LeaveRecord[]
+  attendance      Attendance[]
+  violations      TrafficViolation[]
+  tripSeats       TripPassenger[]
+  salaryPayments  SalaryPayment[]
+  journalLines    JournalLine[]
+  attachments     Attachment[]
+  medicalCheckups MedicalCheckup[]
+  healthProfile   StaffHealthProfile?
+  handovers       AssetHandover[]
+  evaluations     StaffEvaluation[]
+  trainings       StaffTraining[]
 
   @@index([householdId, status])
   @@index([householdId, staffType])
@@ -906,6 +939,182 @@ model SalaryPayment {
   @@index([staffId, periodYear, periodMonth])
   @@index([householdId, status])
   @@map("salary_payments")
+}
+
+// ---- Staff HR extension: health, medical checkups, handovers, evaluations, training ----
+
+enum BloodType {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+  UNKNOWN
+}
+
+enum MedicalResult {
+  PENDING_RESULTS
+  FIT
+  FIT_WITH_RESTRICTIONS
+  UNFIT
+}
+
+/// Annual medical checkup. Mandatory for EVERY staff role (no job-type exemption):
+/// a worker cannot become ACTIVE without a valid FIT / FIT_WITH_RESTRICTIONS result,
+/// and 60/30/15-day reminders run before it lapses.
+model MedicalCheckup {
+  id                     String        @id @default(uuid()) @db.Uuid
+  householdId            String        @db.Uuid
+  staffId                String        @db.Uuid
+  checkupDate            DateTime      @db.Date
+  validUntil             DateTime      @db.Date
+  result                 MedicalResult @default(PENDING_RESULTS)
+  clinicName             String?
+  restrictionsCiphertext String? // KMS envelope: restrictions / doctor notes (health data)
+  reportAttachmentId     String?       @db.Uuid
+  recordedById           String        @db.Uuid
+  createdAt              DateTime      @default(now()) @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, validUntil])
+  @@map("medical_checkups")
+}
+
+/// Streamlined health record. Health data is PDPL "sensitive": conditions and
+/// allergies are encrypted; only staff.health.read (Head / EFA) and the worker see it.
+model StaffHealthProfile {
+  id                   String    @id @default(uuid()) @db.Uuid
+  householdId          String    @db.Uuid
+  staffId              String    @unique @db.Uuid
+  bloodType            BloodType @default(UNKNOWN)
+  conditionsCiphertext String?
+  allergiesCiphertext  String?
+  disclosedById        String?   @db.Uuid
+  disclosedAt          DateTime? @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@map("staff_health_profiles")
+}
+
+enum HandoverItemType {
+  VEHICLE_KEY
+  HOUSE_KEY
+  PHONE
+  PAYMENT_CARD
+  UNIFORM
+  EQUIPMENT
+  OTHER
+}
+
+enum HandoverStatus {
+  PENDING_ACK
+  ISSUED
+  RETURNED
+  LOST
+}
+
+/// Issue and return of physical items with the worker's digital sign-off.
+/// Items still out block FINAL_EXIT / TERMINATED (exit clearance).
+model AssetHandover {
+  id                 String                @id @default(uuid()) @db.Uuid
+  householdId        String                @db.Uuid
+  staffId            String                @db.Uuid
+  itemType           HandoverItemType
+  descriptionI18n    Json                  @default("{}")
+  serialOrTag        String?
+  quantity           Int                   @default(1)
+  vehicleId          String?               @db.Uuid
+  cardId             String?               @db.Uuid
+  conditionOut       String?
+  issuedAt           DateTime              @default(now()) @db.Timestamptz(6)
+  issuedById         String                @db.Uuid
+  expectedReturnAt   DateTime?             @db.Timestamptz(6)
+  status             HandoverStatus        @default(PENDING_ACK)
+  ackAt              DateTime?             @db.Timestamptz(6)
+  ackMethod          AcknowledgmentMethod?
+  ackContentHash     String?
+  returnedAt         DateTime?             @db.Timestamptz(6)
+  conditionIn        String?
+  returnReceivedById String?               @db.Uuid
+  lostNote           String?
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@index([staffId, status])
+  @@map("asset_handovers")
+}
+
+enum EvaluationStatus {
+  DRAFT
+  SHARED
+  ACKNOWLEDGED
+}
+
+model StaffEvaluation {
+  id             String           @id @default(uuid()) @db.Uuid
+  householdId    String           @db.Uuid
+  staffId        String           @db.Uuid
+  periodStart    DateTime         @db.Date
+  periodEnd      DateTime         @db.Date
+  evaluatorId    String           @db.Uuid
+  /// { punctuality, quality, conduct, safety, communication } each 1–5
+  scores         Json
+  overall        Decimal          @db.Decimal(3, 2)
+  commentsI18n   Json             @default("{}")
+  status         EvaluationStatus @default(DRAFT)
+  sharedAt       DateTime?        @db.Timestamptz(6)
+  acknowledgedAt DateTime?        @db.Timestamptz(6)
+  workerComment  String?
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, periodEnd])
+  @@map("staff_evaluations")
+}
+
+enum TrainingCategory {
+  FIRST_AID
+  FIRE_SAFETY
+  CHILD_SAFETY
+  FOOD_HYGIENE
+  DEFENSIVE_DRIVING
+  HOUSEHOLD_POLICY
+  EQUIPMENT_SAFETY
+  OTHER
+}
+
+/// Training and safety log; validUntil drives refresher reminders.
+model StaffTraining {
+  id                      String           @id @default(uuid()) @db.Uuid
+  householdId             String           @db.Uuid
+  staffId                 String           @db.Uuid
+  category                TrainingCategory
+  titleI18n               Json             @default("{}")
+  provider                String?
+  completedAt             DateTime         @db.Date
+  validUntil              DateTime?        @db.Date
+  hours                   Decimal?         @db.Decimal(5, 1)
+  certificateAttachmentId String?          @db.Uuid
+  recordedById            String           @db.Uuid
+  workerAckAt             DateTime?        @db.Timestamptz(6)
+  createdAt               DateTime         @default(now()) @db.Timestamptz(6)
+
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, validUntil])
+  @@map("staff_trainings")
 }
 
 model LeaveRecord {
@@ -2486,21 +2695,31 @@ model TenantKey {
 
 /// Polymorphic file attachment (FK enforced in service layer).
 model Attachment {
-  id           String           @id @default(uuid()) @db.Uuid
-  householdId  String           @db.Uuid
+  id           String                   @id @default(uuid()) @db.Uuid
+  householdId  String                   @db.Uuid
   entityType   AttachmentEntity
-  entityId     String           @db.Uuid
+  entityId     String                   @db.Uuid
   storageKey   String
   fileName     String
   mimeType     String
   sizeBytes    Int
-  isSensitive  Boolean          @default(false) // passports → short-lived signed URLs only
-  uploadedById String           @db.Uuid
-  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+  isSensitive  Boolean                  @default(false) // passports → short-lived signed URLs only
+  uploadedById String                   @db.Uuid
+  createdAt    DateTime                 @default(now()) @db.Timestamptz(6)
+  /// Staff files: the worker the file belongs to (the worker can see their own files).
+  staffId      String?                  @db.Uuid
+  category     StaffAttachmentCategory?
+  status       AttachmentStatus         @default(PENDING_UPLOAD)
+  sha256       String?                  @db.Char(64)
+  /// Encrypted at rest with the household DEK (always for sensitive files).
+  encrypted    Boolean                  @default(false)
+  uploadedAt   DateTime?                @db.Timestamptz(6)
 
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  staff     StaffProfile? @relation(fields: [staffId], references: [id])
 
   @@index([householdId, entityType, entityId])
+  @@index([staffId, category])
   @@map("attachments")
 }
 

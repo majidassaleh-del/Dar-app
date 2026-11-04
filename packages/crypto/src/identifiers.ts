@@ -43,6 +43,10 @@ export const SENSITIVE_FIELDS = {
   'leases.counterpartyIdNo':          { table: 'leases', ciphertext: 'counterpartyIdCiphertext', normalize: normalizeDigitsOnly },
   'staff_profiles.borderNumber':      { table: 'staff_profiles', ciphertext: 'borderNumberCiphertext', normalize: normalizeDigitsOnly },
   'staff_profiles.payoutIban':        { table: 'staff_profiles', ciphertext: 'payoutIbanCiphertext', blindIndex: 'payoutIbanBlindIndex', last4: 'payoutIbanLast4', normalize: normalizeAlnumUpper },
+  // Health data (PDPL sensitive): free text / JSON, not normalised, no index.
+  'staff_health_profiles.conditions': { table: 'staff_health_profiles', ciphertext: 'conditionsCiphertext', normalize: (v: string) => v },
+  'staff_health_profiles.allergies':  { table: 'staff_health_profiles', ciphertext: 'allergiesCiphertext', normalize: (v: string) => v },
+  'medical_checkups.restrictions':    { table: 'medical_checkups', ciphertext: 'restrictionsCiphertext', normalize: (v: string) => v },
 } as const;
 
 export type SensitiveField = keyof typeof SENSITIVE_FIELDS;

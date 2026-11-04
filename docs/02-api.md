@@ -113,6 +113,36 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 | POST | `/tasks` | `staff.tasks.manage` | Auto-translated to the assignee's language |
 | PATCH | `/tasks/{id}` | `staff.tasks.manage` / assignee | Assignees may only change `status` and `proofPhoto` |
 
+## 3a. Staff HR extension: files, health, handover, evaluations, training
+
+> **Status: implemented** in `apps/api/src/files/` and `apps/api/src/hr/`. E2E tests are in `apps/api/test/hrx.e2e.test.ts`; attack tests are in the DB suite (section 11).
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/files` | uploader | `{ entityType, entityId, fileName, mimeType (pdf, jpeg, png, heic, webp), sizeBytes ≤ 15 MB, sha256, staffId?, category? }`. Categories: `PASSPORT, IQAMA, DRIVING_LICENSE, ACADEMIC_CERTIFICATE, EMPLOYMENT_CONTRACT, MEDICAL_REPORT, SICK_LEAVE_CERTIFICATE, TRAINING_CERTIFICATE, OTHER`. Passport, iqama, licence and medical files are **sensitive and encrypted at rest** (household DEK, bound to the file id) |
+| PUT | `/files/{id}/content` | uploader | Raw bytes (`application/octet-stream`). Size and sha256 must match the declaration. Immutable after upload |
+| GET | `/files/{id}/url` | can see the file | Signed link valid 60 s (sensitive) or 300 s. The link names the requester and is **re-checked under RLS** on download. Sensitive downloads are audited (`VIEW_SENSITIVE`) |
+| GET | `/staff/{id}/files?category=` | per file | The worker sees her own files. Medical files need `staff.health.read` |
+| GET · PUT | `/staff/{id}/health` | `staff.health.read` / `.manage` (worker: own) | Blood type, disclosed **conditions and allergies (encrypted)**, medical status, checkups and sick-leave history. Head and EFA only; **not the spouse** (need-to-know) |
+| POST | `/staff/{id}/medical-checkups` · PATCH `/medical-checkups/{id}` | `staff.health.manage` | `{ checkupDate, validUntil? (default +1 year), result, clinicName?, restrictions? (encrypted), reportAttachmentId? }` |
+| GET | `/compliance/staff` | `staff.health.read` | Per worker: medical status (`VALID`, `DUE_SOON`, `OVERDUE`, `MISSING`), open and overdue handovers, trainings expiring |
+| GET · POST | `/staff/{id}/handovers` | read / `staff.profile.manage` | Issue keys, phones, cards, uniforms and equipment `{ itemType, description, serialOrTag?, quantity?, vehicleId?, cardId?, conditionOut?, expectedReturnAt? }` |
+| POST | `/handovers/{id}/acknowledge` | **the worker only** | Digital sign-off. Stores a sha256 of what was signed. Issued details are then frozen |
+| POST | `/handovers/{id}/return` · `/lost` | `staff.profile.manage` | A lost item needs a note |
+| GET · POST | `/staff/{id}/evaluations` | read / manage | Scores 1–5 for punctuality, quality, conduct, safety and communication; `overall` is computed. The worker can't see drafts |
+| POST | `/evaluations/{id}/share` · `/acknowledge` | manager / **the worker** | A shared evaluation is final. Only the worker acknowledges, once, with an optional comment |
+| GET · POST | `/staff/{id}/trainings` · POST `/trainings/{id}/acknowledge` | read / manage / worker | Training and safety log (first aid, fire, child safety, food hygiene, defensive driving, equipment…). `validUntil` drives refresher reminders |
+
+**Database rules:**
+* **Mandatory annual medical checkup for every staff role.** A worker can't become ACTIVE (on insert, or from RECRUITING, ON_PROBATION or ABSCONDED) without a FIT or FIT_WITH_RESTRICTIONS checkup valid today. UNFIT doesn't count.
+* **Exit clearance.** No TERMINATED or FINAL_EXIT while items are PENDING_ACK or ISSUED.
+* **Sick leave** over one day needs a `certificateAttachmentId`, which must be a `SICK_LEAVE_CERTIFICATE` file *of that worker*.
+* **Polymorphic references are now checked.** `attachments.entityId` and `reminders.entityId` must exist in the same household, and a staff file must belong to the same worker as its target.
+* **Reminders** (`node dist/worker.js reminders:sync`):
+  * medical checkup due for **every worker** at 60/30/15 days, then overdue (no checkup ever: hire date + 30 days);
+  * training refreshers at 60/30/15 days;
+  * item returns at 7 and 1 days, then overdue.
+
 ## 4. Household accounting
 
 > **Status: implemented** in `apps/api/src/banking/`: accounts, cards, categories, transactions, budgets, recurring bills, plus funding-clearing reconciliation (below). E2E tests are in `apps/api/test/banking.e2e.test.ts`; the attack tests are in the DB suite.

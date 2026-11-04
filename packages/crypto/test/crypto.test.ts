@@ -105,6 +105,18 @@ describe('two encrypted fields on one table', () => {
   });
 });
 
+describe('file envelopes', () => {
+  it('round-trips bytes, bound to the attachment id', async () => {
+    const pdf = Buffer.from('%PDF-1.7 passport scan');
+    const blob = await cipher.encryptBytes(pdf, { householdId: H1, table: 'attachments', column: 'content:A' });
+    expect(blob.subarray(0, 3).toString()).toBe('HB1');
+    expect(blob.includes(Buffer.from('passport'))).toBe(false);
+    expect((await cipher.decryptBytes(blob, { householdId: H1, table: 'attachments', column: 'content:A' })).equals(pdf)).toBe(true);
+    await expect(cipher.decryptBytes(blob, { householdId: H1, table: 'attachments', column: 'content:B' })).rejects.toThrow();
+    await expect(cipher.decryptBytes(blob, { householdId: H2, table: 'attachments', column: 'content:A' })).rejects.toThrow();
+  });
+});
+
 describe('validators', () => {
   it('Saudi ID / Iqama (Luhn)', () => {
     expect(isValidSaudiId('1000000008')).toBe(true);

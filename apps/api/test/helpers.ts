@@ -9,10 +9,12 @@ export const USERS = {
   spouse: 'a0000000-0000-0000-0000-000000000004',
   nanny: 'a0000000-0000-0000-0000-000000000005',
   cook: 'a0000000-0000-0000-0000-000000000006',
+  gardener: 'a0000000-0000-0000-0000-000000000007',
   head2: 'a0000000-0000-0000-0000-000000000009',
 } as const;
 export const MEMBERSHIPS = { maid: 'c0000000-0000-0000-0000-000000000003', spouse: 'c0000000-0000-0000-0000-000000000004',
-  nanny: 'c0000000-0000-0000-0000-000000000005', cook: 'c0000000-0000-0000-0000-000000000006' } as const;
+  nanny: 'c0000000-0000-0000-0000-000000000005', cook: 'c0000000-0000-0000-0000-000000000006',
+  gardener: 'c0000000-0000-0000-0000-000000000007' } as const;
 
 // Fixed so every test file unwraps the same tenant keys (test files run in isolated module graphs).
 export const TEST_KEK = Buffer.alloc(32, 7).toString('base64');
@@ -25,6 +27,7 @@ export function testEnv() {
   process.env.AUTH_JWT_SECRET = 'test-secret-test-secret-test-secret-0123';
   process.env.HERP_KMS = 'local';
   process.env.HERP_LOCAL_KEK ??= TEST_KEK;
+  process.env.STORAGE_DIR ??= `${process.env.TMPDIR ?? '/tmp'}/herp-test-storage`;
 }
 
 export const token = (sub: string, secret = process.env.AUTH_JWT_SECRET!) =>

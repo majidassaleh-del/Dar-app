@@ -50,7 +50,9 @@ INSERT INTO permissions (id, module, description) VALUES
   ('travel.read',                'travel',   'View trips, passengers, bookings'),
   ('travel.manage',              'travel',   'Plan trips and manage bookings'),
   ('finance.ledger.read',        'finance',  'Read the chart of accounts, journals, trial balance'),
-  ('finance.ledger.manage',      'finance',  'Manage accounts, post manual journals, reverse entries')
+  ('finance.ledger.manage',      'finance',  'Manage accounts, post manual journals, reverse entries'),
+  ('staff.health.read',          'staff',    'Read health records and medical checkups (PDPL sensitive data)'),
+  ('staff.health.manage',        'staff',    'Record medical checkups and health information')
 ON CONFLICT (id) DO UPDATE SET module = EXCLUDED.module, description = EXCLUDED.description;
 
 DROP TABLE IF EXISTS app.role_template;
@@ -66,7 +68,7 @@ INSERT INTO app.role_template SELECT 'EFA_OFFICE_ADMIN', id, 'ALL' FROM permissi
 
 -- SPOUSE: everything except household deletion/billing and trading; WARDS for allowance
 INSERT INTO app.role_template SELECT 'SPOUSE', id, 'ALL' FROM permissions
-  WHERE id NOT IN ('admin.household.manage', 'invest.manage');
+  WHERE id NOT IN ('admin.household.manage', 'invest.manage', 'staff.health.read', 'staff.health.manage'); -- health is need-to-know
 
 INSERT INTO app.role_template (system_role, permission_id, scope) VALUES
   -- DEPENDENT (children): own money, own requests, own chores
@@ -95,6 +97,8 @@ INSERT INTO app.role_template (system_role, permission_id, scope) VALUES
   ('STAFF', 'requests.read',               'OWN'),
   ('STAFF', 'property.tickets.create',     'OWN'),
   ('STAFF', 'governance.read',             'ALL'),
+  ('STAFF', 'staff.health.read',           'OWN'),
+  ('STAFF', 'staff.health.manage',         'OWN'),   -- self-disclosure of conditions / allergies
   ('STAFF', 'finance.cards.read',          'OWN'),   -- a holder sees (and can freeze) their own card
   ('STAFF', 'finance.pettycash.read',      'OWN'),
   ('STAFF', 'finance.pettycash.log',       'OWN'),
@@ -119,6 +123,8 @@ INSERT INTO app.role_template (system_role, permission_id, scope) VALUES
   ('DRIVER', 'fleet.fuel.log',              'ASSIGNED'),
   ('DRIVER', 'property.tickets.create',     'OWN'),
   ('DRIVER', 'governance.read',             'ALL'),
+  ('DRIVER', 'staff.health.read',           'OWN'),
+  ('DRIVER', 'staff.health.manage',         'OWN'),   -- self-disclosure of conditions / allergies
   ('DRIVER', 'finance.pettycash.read',      'OWN'),
   ('DRIVER', 'finance.pettycash.log',       'OWN'),
   ('DRIVER', 'workorders.create',           'OWN'),
