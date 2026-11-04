@@ -2459,6 +2459,12 @@ END $$;
 REVOKE ALL ON FUNCTION app.sync_staff_compliance_reminders(uuid) FROM PUBLIC, app_user;
 GRANT EXECUTE ON FUNCTION app.sync_staff_compliance_reminders(uuid) TO app_service;
 
+-- ============================================================ NOTIFICATIONS ==
+-- Deliveries are written by the dispatcher (app_service); a user may only mark
+-- their own notifications read.
+REVOKE INSERT, UPDATE, DELETE ON notifications FROM app_user;
+GRANT UPDATE ("readAt") ON notifications TO app_user;
+
 -- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
 -- Foreign keys prove a referenced row EXISTS, not that it belongs to the same
 -- household. Without this, a request that guessed another household's UUID

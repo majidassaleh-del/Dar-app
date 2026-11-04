@@ -469,12 +469,48 @@ Request `payload` schemas by `type`:
 | DELETE | `/files/{id}` | uploader / manage | |
 | GET | `/reminders?status=PENDING` | member | |
 | POST | `/reminders/{id}/ack` · `/snooze` | recipient | |
-| GET | `/notifications` · POST `/notifications/read` | self | |
+| GET | `/notifications?unread=true` · POST `/notifications/{id}/read` · `/notifications/read-all` | self | In-app inbox (see §13a) |
+| POST | `/me/devices` · DELETE `/me/devices/{id}` | self | Register an FCM / APNs push token (upsert by token; a token bound to another account is refused) |
+| GET | `/dashboard/pulse` | Head / EFA | EFA Daily Pulse (see §13b) |
 | GET | `/dashboard` | member | Role-aware widgets: head = cash, approvals, expiries; maid = tasks, payslip, requests; driver = vehicle, trips, fuel card balance |
 | GET | `/search?q=` | member | Global search across permitted entities (pg_trgm, Arabic-normalised) |
 | GET | `/sync?since=<cursor>` · POST `/sync` | member | WatermelonDB pull/push protocol for offline mobile (tasks, trips, fuel, receipts, attendance) |
 | POST | `/ai/ask` | member | Natural-language question over permitted data (runs under the same RLS context) |
 | POST | `/translate` | member | `{ text, to }` translates a staff chat or request message |
+
+## 13a. Multi-channel reminders (WhatsApp · push · in-app)
+
+The 60/30/15-day sweeps (`reminders:sync`: staff documents, annual medical checkups for every worker, training refreshers, item returns) write `reminders`. `node dist/worker.js notifications:dispatch` turns each due reminder into one delivery per recipient and channel (`notifications`, unique on reminder × user × channel, so re-runs are no-ops):
+
+* **Recipients:** the reminder's member, else the household's active Head and EFA admins.
+* **Language:** each delivery is rendered from the `notify.*` ICU messages in the recipient's `preferredLocale` (`=0` means overdue). Names fall back to the household language when there is no translation.
+* **Stored payloads:** each row keeps the exact provider body.
+  * WhatsApp Cloud API template (`herp_document_expiry`, `herp_medical_due`, `herp_training_due`, `herp_item_return`). Languages: `tl` → `fil`; `am` → `en_US`, because Amharic template support is not confirmed.
+  * FCM HTTP v1 message per registered device, with `data.deepLink` (`herp://…`).
+  * In-app `{ title, body, data }`.
+* **Statuses:** `SKIPPED` with a reason (no phone, no device), `QUEUED`, `SENT` or `FAILED`.
+  * Failures are retried on later runs, up to 5 attempts.
+  * With no provider credentials (`WHATSAPP_PHONE_NUMBER_ID` + `WHATSAPP_TOKEN`, `FCM_PROJECT_ID` + `FCM_ACCESS_TOKEN`), deliveries stay `QUEUED` without spending an attempt. They go out once credentials are set.
+* **Access:** members can only read their own in-app rows and set `readAt`. Inserts, deletes and other updates are for the dispatcher (service role) only.
+
+The HTTP senders follow the published WhatsApp Cloud and FCM v1 APIs but have **not** been run against live accounts. Template names must be approved in WhatsApp Business Manager first.
+
+## 13b. EFA Daily Pulse — `GET /dashboard/pulse`
+
+The Pulse is for the Head and the EFA office only. Other members get 403, and non-members get 404 from the tenant guard. Every figure is read under the caller's RLS context:
+
+| Section | Content |
+|---|---|
+| `payroll` | current month run status, due date and days left; previous month's unpaid workers |
+| `documents` | expiring staff documents by tier (`60`/`30`/`15`/`EXPIRED`), soonest 5 |
+| `medical` | workers overdue, missing (30 days after hire) or due within 30 days, with names |
+| `workOrders` | by status, overdue, awaiting verification |
+| `approvals` | in review, awaiting the caller |
+| `pettyCash` | expenses pending review (count and amount), floats below their low-balance threshold |
+| `budgets` | alert and over-budget lines with spend |
+| `fundingClearing` | owner-funding clearing balance and unmatched items |
+| `handovers`, `salaryDisputes`, `remindersDueNow` | counts |
+| `attention[]` | `{ severity: critical·warning·info, key, count, deepLink }`, most severe first; labels are `pulse.<key>` ICU messages in all six languages |
 
 ## 14. Realtime & webhooks
 

@@ -2736,8 +2736,9 @@ model Reminder {
   status      ReminderStatus        @default(PENDING)
   channels    NotificationChannel[] @default([IN_APP, PUSH])
 
-  household Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  recipient Membership? @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  household     Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+  recipient     Membership?    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@unique([householdId, entityType, entityId, dueAt, remindAt]) // idempotent sweeps
   @@index([remindAt, status])
@@ -2745,22 +2746,44 @@ model Reminder {
   @@map("reminders")
 }
 
+enum NotificationStatus {
+  QUEUED // built, waiting for a provider (or no provider configured)
+  SENT
+  FAILED // provider error; the reminder stays PENDING and is retried
+  SKIPPED // could not be addressed (no phone / no device)
+}
+
+/// One delivery of one reminder to one user on one channel, with the exact
+/// provider payload (WhatsApp Cloud API template message / FCM v1 message)
+/// rendered in that user's language. Unique per (reminder, user, channel).
 model Notification {
-  id          String              @id @default(uuid()) @db.Uuid
-  householdId String              @db.Uuid
-  userId      String              @db.Uuid
-  channel     NotificationChannel
-  templateKey String // rendered in user's preferredLocale at send time
-  params      Json                @default("{}")
-  deepLink    String?
-  readAt      DateTime?           @db.Timestamptz(6)
-  sentAt      DateTime?           @db.Timestamptz(6)
-  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  id                String              @id @default(uuid()) @db.Uuid
+  householdId       String              @db.Uuid
+  userId            String              @db.Uuid
+  channel           NotificationChannel
+  templateKey       String
+  params            Json                @default("{}")
+  deepLink          String?
+  readAt            DateTime?           @db.Timestamptz(6)
+  sentAt            DateTime?           @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  reminderId        String?             @db.Uuid
+  locale            Locale              @default(ar)
+  title             String              @default("")
+  body              String              @default("")
+  payload           Json                @default("{}")
+  status            NotificationStatus  @default(QUEUED)
+  attempts          Int                 @default(0)
+  error             String?
+  providerMessageId String?
 
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminder  Reminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
 
+  @@unique([reminderId, userId, channel])
   @@index([userId, readAt])
+  @@index([status, createdAt])
   @@map("notifications")
 }
 

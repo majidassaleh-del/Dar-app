@@ -15,5 +15,59 @@
   },
   "policy": { "acknowledge": "Nabasa ko at sumasang-ayon ako", "acknowledgedOn": "Kinilala noong {date}" },
   "receipt": { "scanned": "Na-scan ang resibo", "zatcaVerified": "Wastong ZATCA QR", "total": "Kabuuan {amount}" },
-  "common": { "language": "Wika", "save": "I-save", "cancel": "Kanselahin" }
+  "common": { "language": "Wika", "save": "I-save", "cancel": "Kanselahin" },
+  "notify": {
+    "title": {
+      "document": "Malapit nang mag-expire",
+      "medical": "Taunang medical",
+      "training": "Pag-renew ng training",
+      "handover": "Pagbabalik ng gamit"
+    },
+    "document": "{days, plural, =0 {Expired na ang {item} ni {name}} one {Mag-e-expire ang {item} ni {name} sa loob ng # araw} other {Mag-e-expire ang {item} ni {name} sa loob ng # araw}}",
+    "medical": "{days, plural, =0 {Overdue na ang taunang medical ni {name}} one {Dapat magpa-medical si {name} sa loob ng # araw} other {Dapat magpa-medical si {name} sa loob ng # araw}}",
+    "training": "{days, plural, =0 {Expired na ang {item} training ni {name}} one {Mag-e-expire ang {item} training ni {name} sa loob ng # araw} other {Mag-e-expire ang {item} training ni {name} sa loob ng # araw}}",
+    "handover": "{days, plural, =0 {Lampas na sa takdang pagbabalik ang {item} ni {name}} one {Dapat ibalik ni {name} ang {item} sa loob ng # araw} other {Dapat ibalik ni {name} ang {item} sa loob ng # araw}}",
+    "item": {
+      "IQAMA": "Iqama",
+      "PASSPORT": "Pasaporte",
+      "VISA": "Visa",
+      "EXIT_REENTRY_VISA": "Exit/re-entry visa",
+      "DRIVING_LICENSE": "Lisensya sa pagmamaneho",
+      "MEDICAL_INSURANCE": "Medical insurance",
+      "WORK_PERMIT": "Work permit",
+      "DOCUMENT": "Dokumento",
+      "PHONE": "Telepono",
+      "VEHICLE_KEY": "Susi ng sasakyan",
+      "HOUSE_KEY": "Susi ng bahay",
+      "PAYMENT_CARD": "Payment card",
+      "UNIFORM": "Uniporme",
+      "EQUIPMENT": "Kagamitan",
+      "ITEM": "Gamit",
+      "FIRST_AID": "First aid",
+      "FIRE_SAFETY": "Kaligtasan sa sunog",
+      "CHILD_SAFETY": "Kaligtasan ng bata",
+      "FOOD_HYGIENE": "Kalinisan ng pagkain",
+      "DEFENSIVE_DRIVING": "Ligtas na pagmamaneho",
+      "HOUSEHOLD_POLICY": "Patakaran ng bahay",
+      "EQUIPMENT_SAFETY": "Kaligtasan sa kagamitan",
+      "TRAINING": "Kaligtasan"
+    }
+  },
+  "pulse": {
+    "title": "EFA Pang-araw-araw na Buod",
+    "documentsExpired": "{count, plural, one {# dokumento ng staff ang expired na} other {# dokumento ng staff ang expired na}}",
+    "medicalOverdue": "{count, plural, one {# manggagawa ang walang valid na medical} other {# manggagawa ang walang valid na medical}}",
+    "salaryDisputes": "{count, plural, one {# bayad sa sahod ang kinokontra} other {# bayad sa sahod ang kinokontra}}",
+    "salaryUnpaidLastMonth": "{count, plural, one {# manggagawa ang hindi nabayaran noong nakaraang buwan} other {# manggagawa ang hindi nabayaran noong nakaraang buwan}}",
+    "itemsOverdue": "{count, plural, one {# gamit ang lampas na sa petsa ng pagbalik} other {# gamit ang lampas na sa petsa ng pagbalik}}",
+    "documentsDue15": "{count, plural, one {# dokumento ang mag-e-expire sa loob ng 15 araw} other {# dokumento ang mag-e-expire sa loob ng 15 araw}}",
+    "workOrdersOverdue": "{count, plural, one {# work order ang lampas na} other {# work order ang lampas na}}",
+    "approvalsWaiting": "{count, plural, one {# kahilingan ang naghihintay ng iyong pag-apruba} other {# kahilingan ang naghihintay ng iyong pag-apruba}}",
+    "budgetsOver": "{count, plural, one {# budget ang lumampas sa limit} other {# budget ang lumampas sa limit}}",
+    "pettyCashToReview": "{count, plural, one {# gastos sa petty cash na susuriin} other {# gastos sa petty cash na susuriin}}",
+    "floatsLow": "{count, plural, one {# petty cash ang paubos na} other {# petty cash ang paubos na}}",
+    "fundingToMatch": "{count, plural, one {# pondo mula sa may-ari na itutugma} other {# pondo mula sa may-ari na itutugma}}",
+    "medicalDueSoon": "{count, plural, one {# medical checkup sa loob ng 30 araw} other {# medical checkup sa loob ng 30 araw}}",
+    "payrollNotStarted": "Hindi pa nasisimulan ang payroll ngayong buwan"
+  }
 }

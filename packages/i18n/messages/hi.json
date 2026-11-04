@@ -15,5 +15,59 @@
   },
   "policy": { "acknowledge": "मैंने पढ़ लिया है और सहमत हूँ", "acknowledgedOn": "{date} को स्वीकार किया" },
   "receipt": { "scanned": "रसीद स्कैन हो गई", "zatcaVerified": "मान्य ZATCA QR", "total": "कुल {amount}" },
-  "common": { "language": "भाषा", "save": "सहेजें", "cancel": "रद्द करें" }
+  "common": { "language": "भाषा", "save": "सहेजें", "cancel": "रद्द करें" },
+  "notify": {
+    "title": {
+      "document": "दस्तावेज़ की समय-सीमा",
+      "medical": "चिकित्सा जाँच देय",
+      "training": "प्रशिक्षण नवीनीकरण",
+      "handover": "सामान वापसी"
+    },
+    "document": "{days, plural, =0 {{name} का {item} समाप्त हो गया है} one {{name} का {item} # दिन में समाप्त होगा} other {{name} का {item} # दिनों में समाप्त होगा}}",
+    "medical": "{days, plural, =0 {{name} की वार्षिक चिकित्सा जाँच बकाया है} one {{name} की वार्षिक चिकित्सा जाँच # दिन में देय है} other {{name} की वार्षिक चिकित्सा जाँच # दिनों में देय है}}",
+    "training": "{days, plural, =0 {{name} का {item} प्रशिक्षण समाप्त हो गया है} one {{name} का {item} प्रशिक्षण # दिन में समाप्त होगा} other {{name} का {item} प्रशिक्षण # दिनों में समाप्त होगा}}",
+    "handover": "{days, plural, =0 {{name} से {item} की वापसी में देरी हो गई है} one {{name} को {item} # दिन में लौटाना है} other {{name} को {item} # दिनों में लौटाना है}}",
+    "item": {
+      "IQAMA": "इक़ामा",
+      "PASSPORT": "पासपोर्ट",
+      "VISA": "वीज़ा",
+      "EXIT_REENTRY_VISA": "एग्ज़िट/री-एंट्री वीज़ा",
+      "DRIVING_LICENSE": "ड्राइविंग लाइसेंस",
+      "MEDICAL_INSURANCE": "चिकित्सा बीमा",
+      "WORK_PERMIT": "वर्क परमिट",
+      "DOCUMENT": "दस्तावेज़",
+      "PHONE": "फ़ोन",
+      "VEHICLE_KEY": "गाड़ी की चाबी",
+      "HOUSE_KEY": "घर की चाबी",
+      "PAYMENT_CARD": "भुगतान कार्ड",
+      "UNIFORM": "वर्दी",
+      "EQUIPMENT": "उपकरण",
+      "ITEM": "सामान",
+      "FIRST_AID": "प्राथमिक चिकित्सा",
+      "FIRE_SAFETY": "अग्नि सुरक्षा",
+      "CHILD_SAFETY": "बाल सुरक्षा",
+      "FOOD_HYGIENE": "खाद्य स्वच्छता",
+      "DEFENSIVE_DRIVING": "सुरक्षित ड्राइविंग",
+      "HOUSEHOLD_POLICY": "घरेलू नीति",
+      "EQUIPMENT_SAFETY": "उपकरण सुरक्षा",
+      "TRAINING": "सुरक्षा"
+    }
+  },
+  "pulse": {
+    "title": "EFA दैनिक सारांश",
+    "documentsExpired": "{count, plural, one {# कर्मचारी दस्तावेज़ समाप्त हो गया है} other {# कर्मचारी दस्तावेज़ समाप्त हो गए हैं}}",
+    "medicalOverdue": "{count, plural, one {# कर्मचारी की वैध मेडिकल जाँच नहीं है} other {# कर्मचारियों की वैध मेडिकल जाँच नहीं है}}",
+    "salaryDisputes": "{count, plural, one {# वेतन भुगतान पर विवाद है} other {# वेतन भुगतानों पर विवाद है}}",
+    "salaryUnpaidLastMonth": "{count, plural, one {# कर्मचारी को पिछले महीने का वेतन नहीं मिला} other {# कर्मचारियों को पिछले महीने का वेतन नहीं मिला}}",
+    "itemsOverdue": "{count, plural, one {# सौंपी गई वस्तु की वापसी बाकी है} other {# सौंपी गई वस्तुओं की वापसी बाकी है}}",
+    "documentsDue15": "{count, plural, one {# दस्तावेज़ 15 दिनों में समाप्त होगा} other {# दस्तावेज़ 15 दिनों में समाप्त होंगे}}",
+    "workOrdersOverdue": "{count, plural, one {# कार्य आदेश में देरी है} other {# कार्य आदेशों में देरी है}}",
+    "approvalsWaiting": "{count, plural, one {# अनुरोध आपकी स्वीकृति की प्रतीक्षा में है} other {# अनुरोध आपकी स्वीकृति की प्रतीक्षा में हैं}}",
+    "budgetsOver": "{count, plural, one {# बजट सीमा से अधिक है} other {# बजट सीमा से अधिक हैं}}",
+    "pettyCashToReview": "{count, plural, one {समीक्षा के लिए # छोटा नकद खर्च} other {समीक्षा के लिए # छोटे नकद खर्च}}",
+    "floatsLow": "{count, plural, one {# नकद फ़्लोट कम है} other {# नकद फ़्लोट कम हैं}}",
+    "fundingToMatch": "{count, plural, one {मिलान के लिए # मालिक फ़ंडिंग प्रविष्टि} other {मिलान के लिए # मालिक फ़ंडिंग प्रविष्टियाँ}}",
+    "medicalDueSoon": "{count, plural, one {# मेडिकल जाँच 30 दिनों में देय} other {# मेडिकल जाँच 30 दिनों में देय}}",
+    "payrollNotStarted": "इस महीने का वेतन अभी शुरू नहीं हुआ है"
+  }
 }

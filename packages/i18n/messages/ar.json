@@ -15,5 +15,59 @@
   },
   "policy": { "acknowledge": "قرأت وأوافق", "acknowledgedOn": "تم الإقرار في {date}" },
   "receipt": { "scanned": "تمت قراءة الفاتورة", "zatcaVerified": "رمز ZATCA صالح", "total": "الإجمالي {amount}" },
-  "common": { "language": "اللغة", "save": "حفظ", "cancel": "إلغاء" }
+  "common": { "language": "اللغة", "save": "حفظ", "cancel": "إلغاء" },
+  "notify": {
+    "title": {
+      "document": "وثيقة تقترب من الانتهاء",
+      "medical": "موعد الفحص الطبي",
+      "training": "تجديد تدريب",
+      "handover": "موعد إرجاع عهدة"
+    },
+    "document": "{days, plural, =0 {انتهت صلاحية {item} للعامل {name}} one {تنتهي {item} للعامل {name} خلال يوم واحد} two {تنتهي {item} للعامل {name} خلال يومين} few {تنتهي {item} للعامل {name} خلال # أيام} many {تنتهي {item} للعامل {name} خلال # يوماً} other {تنتهي {item} للعامل {name} خلال # يوم}}",
+    "medical": "{days, plural, =0 {الفحص الطبي السنوي للعامل {name} متأخر} one {الفحص الطبي السنوي للعامل {name} مستحق خلال يوم واحد} two {الفحص الطبي السنوي للعامل {name} مستحق خلال يومين} few {الفحص الطبي السنوي للعامل {name} مستحق خلال # أيام} many {الفحص الطبي السنوي للعامل {name} مستحق خلال # يوماً} other {الفحص الطبي السنوي للعامل {name} مستحق خلال # يوم}}",
+    "training": "{days, plural, =0 {انتهت صلاحية تدريب {item} للعامل {name}} one {تنتهي صلاحية تدريب {item} للعامل {name} خلال يوم واحد} two {تنتهي صلاحية تدريب {item} للعامل {name} خلال يومين} few {تنتهي صلاحية تدريب {item} للعامل {name} خلال # أيام} many {تنتهي صلاحية تدريب {item} للعامل {name} خلال # يوماً} other {تنتهي صلاحية تدريب {item} للعامل {name} خلال # يوم}}",
+    "handover": "{days, plural, =0 {تأخر إرجاع {item} من العامل {name}} one {يجب إرجاع {item} من العامل {name} خلال يوم واحد} two {يجب إرجاع {item} من العامل {name} خلال يومين} few {يجب إرجاع {item} من العامل {name} خلال # أيام} many {يجب إرجاع {item} من العامل {name} خلال # يوماً} other {يجب إرجاع {item} من العامل {name} خلال # يوم}}",
+    "item": {
+      "IQAMA": "الإقامة",
+      "PASSPORT": "جواز السفر",
+      "VISA": "التأشيرة",
+      "EXIT_REENTRY_VISA": "تأشيرة الخروج والعودة",
+      "DRIVING_LICENSE": "رخصة القيادة",
+      "MEDICAL_INSURANCE": "التأمين الطبي",
+      "WORK_PERMIT": "رخصة العمل",
+      "DOCUMENT": "الوثيقة",
+      "PHONE": "الجوال",
+      "VEHICLE_KEY": "مفتاح السيارة",
+      "HOUSE_KEY": "مفتاح المنزل",
+      "PAYMENT_CARD": "بطاقة الدفع",
+      "UNIFORM": "الزي الموحد",
+      "EQUIPMENT": "المعدات",
+      "ITEM": "العهدة",
+      "FIRST_AID": "الإسعافات الأولية",
+      "FIRE_SAFETY": "السلامة من الحريق",
+      "CHILD_SAFETY": "سلامة الأطفال",
+      "FOOD_HYGIENE": "سلامة الغذاء",
+      "DEFENSIVE_DRIVING": "القيادة الوقائية",
+      "HOUSEHOLD_POLICY": "سياسة المنزل",
+      "EQUIPMENT_SAFETY": "سلامة المعدات",
+      "TRAINING": "السلامة"
+    }
+  },
+  "pulse": {
+    "title": "النبض اليومي لمكتب EFA",
+    "documentsExpired": "{count, plural, zero {لا توجد وثائق منتهية} one {وثيقة عامل واحدة منتهية} two {وثيقتا عاملين منتهيتان} few {# وثائق عمال منتهية} many {# وثيقة عمال منتهية} other {# وثيقة عمال منتهية}}",
+    "medicalOverdue": "{count, plural, one {عامل واحد بلا فحص طبي ساري} two {عاملان بلا فحص طبي ساري} few {# عمال بلا فحص طبي ساري} other {# عاملًا بلا فحص طبي ساري}}",
+    "salaryDisputes": "{count, plural, one {دفعة راتب واحدة عليها اعتراض} other {# دفعات رواتب عليها اعتراض}}",
+    "salaryUnpaidLastMonth": "{count, plural, one {عامل واحد لم يُصرف راتبه للشهر الماضي} other {# عمال لم تُصرف رواتبهم للشهر الماضي}}",
+    "itemsOverdue": "{count, plural, one {عهدة واحدة متأخرة الإرجاع} other {# عهد متأخرة الإرجاع}}",
+    "documentsDue15": "{count, plural, one {وثيقة واحدة تنتهي خلال 15 يومًا} other {# وثائق تنتهي خلال 15 يومًا}}",
+    "workOrdersOverdue": "{count, plural, one {أمر عمل واحد متأخر} other {# أوامر عمل متأخرة}}",
+    "approvalsWaiting": "{count, plural, one {طلب واحد بانتظار موافقتك} other {# طلبات بانتظار موافقتك}}",
+    "budgetsOver": "{count, plural, one {ميزانية واحدة تجاوزت الحد} other {# ميزانيات تجاوزت الحد}}",
+    "pettyCashToReview": "{count, plural, one {مصروف عهدة نقدية واحد للمراجعة} other {# مصروفات عهدة نقدية للمراجعة}}",
+    "floatsLow": "{count, plural, one {عهدة نقدية واحدة رصيدها منخفض} other {# عهد نقدية رصيدها منخفض}}",
+    "fundingToMatch": "{count, plural, one {بند تمويل واحد من المالك للمطابقة} other {# بنود تمويل من المالك للمطابقة}}",
+    "medicalDueSoon": "{count, plural, one {فحص طبي واحد مستحق خلال 30 يومًا} other {# فحوصات طبية مستحقة خلال 30 يومًا}}",
+    "payrollNotStarted": "لم تبدأ مسيرة رواتب هذا الشهر بعد"
+  }
 }

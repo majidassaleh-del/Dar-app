@@ -15,5 +15,59 @@
   },
   "policy": { "acknowledge": "আমি পড়েছি এবং সম্মত", "acknowledgedOn": "{date} তারিখে স্বীকার করা হয়েছে" },
   "receipt": { "scanned": "রসিদ স্ক্যান হয়েছে", "zatcaVerified": "বৈধ ZATCA QR", "total": "মোট {amount}" },
-  "common": { "language": "ভাষা", "save": "সংরক্ষণ", "cancel": "বাতিল" }
+  "common": { "language": "ভাষা", "save": "সংরক্ষণ", "cancel": "বাতিল" },
+  "notify": {
+    "title": {
+      "document": "নথির মেয়াদ শেষ হচ্ছে",
+      "medical": "বার্ষিক মেডিকেল চেকআপ",
+      "training": "প্রশিক্ষণ নবায়ন",
+      "handover": "জিনিস ফেরত"
+    },
+    "document": "{days, plural, =0 {{name}-এর {item}-এর মেয়াদ শেষ হয়ে গেছে} one {{name}-এর {item}-এর মেয়াদ # দিনের মধ্যে শেষ হবে} other {{name}-এর {item}-এর মেয়াদ # দিনের মধ্যে শেষ হবে}}",
+    "medical": "{days, plural, =0 {{name}-এর বার্ষিক মেডিকেল চেকআপ বাকি পড়েছে} one {{name}-এর বার্ষিক মেডিকেল চেকআপ # দিনের মধ্যে করতে হবে} other {{name}-এর বার্ষিক মেডিকেল চেকআপ # দিনের মধ্যে করতে হবে}}",
+    "training": "{days, plural, =0 {{name}-এর {item} প্রশিক্ষণের মেয়াদ শেষ হয়ে গেছে} one {{name}-এর {item} প্রশিক্ষণের মেয়াদ # দিনের মধ্যে শেষ হবে} other {{name}-এর {item} প্রশিক্ষণের মেয়াদ # দিনের মধ্যে শেষ হবে}}",
+    "handover": "{days, plural, =0 {{name}-এর কাছ থেকে {item} ফেরতের সময় পেরিয়ে গেছে} one {{name}-কে # দিনের মধ্যে {item} ফেরত দিতে হবে} other {{name}-কে # দিনের মধ্যে {item} ফেরত দিতে হবে}}",
+    "item": {
+      "IQAMA": "ইকামা",
+      "PASSPORT": "পাসপোর্ট",
+      "VISA": "ভিসা",
+      "EXIT_REENTRY_VISA": "এক্সিট/রি-এন্ট্রি ভিসা",
+      "DRIVING_LICENSE": "ড্রাইভিং লাইসেন্স",
+      "MEDICAL_INSURANCE": "চিকিৎসা বীমা",
+      "WORK_PERMIT": "ওয়ার্ক পারমিট",
+      "DOCUMENT": "নথি",
+      "PHONE": "ফোন",
+      "VEHICLE_KEY": "গাড়ির চাবি",
+      "HOUSE_KEY": "বাড়ির চাবি",
+      "PAYMENT_CARD": "পেমেন্ট কার্ড",
+      "UNIFORM": "ইউনিফর্ম",
+      "EQUIPMENT": "সরঞ্জাম",
+      "ITEM": "জিনিস",
+      "FIRST_AID": "প্রাথমিক চিকিৎসা",
+      "FIRE_SAFETY": "অগ্নি নিরাপত্তা",
+      "CHILD_SAFETY": "শিশু নিরাপত্তা",
+      "FOOD_HYGIENE": "খাদ্য স্বাস্থ্যবিধি",
+      "DEFENSIVE_DRIVING": "নিরাপদ ড্রাইভিং",
+      "HOUSEHOLD_POLICY": "গৃহস্থালির নীতি",
+      "EQUIPMENT_SAFETY": "সরঞ্জাম নিরাপত্তা",
+      "TRAINING": "নিরাপত্তা"
+    }
+  },
+  "pulse": {
+    "title": "EFA দৈনিক সারসংক্ষেপ",
+    "documentsExpired": "{count, plural, one {# কর্মীর নথির মেয়াদ শেষ} other {# কর্মীর নথির মেয়াদ শেষ}}",
+    "medicalOverdue": "{count, plural, one {# কর্মীর বৈধ মেডিকেল চেকআপ নেই} other {# কর্মীর বৈধ মেডিকেল চেকআপ নেই}}",
+    "salaryDisputes": "{count, plural, one {# বেতন প্রদানে আপত্তি আছে} other {# বেতন প্রদানে আপত্তি আছে}}",
+    "salaryUnpaidLastMonth": "{count, plural, one {# কর্মী গত মাসের বেতন পাননি} other {# কর্মী গত মাসের বেতন পাননি}}",
+    "itemsOverdue": "{count, plural, one {# দেওয়া জিনিস ফেরতের সময় পেরিয়েছে} other {# দেওয়া জিনিস ফেরতের সময় পেরিয়েছে}}",
+    "documentsDue15": "{count, plural, one {# নথির মেয়াদ ১৫ দিনের মধ্যে শেষ হবে} other {# নথির মেয়াদ ১৫ দিনের মধ্যে শেষ হবে}}",
+    "workOrdersOverdue": "{count, plural, one {# কাজের আদেশ বিলম্বিত} other {# কাজের আদেশ বিলম্বিত}}",
+    "approvalsWaiting": "{count, plural, one {# অনুরোধ আপনার অনুমোদনের অপেক্ষায়} other {# অনুরোধ আপনার অনুমোদনের অপেক্ষায়}}",
+    "budgetsOver": "{count, plural, one {# বাজেট সীমা ছাড়িয়েছে} other {# বাজেট সীমা ছাড়িয়েছে}}",
+    "pettyCashToReview": "{count, plural, one {পর্যালোচনার জন্য # খুচরা খরচ} other {পর্যালোচনার জন্য # খুচরা খরচ}}",
+    "floatsLow": "{count, plural, one {# খুচরা তহবিলে ব্যালেন্স কম} other {# খুচরা তহবিলে ব্যালেন্স কম}}",
+    "fundingToMatch": "{count, plural, one {মেলানোর জন্য # মালিকের তহবিল} other {মেলানোর জন্য # মালিকের তহবিল}}",
+    "medicalDueSoon": "{count, plural, one {৩০ দিনের মধ্যে # মেডিকেল চেকআপ} other {৩০ দিনের মধ্যে # মেডিকেল চেকআপ}}",
+    "payrollNotStarted": "এই মাসের বেতন এখনও শুরু হয়নি"
+  }
 }

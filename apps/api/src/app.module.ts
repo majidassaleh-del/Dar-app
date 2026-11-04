@@ -11,6 +11,8 @@ import { LedgerModule } from './ledger/ledger.module';
 import { BankingModule } from './banking/banking.module';
 import { FilesModule } from './files/files.module';
 import { HrModule } from './hr/hr.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { JwtGuard } from './auth/jwt.guard';
 import { HouseholdGuard } from './tenancy/household.guard';
 import { ProblemFilter } from './common/problem.filter';
@@ -18,7 +20,7 @@ import { HealthController } from './health/health.controller';
 import { MembersController } from './members/members.controller';
 
 @Module({
-  imports: [ConfigModule, DbModule, CryptoModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule, LedgerModule, BankingModule, FilesModule, HrModule],
+  imports: [ConfigModule, DbModule, CryptoModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule, LedgerModule, BankingModule, FilesModule, HrModule, NotificationsModule, DashboardModule],
   controllers: [HealthController, MembersController],
   providers: [
     // Order matters: authenticate, then resolve the household membership.

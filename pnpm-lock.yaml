@@ -56,6 +56,9 @@ importers:
       '@prisma/client':
         specifier: 6.16.2
         version: 6.16.2(prisma@6.16.2(typescript@5.9.3))(typescript@5.9.3)
+      intl-messageformat:
+        specifier: 10.7.18
+        version: 10.7.18
       jose:
         specifier: 6.2.15
         version: 6.2.15

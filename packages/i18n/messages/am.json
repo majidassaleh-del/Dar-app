@@ -15,5 +15,59 @@
   },
   "policy": { "acknowledge": "አንብቤ ተስማምቻለሁ", "acknowledgedOn": "በ{date} ተቀብለዋል" },
   "receipt": { "scanned": "ደረሰኙ ተቃኝቷል", "zatcaVerified": "ትክክለኛ የZATCA QR", "total": "ጠቅላላ {amount}" },
-  "common": { "language": "ቋንቋ", "save": "አስቀምጥ", "cancel": "ሰርዝ" }
+  "common": { "language": "ቋንቋ", "save": "አስቀምጥ", "cancel": "ሰርዝ" },
+  "notify": {
+    "title": {
+      "document": "የሰነድ ማብቂያ",
+      "medical": "ዓመታዊ የሕክምና ምርመራ",
+      "training": "የሥልጠና እድሳት",
+      "handover": "የእቃ መመለሻ"
+    },
+    "document": "{days, plural, =0 {የ{name} {item} ጊዜው አልፏል} one {የ{name} {item} በ# ቀን ውስጥ ያበቃል} other {የ{name} {item} በ# ቀናት ውስጥ ያበቃል}}",
+    "medical": "{days, plural, =0 {የ{name} ዓመታዊ የሕክምና ምርመራ ዘግይቷል} one {የ{name} ዓመታዊ የሕክምና ምርመራ በ# ቀን ውስጥ ይጠበቃል} other {የ{name} ዓመታዊ የሕክምና ምርመራ በ# ቀናት ውስጥ ይጠበቃል}}",
+    "training": "{days, plural, =0 {የ{name} የ{item} ሥልጠና ጊዜው አልፏል} one {የ{name} የ{item} ሥልጠና በ# ቀን ውስጥ ያበቃል} other {የ{name} የ{item} ሥልጠና በ# ቀናት ውስጥ ያበቃል}}",
+    "handover": "{days, plural, =0 {{name} {item} የመመለሻ ጊዜው አልፏል} one {{name} {item} በ# ቀን ውስጥ መመለስ አለበት} other {{name} {item} በ# ቀናት ውስጥ መመለስ አለበት}}",
+    "item": {
+      "IQAMA": "ኢቃማ",
+      "PASSPORT": "ፓስፖርት",
+      "VISA": "ቪዛ",
+      "EXIT_REENTRY_VISA": "የመውጫ/መመለሻ ቪዛ",
+      "DRIVING_LICENSE": "መንጃ ፈቃድ",
+      "MEDICAL_INSURANCE": "የሕክምና ኢንሹራንስ",
+      "WORK_PERMIT": "የሥራ ፈቃድ",
+      "DOCUMENT": "ሰነድ",
+      "PHONE": "ስልክ",
+      "VEHICLE_KEY": "የመኪና ቁልፍ",
+      "HOUSE_KEY": "የቤት ቁልፍ",
+      "PAYMENT_CARD": "የክፍያ ካርድ",
+      "UNIFORM": "ዩኒፎርም",
+      "EQUIPMENT": "መሣሪያ",
+      "ITEM": "እቃ",
+      "FIRST_AID": "የመጀመሪያ ዕርዳታ",
+      "FIRE_SAFETY": "የእሳት ደኅንነት",
+      "CHILD_SAFETY": "የሕፃናት ደኅንነት",
+      "FOOD_HYGIENE": "የምግብ ንጽሕና",
+      "DEFENSIVE_DRIVING": "ጥንቃቄ የተሞላበት አነዳድ",
+      "HOUSEHOLD_POLICY": "የቤት መመሪያ",
+      "EQUIPMENT_SAFETY": "የመሣሪያ ደኅንነት",
+      "TRAINING": "ደኅንነት"
+    }
+  },
+  "pulse": {
+    "title": "የEFA ዕለታዊ ማጠቃለያ",
+    "documentsExpired": "{count, plural, one {# የሠራተኛ ሰነድ ጊዜው አልፏል} other {# የሠራተኛ ሰነዶች ጊዜያቸው አልፏል}}",
+    "medicalOverdue": "{count, plural, one {# ሠራተኛ የሚሰራ የሕክምና ምርመራ የለውም} other {# ሠራተኞች የሚሰራ የሕክምና ምርመራ የላቸውም}}",
+    "salaryDisputes": "{count, plural, one {# የደመወዝ ክፍያ ተቃውሞ አለበት} other {# የደመወዝ ክፍያዎች ተቃውሞ አለባቸው}}",
+    "salaryUnpaidLastMonth": "{count, plural, one {# ሠራተኛ ያለፈው ወር ደመወዝ አልተከፈለውም} other {# ሠራተኞች ያለፈው ወር ደመወዝ አልተከፈላቸውም}}",
+    "itemsOverdue": "{count, plural, one {# የተሰጠ ዕቃ የመመለሻ ጊዜው አልፏል} other {# የተሰጡ ዕቃዎች የመመለሻ ጊዜያቸው አልፏል}}",
+    "documentsDue15": "{count, plural, one {# ሰነድ በ15 ቀናት ውስጥ ጊዜው ያልፋል} other {# ሰነዶች በ15 ቀናት ውስጥ ጊዜያቸው ያልፋል}}",
+    "workOrdersOverdue": "{count, plural, one {# የሥራ ትዕዛዝ ዘግይቷል} other {# የሥራ ትዕዛዞች ዘግይተዋል}}",
+    "approvalsWaiting": "{count, plural, one {# ጥያቄ የእርስዎን ማጽደቅ ይጠብቃል} other {# ጥያቄዎች የእርስዎን ማጽደቅ ይጠብቃሉ}}",
+    "budgetsOver": "{count, plural, one {# በጀት ከገደቡ አልፏል} other {# በጀቶች ከገደባቸው አልፈዋል}}",
+    "pettyCashToReview": "{count, plural, one {የሚገመገም # የጥቃቅን ወጪ} other {የሚገመገሙ # የጥቃቅን ወጪዎች}}",
+    "floatsLow": "{count, plural, one {# የጥቃቅን ገንዘብ ቀሪ ዝቅተኛ ነው} other {# የጥቃቅን ገንዘብ ቀሪዎች ዝቅተኛ ናቸው}}",
+    "fundingToMatch": "{count, plural, one {የሚዛመድ # የባለቤት ገንዘብ} other {የሚዛመዱ # የባለቤት ገንዘቦች}}",
+    "medicalDueSoon": "{count, plural, one {በ30 ቀናት ውስጥ # የሕክምና ምርመራ} other {በ30 ቀናት ውስጥ # የሕክምና ምርመራዎች}}",
+    "payrollNotStarted": "የዚህ ወር ደመወዝ ገና አልተጀመረም"
+  }
 }

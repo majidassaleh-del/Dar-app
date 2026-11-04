@@ -23,7 +23,8 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "zod": "4.6.7",
-    "@herp/bank-statements": "workspace:*"
+    "@herp/bank-statements": "workspace:*",
+    "intl-messageformat": "10.7.18"
   },
   "devDependencies": {
     "@nestjs/testing": "11.2.8",

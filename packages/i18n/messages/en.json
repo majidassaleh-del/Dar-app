@@ -15,5 +15,59 @@
   },
   "policy": { "acknowledge": "I have read and agree", "acknowledgedOn": "Acknowledged on {date}" },
   "receipt": { "scanned": "Receipt scanned", "zatcaVerified": "Valid ZATCA QR", "total": "Total {amount}" },
-  "common": { "language": "Language", "save": "Save", "cancel": "Cancel" }
+  "common": { "language": "Language", "save": "Save", "cancel": "Cancel" },
+  "notify": {
+    "title": {
+      "document": "Document expiring",
+      "medical": "Medical checkup due",
+      "training": "Training refresher",
+      "handover": "Item due back"
+    },
+    "document": "{days, plural, =0 {{item} of {name} has expired} one {{item} of {name} expires in # day} other {{item} of {name} expires in # days}}",
+    "medical": "{days, plural, =0 {Annual medical checkup for {name} is overdue} one {Annual medical checkup for {name} is due in # day} other {Annual medical checkup for {name} is due in # days}}",
+    "training": "{days, plural, =0 {{item} training for {name} has expired} one {{item} training for {name} expires in # day} other {{item} training for {name} expires in # days}}",
+    "handover": "{days, plural, =0 {{item} from {name} is overdue for return} one {{item} from {name} is due back in # day} other {{item} from {name} is due back in # days}}",
+    "item": {
+      "IQAMA": "Iqama",
+      "PASSPORT": "Passport",
+      "VISA": "Visa",
+      "EXIT_REENTRY_VISA": "Exit/re-entry visa",
+      "DRIVING_LICENSE": "Driving licence",
+      "MEDICAL_INSURANCE": "Medical insurance",
+      "WORK_PERMIT": "Work permit",
+      "DOCUMENT": "Document",
+      "PHONE": "Phone",
+      "VEHICLE_KEY": "Car key",
+      "HOUSE_KEY": "House key",
+      "PAYMENT_CARD": "Payment card",
+      "UNIFORM": "Uniform",
+      "EQUIPMENT": "Equipment",
+      "ITEM": "Item",
+      "FIRST_AID": "First aid",
+      "FIRE_SAFETY": "Fire safety",
+      "CHILD_SAFETY": "Child safety",
+      "FOOD_HYGIENE": "Food hygiene",
+      "DEFENSIVE_DRIVING": "Defensive driving",
+      "HOUSEHOLD_POLICY": "Household policy",
+      "EQUIPMENT_SAFETY": "Equipment safety",
+      "TRAINING": "Safety"
+    }
+  },
+  "pulse": {
+    "title": "EFA Daily Pulse",
+    "documentsExpired": "{count, plural, one {# staff document has expired} other {# staff documents have expired}}",
+    "medicalOverdue": "{count, plural, one {# worker has no valid medical checkup} other {# workers have no valid medical checkup}}",
+    "salaryDisputes": "{count, plural, one {# salary payment is disputed} other {# salary payments are disputed}}",
+    "salaryUnpaidLastMonth": "{count, plural, one {# worker was not paid last month} other {# workers were not paid last month}}",
+    "itemsOverdue": "{count, plural, one {# issued item is overdue for return} other {# issued items are overdue for return}}",
+    "documentsDue15": "{count, plural, one {# document expires within 15 days} other {# documents expire within 15 days}}",
+    "workOrdersOverdue": "{count, plural, one {# work order is overdue} other {# work orders are overdue}}",
+    "approvalsWaiting": "{count, plural, one {# request awaits your approval} other {# requests await your approval}}",
+    "budgetsOver": "{count, plural, one {# budget is over its limit} other {# budgets are over their limit}}",
+    "pettyCashToReview": "{count, plural, one {# petty cash expense to review} other {# petty cash expenses to review}}",
+    "floatsLow": "{count, plural, one {# petty cash float is running low} other {# petty cash floats are running low}}",
+    "fundingToMatch": "{count, plural, one {# owner funding item to match} other {# owner funding items to match}}",
+    "medicalDueSoon": "{count, plural, one {# medical checkup due within 30 days} other {# medical checkups due within 30 days}}",
+    "payrollNotStarted": "This month's payroll has not been started"
+  }
 }

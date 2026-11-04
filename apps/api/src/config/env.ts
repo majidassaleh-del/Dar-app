@@ -20,6 +20,11 @@ const Env = z.object({
   STORAGE_DIR: z.string().default('.storage'),
   /** HMAC key for short-lived download links (≥ 32 chars). Random per process when unset outside production. */
   FILE_SIGNING_SECRET: z.string().min(32).optional(),
+  /** Notification providers (worker). Unset ⇒ deliveries are built and stored, but stay QUEUED. */
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_TOKEN: z.string().optional(),
+  FCM_PROJECT_ID: z.string().optional(),
+  FCM_ACCESS_TOKEN: z.string().optional(),
   /** Worker only: login role that may SET ROLE app_service. */
   WORKER_DATABASE_URL: z.string().url().optional(),
 }).refine((e) => e.AUTH_JWKS_URL || e.AUTH_JWT_SECRET, { message: 'set AUTH_JWKS_URL or AUTH_JWT_SECRET' })

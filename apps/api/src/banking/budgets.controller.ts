@@ -71,7 +71,7 @@ export class BudgetsController {
     });
   }
 
-  private async withSpend(tx: Tx, ctx: RequestContext, b: Budget, today: Date) {
+  async withSpend(tx: Tx, ctx: RequestContext, b: Budget, today: Date) {
     const { start, end } = periodWindow(b.startsOn, b.period, today);
     const [r] = await tx.$queryRaw<Array<{ bank: string; petty: string }>>`
       WITH RECURSIVE cats AS (
