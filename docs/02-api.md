@@ -55,6 +55,48 @@ The API is REST + JSON, specified as OpenAPI 3.1, with request and response type
 
 Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_ADMIN`) and editing role matrices or overrides are refused with `403` for non-admins. Removing or demoting the last active Head returns `409 LAST_HEAD`.
 
+## 2a. Onboarding and daily unlock (`/auth`)
+
+> **Status: implemented** in `apps/api/src/auth/` (with client logic in `packages/offline/src/device-unlock.ts` and the Expo wiring in `apps/mobile/src/auth/`). Tests: `apps/api/test/auth.e2e.test.ts` (including RFC 6238 vectors), `packages/offline/test/device-unlock.test.ts` and DB-suite section 16. **Not tested against a live SMS or email gateway, and not on a real phone.**
+
+**First-time onboarding (once per user):**
+1. SMS OTP to the phone.
+2. Email OTP.
+3. An authenticator app (TOTP, compatible with Microsoft Authenticator).
+
+Until all three are verified, every endpoint except `/auth/*` answers **403** "complete onboarding first" (`OnboardingGuard`). The verified phone and email become the user's login identifiers.
+
+**Daily unlock:**
+* The app holds a P-256 key whose private half is released only by Face ID / Touch ID.
+* It signs a server nonce and receives a **device-session token**, valid until 04:00 Riyadh (one unlock a day).
+* With `AUTH_REQUIRE_DEVICE_SESSION=true` (the production default), every non-auth route requires that session token. The identity provider's token alone gets 401 "unlock the app first".
+* Revoking a device ends its sessions within 30 s.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/auth/onboarding` | `{ phone, email, authenticator, complete, next }` (masked values) |
+| POST | `/auth/onboarding/phone` · `/phone/verify` | `{ phone }` (E.164) → `{ challengeId, expiresAt }`; then `{ challengeId, code }`. 6-digit code, 5 minutes, at most 5 attempts (then locked), at most 5 codes per hour (429) |
+| POST | `/auth/onboarding/email` · `/email/verify` | The same, by email |
+| POST | `/auth/onboarding/totp` | After phone and email are verified: returns `otpauthUri` (QR) and `secret`. It can be restarted until confirmed |
+| POST | `/auth/onboarding/totp/verify` | `{ code }`: confirms enrolment; `complete` becomes true |
+| POST | `/auth/devices` | `{ deviceId, publicKeyJwk (P-256), label?, totpCode }`. Requires onboarding, a fresh sign-in (≤ 10 min) and an authenticator code |
+| GET · DELETE | `/auth/devices` · `/auth/devices/{id}` | List and revoke this user's devices |
+| POST | `/auth/unlock/challenge` | `{ deviceId }` → `{ challengeId, nonce, message }` (2 minutes) |
+| POST | `/auth/unlock` | `{ challengeId, nonce, signature }`. ECDSA P-256/SHA-256 over `message`; raw (WebCrypto) or DER (iOS / Android) signatures are accepted. Returns `{ token, expiresAt, deviceKeyId }` |
+| POST | `/auth/unlock/totp` | Fallback when biometrics changed: fresh sign-in + `{ deviceId, code }` → the same session |
+
+**Security properties (database-enforced unless noted):**
+* **Codes and nonces.** Stored only as HMACs. `app.consume_auth_challenge` enforces single use, expiry and 5 attempts. It returns a status instead of raising, and the API refuses only after commit, so failed attempts always count.
+* **Factor rows.** A user cannot set their own factors, edit a challenge, change phone or email without verifying, or register a device key before onboarding. Challenges are private to their user, including from the Head.
+* **Authenticator.**
+  * The secret is AES-256-GCM encrypted (`AUTH_TOTP_KEY`).
+  * A time step is accepted once (replay → 422).
+  * Five wrong codes lock the factor for 15 minutes (429).
+  * Enrolment cannot be swapped once confirmed.
+* **Sessions.** HS256 with `SESSION_SIGNING_SECRET`, bound to the device key, and checked against revocation.
+* **Production configuration.** Production refuses to start without `AUTH_TOTP_KEY`, `SESSION_SIGNING_SECRET` and `OTP_WEBHOOK_URL`, the SMS/email gateway that receives `{ channel, to, text }`.
+* **Known limit.** On Expo the private key sits in the Keychain / Keystore behind biometrics, not inside the Secure Enclave; a native signing module can move it there without server changes.
+
 ## 3. Staff HR
 
 > **Status: implemented**: everything in this section. Code is in `apps/api/src/staff/`, with e2e tests in `apps/api/test/staff.e2e.test.ts` and `hr.e2e.test.ts`. Notes on the implementation:

@@ -6,6 +6,7 @@ import type { Request } from 'express';
 import { negotiateLocale } from '@herp/i18n';
 import { ENV, type Env } from '../config/env';
 import { IS_PUBLIC } from '../common/decorators';
+import { AuthCryptoService } from './auth-crypto.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -14,7 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export class JwtGuard implements CanActivate {
   private readonly key: JWTVerifyGetKey | Uint8Array;
 
-  constructor(@Inject(ENV) private readonly env: Env, private readonly reflector: Reflector) {
+  constructor(@Inject(ENV) private readonly env: Env, private readonly reflector: Reflector, private readonly authCrypto: AuthCryptoService) {
     this.key = env.AUTH_JWKS_URL ? createRemoteJWKSet(new URL(env.AUTH_JWKS_URL)) : new TextEncoder().encode(env.AUTH_JWT_SECRET!);
   }
 
@@ -29,6 +30,13 @@ export class JwtGuard implements CanActivate {
     const header = req.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : undefined;
     if (!token) throw new UnauthorizedException('missing bearer token');
+    // Device-session token (issued by POST /auth/unlock after the daily biometric unlock).
+    const session = await this.authCrypto.verifySession(token);
+    if (session) {
+      if (!UUID.test(session.sub)) throw new UnauthorizedException('invalid session');
+      req.ctx = { userId: session.sub, locale, requestId, authTime: session.auth_time, session: { deviceKeyId: session.did, amr: session.amr } };
+      return true;
+    }
     try {
       const { payload } = await jwtVerify(token, this.key as never, {
         issuer: this.env.AUTH_ISSUER, audience: this.env.AUTH_AUDIENCE,

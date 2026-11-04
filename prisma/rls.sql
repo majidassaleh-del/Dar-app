@@ -2507,6 +2507,136 @@ BEGIN
   RETURN NEW;
 END $$;
 
+-- ======================================================= ONBOARDING AUTH ==
+-- First-time onboarding = verified phone (SMS OTP) + verified email (OTP) + an
+-- authenticator app (TOTP). Afterwards the daily unlock is a device-bound key
+-- (Face ID / Touch ID) signing a server nonce. Factor rows are user-scoped (no
+-- household); every write goes through the definer functions below.
+CREATE OR REPLACE FUNCTION app.user_onboarded(p_user uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT COALESCE((SELECT "onboardedAt" IS NOT NULL FROM user_auth_factors WHERE "userId" = p_user), false)
+$$;
+GRANT EXECUTE ON FUNCTION app.user_onboarded(uuid) TO app_user;
+
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['user_auth_factors', 'auth_challenges', 'device_keys'] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format('CREATE POLICY self_p ON %I FOR ALL TO app_user USING ("userId" = app.current_user_id()) WITH CHECK ("userId" = app.current_user_id())', t);
+    EXECUTE format('CREATE POLICY self_r ON %I AS RESTRICTIVE FOR ALL TO app_user USING ("userId" = app.current_user_id()) WITH CHECK ("userId" = app.current_user_id())', t);
+  END LOOP;
+END $$;
+REVOKE INSERT, UPDATE, DELETE ON user_auth_factors FROM app_user;
+REVOKE UPDATE, DELETE ON auth_challenges FROM app_user;
+REVOKE UPDATE, DELETE ON device_keys FROM app_user;
+GRANT UPDATE ("revokedAt", "lastUsedAt") ON device_keys TO app_user;
+-- New challenges start unused; device keys only once onboarding is complete.
+CREATE POLICY ch_ins ON auth_challenges AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK (attempts = 0 AND "consumedAt" IS NULL AND "expiresAt" <= now() + interval '15 minutes');
+CREATE POLICY dk_ins ON device_keys AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK (app.user_onboarded("userId") AND "revokedAt" IS NULL);
+
+CREATE OR REPLACE FUNCTION app.auth_factors_onboarded() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW."onboardedAt" IS NULL AND NEW."phoneVerifiedAt" IS NOT NULL AND NEW."emailVerifiedAt" IS NOT NULL AND NEW."totpVerifiedAt" IS NOT NULL THEN
+    NEW."onboardedAt" := now();
+  END IF;
+  NEW."updatedAt" := now();
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS user_auth_factors_onboarded ON user_auth_factors;
+CREATE TRIGGER user_auth_factors_onboarded BEFORE INSERT OR UPDATE ON user_auth_factors FOR EACH ROW EXECUTE FUNCTION app.auth_factors_onboarded();
+
+-- Check a code / nonce: at most 5 attempts, unexpired, single use. The attempt counter is
+-- persisted even on a wrong code (status is returned, not raised). A verified phone / email
+-- also becomes the user's login phone / email.
+CREATE OR REPLACE FUNCTION app.consume_auth_challenge(p_id uuid, p_hash text) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE c auth_challenges;
+BEGIN
+  SELECT * INTO c FROM auth_challenges WHERE id = p_id AND "userId" = app.current_user_id() FOR UPDATE;
+  IF NOT FOUND THEN RETURN 'NOT_FOUND'; END IF;
+  IF c."consumedAt" IS NOT NULL THEN RETURN 'USED'; END IF;
+  IF c."expiresAt" < now() THEN RETURN 'EXPIRED'; END IF;
+  IF c.attempts >= 5 THEN RETURN 'LOCKED'; END IF;
+  UPDATE auth_challenges SET attempts = attempts + 1 WHERE id = p_id;
+  IF c."codeHash" <> p_hash THEN RETURN CASE WHEN c.attempts + 1 >= 5 THEN 'LOCKED' ELSE 'INVALID' END; END IF;
+  UPDATE auth_challenges SET "consumedAt" = now() WHERE id = p_id;
+  IF c.kind = 'PHONE_OTP' THEN
+    INSERT INTO user_auth_factors ("userId", phone, "phoneVerifiedAt") VALUES (c."userId", c.target, now())
+    ON CONFLICT ("userId") DO UPDATE SET phone = EXCLUDED.phone, "phoneVerifiedAt" = now();
+    UPDATE users SET phone = c.target WHERE id = c."userId" AND phone IS DISTINCT FROM c.target;
+  ELSIF c.kind = 'EMAIL_OTP' THEN
+    INSERT INTO user_auth_factors ("userId", email, "emailVerifiedAt") VALUES (c."userId", c.target, now())
+    ON CONFLICT ("userId") DO UPDATE SET email = EXCLUDED.email, "emailVerifiedAt" = now();
+    UPDATE users SET email = c.target WHERE id = c."userId" AND email IS DISTINCT FROM c.target;
+  END IF;
+  RETURN 'OK';
+END $$;
+GRANT EXECUTE ON FUNCTION app.consume_auth_challenge(uuid, text) TO app_user;
+
+-- Authenticator enrolment: the (encrypted) secret can be replaced only until it is confirmed.
+CREATE OR REPLACE FUNCTION app.set_totp_secret(p_cipher text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM user_auth_factors WHERE "userId" = app.current_user_id() AND "totpVerifiedAt" IS NOT NULL) THEN
+    RAISE EXCEPTION 'an authenticator is already enrolled' USING ERRCODE = 'check_violation';
+  END IF;
+  INSERT INTO user_auth_factors ("userId", "totpSecretCiphertext") VALUES (app.current_user_id(), p_cipher)
+  ON CONFLICT ("userId") DO UPDATE SET "totpSecretCiphertext" = EXCLUDED."totpSecretCiphertext", "totpLastStep" = NULL;
+END $$;
+GRANT EXECUTE ON FUNCTION app.set_totp_secret(text) TO app_user;
+
+-- Called after the API verified a TOTP code for time step p_step: confirms enrolment and
+-- rejects a replay of the same (or an older) step.
+CREATE OR REPLACE FUNCTION app.accept_totp_step(p_step bigint) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_last bigint;
+BEGIN
+  SELECT "totpLastStep" INTO v_last FROM user_auth_factors WHERE "userId" = app.current_user_id() AND "totpSecretCiphertext" IS NOT NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'no authenticator enrolled' USING ERRCODE = 'check_violation'; END IF;
+  IF v_last IS NOT NULL AND p_step <= v_last THEN
+    RAISE EXCEPTION 'this authenticator code was already used' USING ERRCODE = 'check_violation';
+  END IF;
+  IF app.totp_locked() THEN RAISE EXCEPTION 'too many wrong authenticator codes; try again later' USING ERRCODE = 'check_violation'; END IF;
+  UPDATE user_auth_factors SET "totpLastStep" = p_step, "totpVerifiedAt" = COALESCE("totpVerifiedAt", now()), "totpFailures" = 0, "totpLockedUntil" = NULL
+   WHERE "userId" = app.current_user_id();
+END $$;
+GRANT EXECUTE ON FUNCTION app.accept_totp_step(bigint) TO app_user;
+
+-- Wrong authenticator codes: 5 in a row lock the factor for 15 minutes (brute-force guard).
+CREATE OR REPLACE FUNCTION app.record_totp_failure() RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v int;
+BEGIN
+  UPDATE user_auth_factors SET "totpFailures" = "totpFailures" + 1,
+         "totpLockedUntil" = CASE WHEN "totpFailures" + 1 >= 5 THEN now() + interval '15 minutes' ELSE "totpLockedUntil" END
+   WHERE "userId" = app.current_user_id() RETURNING "totpFailures" INTO v;
+  RETURN COALESCE(v, 0) >= 5;
+END $$;
+GRANT EXECUTE ON FUNCTION app.record_totp_failure() TO app_user;
+
+CREATE OR REPLACE FUNCTION app.totp_locked() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT COALESCE((SELECT "totpLockedUntil" > now() FROM user_auth_factors WHERE "userId" = app.current_user_id()), false)
+$$;
+GRANT EXECUTE ON FUNCTION app.totp_locked() TO app_user;
+
+-- Phone and email are login identifiers: a user changes them only by verifying (above).
+CREATE OR REPLACE FUNCTION app.guard_user_identifiers() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF app.caller_is_restricted() AND (NEW.phone, NEW.email) IS DISTINCT FROM (OLD.phone, OLD.email) THEN
+    RAISE EXCEPTION 'phone and email change only through verification (/auth/onboarding)' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS users_0_identifiers ON users;
+CREATE TRIGGER users_0_identifiers BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION app.guard_user_identifiers();
+
 -- ============================================ SAUDI DOMESTIC LABOR COMPLIANCE ==
 -- لائحة عمال الخدمة المنزلية ومن في حكمهم (Decision 310/1434H).
 

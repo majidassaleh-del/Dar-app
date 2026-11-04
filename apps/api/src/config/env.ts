@@ -22,6 +22,15 @@ const Env = z.object({
   FILE_SIGNING_SECRET: z.string().min(32).optional(),
   /** HMAC key for per-device offline fallback keys (≥ 32 chars). Random per process when unset outside production. */
   OFFLINE_KEY_SECRET: z.string().min(32).optional(),
+  /** Onboarding: AES key for authenticator (TOTP) secrets, 32 bytes base64; random per process outside production. */
+  AUTH_TOTP_KEY: z.string().optional(),
+  /** HS256 key for device-session tokens issued after the daily Face ID / Touch ID unlock (≥ 32 chars). */
+  SESSION_SIGNING_SECRET: z.string().min(32).optional(),
+  /** Require a device-session token (daily biometric unlock) on every non-auth route. Default: on in production. */
+  AUTH_REQUIRE_DEVICE_SESSION: z.enum(['true', 'false']).optional(),
+  /** SMS / email gateway for one-time codes; unset = in-memory outbox (dev / tests only). */
+  OTP_WEBHOOK_URL: z.string().url().optional(),
+  OTP_WEBHOOK_TOKEN: z.string().optional(),
   /** Receipt OCR: 'claude' uses Claude vision (credentials from ANTHROPIC_API_KEY or the SDK's usual sources); 'none' stores receipts for manual entry. */
   OCR_PROVIDER: z.enum(['none', 'claude']).default('none'),
   OCR_MODEL: z.string().default('claude-opus-5-5'),
@@ -38,7 +47,9 @@ const Env = z.object({
   .refine((e) => e.HERP_KMS !== 'gcp' || e.HERP_KMS_KEY, { message: 'HERP_KMS=gcp needs HERP_KMS_KEY' })
   .refine((e) => e.NODE_ENV !== 'production' || e.HERP_KMS === 'gcp', { message: 'production requires HERP_KMS=gcp' })
   .refine((e) => e.NODE_ENV !== 'production' || e.FILE_SIGNING_SECRET, { message: 'production requires FILE_SIGNING_SECRET' })
-  .refine((e) => e.NODE_ENV !== 'production' || e.OFFLINE_KEY_SECRET, { message: 'production requires OFFLINE_KEY_SECRET' });
+  .refine((e) => e.NODE_ENV !== 'production' || e.OFFLINE_KEY_SECRET, { message: 'production requires OFFLINE_KEY_SECRET' })
+  .refine((e) => e.NODE_ENV !== 'production' || (e.AUTH_TOTP_KEY && e.SESSION_SIGNING_SECRET && e.OTP_WEBHOOK_URL),
+    { message: 'production requires AUTH_TOTP_KEY, SESSION_SIGNING_SECRET and OTP_WEBHOOK_URL' });
 
 export type Env = z.infer<typeof Env>;
 export const ENV = Symbol('ENV');

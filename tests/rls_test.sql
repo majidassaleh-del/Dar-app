@@ -766,4 +766,22 @@ SET LOCAL ROLE app_user;
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
 SELECT pg_temp.expect('other household cannot see them', (SELECT count(*) FROM reminders WHERE "entityId" = 'd5000000-0000-0000-0000-000000000001'), 0);
 
+-- ---- 16. onboarding auth ----
+RESET ROLE;
+INSERT INTO auth_challenges (id,"userId",kind,target,"codeHash","expiresAt")
+VALUES ('d6000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-00000000000c','PHONE_OTP','+966511111111','h', now() + interval '5 minutes');
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h1');  -- maid (not onboarded in this suite)
+SELECT pg_temp.expect('a user cannot mark their own factors verified', pg_temp.try_rows($q$INSERT INTO user_auth_factors ("userId","phoneVerifiedAt","emailVerifiedAt","totpVerifiedAt") VALUES ('00000000-0000-0000-0000-00000000000c', now(), now(), now())$q$), -1);
+SELECT pg_temp.expect('…nor change their phone without verification', pg_temp.try_rows($q$UPDATE users SET phone = '+966599999999' WHERE id = '00000000-0000-0000-0000-00000000000c'$q$), -1);
+SELECT pg_temp.expect('…nor edit a challenge (attempt counter, expiry)', pg_temp.try_rows($q$UPDATE auth_challenges SET attempts = 0$q$), -1);
+SELECT pg_temp.expect('…nor register a device key before onboarding', pg_temp.try_rows($q$INSERT INTO device_keys (id,"userId","deviceId","publicKeyJwk") VALUES (gen_random_uuid(), '00000000-0000-0000-0000-00000000000c', 'dev-12345678', '{}')$q$), -1);
+SELECT pg_temp.expect('a wrong code is reported, not raised', (SELECT CASE WHEN app.consume_auth_challenge('d6000000-0000-0000-0000-000000000001', 'x') = 'INVALID' THEN 1 ELSE 0 END), 1);
+SELECT pg_temp.expect('…and counted', (SELECT attempts FROM auth_challenges WHERE id = 'd6000000-0000-0000-0000-000000000001'), 1);
+SELECT pg_temp.expect('the right code verifies the phone', (SELECT CASE WHEN app.consume_auth_challenge('d6000000-0000-0000-0000-000000000001', 'h') = 'OK' THEN 1 ELSE 0 END), 1);
+SELECT pg_temp.expect('…recorded as a verified factor', (SELECT count(*) FROM user_auth_factors WHERE "phoneVerifiedAt" IS NOT NULL), 1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');  -- head
+SELECT pg_temp.expect('another user (even the Head) cannot see or consume it', (SELECT count(*) FROM auth_challenges)
+  + (SELECT CASE WHEN app.consume_auth_challenge('d6000000-0000-0000-0000-000000000001', 'h') = 'NOT_FOUND' THEN 0 ELSE 10 END), 0);
+
 ROLLBACK;

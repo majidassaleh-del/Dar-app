@@ -30,3 +30,9 @@ FROM (VALUES ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-0
              ('c0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000008', 'DRIVER', 'Rahim')) v(mid, uid, role, dn)
 JOIN roles r ON r."householdId" = 'b0000000-0000-0000-0000-000000000001' AND r."systemRole" = v.role::"SystemRole";
 RESET app.user_id;
+
+-- Fixture users have completed onboarding (phone + email + authenticator), so the
+-- e2e suites exercise the modules; the onboarding suite uses fresh users.
+INSERT INTO user_auth_factors ("userId", "phoneVerifiedAt", "emailVerifiedAt", "totpVerifiedAt", "onboardedAt")
+SELECT id, now(), now(), now(), now() FROM users WHERE id::text LIKE 'a0000000-%';
+

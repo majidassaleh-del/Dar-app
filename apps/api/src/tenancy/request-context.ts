@@ -9,6 +9,8 @@ export interface RequestContext {
   requestId: string;
   /** When the user last actually authenticated (JWT auth_time, else iat), epoch seconds. */
   authTime?: number;
+  /** Present when the caller used a device-session token (daily biometric unlock). */
+  session?: { deviceKeyId: string; amr: string[] };
 }
 
 declare global {

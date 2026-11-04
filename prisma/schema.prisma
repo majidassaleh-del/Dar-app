@@ -480,12 +480,80 @@ model User {
   updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt       DateTime? @db.Timestamptz(6)
 
-  memberships   Membership[]
-  devices       UserDevice[]
-  notifications Notification[]
-  auditLogs     AuditLog[]     @relation("AuditActor")
+  memberships    Membership[]
+  devices        UserDevice[]
+  authFactor     UserAuthFactor?
+  authChallenges AuthChallenge[]
+  deviceKeys     DeviceKey[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]      @relation("AuditActor")
 
   @@map("users")
+}
+
+enum AuthChallengeKind {
+  PHONE_OTP
+  EMAIL_OTP
+  DEVICE_UNLOCK
+}
+
+/// First-time onboarding factors: SMS OTP (phone), email OTP, and an authenticator app
+/// (TOTP, e.g. Microsoft Authenticator). Written only through app.* definer functions;
+/// onboardedAt is set by trigger once all three are verified.
+model UserAuthFactor {
+  userId               String    @id @db.Uuid
+  phone                String?
+  phoneVerifiedAt      DateTime? @db.Timestamptz(6)
+  email                String?   @db.Citext
+  emailVerifiedAt      DateTime? @db.Timestamptz(6)
+  totpSecretCiphertext String? // AES-256-GCM under AUTH_TOTP_KEY
+  totpVerifiedAt       DateTime? @db.Timestamptz(6)
+  totpLastStep         BigInt? // replay protection: a TOTP step is accepted once
+  totpFailures         Int       @default(0)
+  totpLockedUntil      DateTime? @db.Timestamptz(6) // 15 min after 5 wrong codes
+  onboardedAt          DateTime? @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_auth_factors")
+}
+
+/// One-time codes and device-unlock nonces; only a hash is stored. Consumed through
+/// app.consume_auth_challenge (attempt limit, expiry, single use).
+model AuthChallenge {
+  id         String            @id @default(uuid()) @db.Uuid
+  userId     String            @db.Uuid
+  kind       AuthChallengeKind
+  target     String? // phone / email being verified, device key id for unlock
+  codeHash   String
+  attempts   Int               @default(0)
+  expiresAt  DateTime          @db.Timestamptz(6)
+  consumedAt DateTime?         @db.Timestamptz(6)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("auth_challenges")
+}
+
+/// Device-bound key (P-256) whose private half sits in the Secure Enclave / Android
+/// Keystore behind Face ID / Touch ID. Signing a server nonce is the daily unlock.
+model DeviceKey {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  deviceId     String
+  publicKeyJwk Json
+  label        String?
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  lastUsedAt   DateTime? @db.Timestamptz(6)
+  revokedAt    DateTime? @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@map("device_keys")
 }
 
 model UserDevice {
