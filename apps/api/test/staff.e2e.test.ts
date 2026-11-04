@@ -234,6 +234,14 @@ describe('salary payments (Musaned / direct transfer, no WPS)', () => {
     expect(r.body.warnings[0]).toMatch(/exceeds the contract amount/);
   });
 
+  it('a guessed foreign id (proof file from elsewhere) → 422 INVALID_REFERENCE, not 500', async () => {
+    const r = await http().post(`/v1/staff/${maidStaffId}/salary-payments`).set(await as(USERS.head))
+      .send({ periodYear: 2026, periodMonth: 11, channel: 'CASH', amount: 10, proofFileId: '7f9c2ba4-e88f-4d3b-9b0e-6c1d2a3b4c5d' });
+    expect(r.status).toBe(422);
+    // Prisma surfaces SQLSTATE 23503 as P2003 without the trigger text; the generic detail is also oracle-free.
+    expect(r.body).toMatchObject({ code: 'INVALID_REFERENCE', detail: 'referenced record does not exist' });
+  });
+
   it('maid sees only her own payments and cannot record any', async () => {
     const r = await http().get('/v1/salary-payments').set(await as(USERS.maid)).expect(200);
     expect(new Set(r.body.data.map((p: { staffId: string }) => p.staffId))).toEqual(new Set([maidStaffId]));

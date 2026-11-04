@@ -1182,10 +1182,10 @@ END $$;
 -- Creates a household, its default roles + permission matrix, and the owner
 -- membership in one call. Exposed as POST /v1/households.
 CREATE OR REPLACE FUNCTION app.provision_household(
-  p_owner uuid, p_slug text, p_name jsonb, p_locale "Locale" DEFAULT 'ar'
+  p_owner uuid, p_slug text, p_name jsonb, p_locale "Locale" DEFAULT 'ar', p_id uuid DEFAULT NULL
 ) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE v_hh uuid := gen_random_uuid(); v_role uuid; r record;
+DECLARE v_hh uuid := COALESCE(p_id, gen_random_uuid()); v_role uuid; r record;
 BEGIN
   -- (current_user is the function owner here, so there is no reliable way to
   -- exempt workers by role; a worker provisioning for someone sets app.user_id.)

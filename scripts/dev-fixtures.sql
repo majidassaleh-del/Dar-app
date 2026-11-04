@@ -7,15 +7,13 @@ INSERT INTO users (id, "fullNameI18n", "preferredLocale", "updatedAt") VALUES
  ('a0000000-0000-0000-0000-000000000004', '{"ar":"أم أحمد"}',          'ar', now()),   -- spouse
  ('a0000000-0000-0000-0000-000000000009', '{"en":"Other head"}',       'en', now());   -- head of household 2
 
-DO $$
-DECLARE h1 uuid; h2 uuid;
-BEGIN
-  h1 := app.provision_household('a0000000-0000-0000-0000-000000000001', 'demo', '{"ar":"بيت ماجد","en":"Majid household"}');
-  UPDATE households SET id = 'b0000000-0000-0000-0000-000000000001' WHERE id = h1;  -- cascades
-  PERFORM set_config('app.user_id', 'a0000000-0000-0000-0000-000000000009', false);
-  h2 := app.provision_household('a0000000-0000-0000-0000-000000000009', 'other', '{"en":"Other household"}');
-  UPDATE households SET id = 'b0000000-0000-0000-0000-000000000002' WHERE id = h2;
-END $$;
+-- Fixed ids via p_id (renaming ids after the fact would cascade through tables
+-- in arbitrary order and trip the same-household reference triggers).
+SELECT app.provision_household('a0000000-0000-0000-0000-000000000001', 'demo', '{"ar":"بيت ماجد","en":"Majid household"}', 'ar',
+                               'b0000000-0000-0000-0000-000000000001');
+SELECT set_config('app.user_id', 'a0000000-0000-0000-0000-000000000009', false);
+SELECT app.provision_household('a0000000-0000-0000-0000-000000000009', 'other', '{"en":"Other household"}', 'en',
+                               'b0000000-0000-0000-0000-000000000002');
 
 INSERT INTO memberships (id, "householdId", "userId", "roleId", status, "displayName", "updatedAt")
 SELECT v.mid::uuid, 'b0000000-0000-0000-0000-000000000001', v.uid::uuid, r.id, 'ACTIVE', v.dn, now()
