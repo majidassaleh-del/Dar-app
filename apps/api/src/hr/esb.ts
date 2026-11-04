@@ -9,7 +9,8 @@ import type { Tx } from '../db/prisma.service';
  * the article in two ways, so both are offered and the contract chooses
  * (EmploymentContract.endOfServiceRule):
  *
- *  - SA_DOMESTIC (default): one month's wage for every completed 4-year period
+ *  - SA_DOMESTIC (default, confirmed by the household 2026-11-04 as the primary
+ *    strategy): one month's wage for every completed 4-year period
  *    (the reading most commentators use; it is also the safer one for an employer in a
  *    dispute).
  *  - SA_DOMESTIC_SINGLE: one month's wage once 4 consecutive years are reached.

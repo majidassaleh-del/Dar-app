@@ -131,6 +131,32 @@
       },
       "done": "ተጠናቋል",
       "next": "ቀጣይ"
+    },
+    "table": {
+      "severity": "ቅድሚያ",
+      "item": "ጉዳይ",
+      "count": "ብዛት",
+      "action": "ክፈት"
+    },
+    "budgets": {
+      "title": "የዚህ ወር በጀቶች",
+      "budget": "በጀት",
+      "spent": "ወጪ"
+    },
+    "docs": {
+      "title": "ጊዜያቸው የሚያልፉ ሰነዶች",
+      "expired": "ጊዜው ያለፈ",
+      "within": "በ{days} ቀናት ውስጥ"
+    },
+    "medical": {
+      "title": "የሕክምና ተገዢነት",
+      "valid": "ከ{total} ሠራተኞች {valid} የሚሰራ"
+    },
+    "theme": {
+      "toggle": "ገጽታ",
+      "light": "ብሩህ",
+      "dark": "ጨለማ",
+      "system": "ሲስተም"
     }
   }
 }

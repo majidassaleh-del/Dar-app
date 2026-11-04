@@ -131,6 +131,32 @@
       },
       "done": "Done",
       "next": "Next"
+    },
+    "table": {
+      "severity": "Severity",
+      "item": "Item",
+      "count": "Count",
+      "action": "Open"
+    },
+    "budgets": {
+      "title": "Budgets this month",
+      "budget": "Budget",
+      "spent": "Spent"
+    },
+    "docs": {
+      "title": "Expiring documents",
+      "expired": "Expired",
+      "within": "Within {days} days"
+    },
+    "medical": {
+      "title": "Medical compliance",
+      "valid": "{valid} of {total} workers valid"
+    },
+    "theme": {
+      "toggle": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
     }
   }
 }

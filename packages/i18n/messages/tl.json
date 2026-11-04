@@ -131,6 +131,32 @@
       },
       "done": "Tapos",
       "next": "Susunod"
+    },
+    "table": {
+      "severity": "Antas",
+      "item": "Item",
+      "count": "Bilang",
+      "action": "Buksan"
+    },
+    "budgets": {
+      "title": "Mga budget ngayong buwan",
+      "budget": "Budget",
+      "spent": "Nagastos"
+    },
+    "docs": {
+      "title": "Mga dokumentong mag-e-expire",
+      "expired": "Expired",
+      "within": "Sa loob ng {days} araw"
+    },
+    "medical": {
+      "title": "Pagsunod sa medical",
+      "valid": "{valid} sa {total} manggagawa ang valid"
+    },
+    "theme": {
+      "toggle": "Tema",
+      "light": "Maliwanag",
+      "dark": "Madilim",
+      "system": "System"
     }
   }
 }

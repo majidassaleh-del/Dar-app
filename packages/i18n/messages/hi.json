@@ -131,6 +131,32 @@
       },
       "done": "पूर्ण",
       "next": "आगे"
+    },
+    "table": {
+      "severity": "प्राथमिकता",
+      "item": "मद",
+      "count": "संख्या",
+      "action": "खोलें"
+    },
+    "budgets": {
+      "title": "इस महीने का बजट",
+      "budget": "बजट",
+      "spent": "खर्च"
+    },
+    "docs": {
+      "title": "समाप्त हो रहे दस्तावेज़",
+      "expired": "समाप्त",
+      "within": "{days} दिनों में"
+    },
+    "medical": {
+      "title": "मेडिकल अनुपालन",
+      "valid": "{total} में से {valid} कर्मचारी वैध"
+    },
+    "theme": {
+      "toggle": "थीम",
+      "light": "हल्का",
+      "dark": "गहरा",
+      "system": "सिस्टम"
     }
   }
 }

@@ -4,7 +4,13 @@ import { NextIntlClientProvider, hasLocale } from 'next-intl';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getDirection, localeMeta, type Locale } from '@herp/i18n';
 import { routing } from '@/i18n/routing';
+import '@fontsource-variable/inter';
+import '@fontsource/ibm-plex-sans-arabic/400.css';
+import '@fontsource/ibm-plex-sans-arabic/500.css';
+import '@fontsource/ibm-plex-sans-arabic/600.css';
+import '@fontsource/ibm-plex-sans-arabic/700.css';
 import '../globals.css';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -27,9 +33,9 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   setRequestLocale(locale);
   const l = locale as Locale;
   return (
-    <html lang={locale} dir={getDirection(l)} style={{ ['--font-stack' as string]: localeMeta[l].fontStack }}>
+    <html lang={locale} dir={getDirection(l)} suppressHydrationWarning style={{ ['--font-locale' as string]: localeMeta[l].fontStack }}>
       <body>
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <ThemeProvider><NextIntlClientProvider>{children}</NextIntlClientProvider></ThemeProvider>
       </body>
     </html>
   );

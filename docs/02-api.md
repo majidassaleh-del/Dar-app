@@ -201,7 +201,7 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 
 **End-of-service (Art. 16):**
 * **Strategy.** Set per contract with `endOfServiceRule`:
-  * `SA_DOMESTIC` (default): one month's wage for every completed period of 4 consecutive years.
+  * `SA_DOMESTIC` (**default; confirmed by the household on 2026-11-04 as its primary ESB strategy**): one month's wage for every completed period of 4 consecutive years.
   * `SA_DOMESTIC_SINGLE`: one month's wage, once, after 4 consecutive years.
   * `SA_LABOR_LAW`: for contracts that grant the general Labor Law formula. That is half a month per year for the first 5 years and a month per year after, pro rata. The Art. 85 resignation reductions are not applied.
 * **Wage basis.** The last contractual monthly wage: basic salary plus fixed allowances.
@@ -691,22 +691,35 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 | `POST /webhooks/ocr/{provider}` | Async OCR completion → `processReceiptImage` merge (ZATCA QR authoritative) |
 | `POST /webhooks/billing` | Subscription events |
 
-## 16. Web: executive UI (Slate / Navy)
+## 16. Web: executive UI (shadcn/ui + Tremor, Slate / Navy)
 
-The `apps/web` theme for EFA Private Office lives in `src/app/globals.css` and `src/components/AppShell.tsx`.
+**Stack (`apps/web`):**
+* **Tailwind CSS v4.** CSS-first config in `src/app/globals.css`, `@tailwindcss/postcss`.
+* **shadcn/ui.** Tokens and components (`components.json`, `src/components/ui/`: Card, Badge, Button, Table), new-york style, slate base. They are copied in, owned and themed, as shadcn intends; `npx shadcn add …` works for more.
+* **Tremor Raw.** Dashboard primitives in `src/components/tremor/`: BarList, ProgressBar and BarChart on Recharts 2.15. The `@tremor/react` 3.x package was not used because it supports only React 18 and Tailwind v3; this app runs React 19 and Tailwind v4. Tremor's current distribution is these copy-in components, built for Tailwind v4.
 
-**Tokens and modes:**
-* Design tokens on `:root`: slate surfaces, a navy brand sidebar, brass for the brand mark only, and severity colours for `critical` / `warning` / `info` / `ok`.
-* Dark mode follows the OS, or `data-theme`.
-* Logical CSS properties only, so Arabic RTL and LTR share one stylesheet.
-* Tabular numerals for figures.
-* The layout collapses to a top bar at phone width.
+**Palette and modes:**
+* **Light.** Navy primary, slate surfaces, crisp `border-slate-200`, soft `shadow-sm`, no glows or neon.
+* **Slate Dark.** `slate-950` background and `border-slate-800`.
+* **Switching.** `next-themes` (`.dark` class) follows the OS until the user chooses Light, Dark or System in the sidebar.
+* **Severity tokens.** `critical`, `warning`, `info`, `ok`, used by Badge variants.
 
-**Pages:**
-* `/[locale]`: the **EFA Daily Pulse**, with the attention list (`pulse.*` labels, severity chips) and KPI tiles (`exec.kpi.*`) in all six languages, plus the Gregorian and Umm al-Qura dates.
-* `/[locale]/onboarding`: the onboarding steps.
+**Typography:**
+* IBM Plex Sans Arabic (Arabic) and Inter (Latin), self-hosted with `@fontsource`, so builds don't depend on Google Fonts.
+* Tailwind `font-sans` / `font-arabic`; `:lang(ar)` switches to Plex Arabic.
+* Amharic, Bengali and Hindi fall back to the locale's system font stack.
 
-Both pages render **sample data** shaped like `GET /v1/dashboard/pulse` and `GET /v1/auth/onboarding`. The authenticated API client is not wired into the web app yet.
+**RTL:**
+* Logical utilities only (`ps-`/`pe-`/`ms-`/`start-`/`end-`, `text-start`/`text-end`).
+* BarList and ProgressBar fill from inline-start.
+* In Arabic the chart's category axis runs right to left, with its value axis on the right.
+* Forward arrows flip in Arabic.
+
+**Pages and checks:**
+* `/[locale]`: Daily Pulse with KPI cards, the attention Table with severity Badges, budgets BarChart, expiring documents BarList, medical compliance ProgressBar and fleet card.
+* `/[locale]/onboarding`: the four-step onboarding.
+* Both still render **sample data** shaped like `GET /v1/dashboard/pulse` and `GET /v1/auth/onboarding`; the authenticated API client is not wired in yet.
+* Screenshots (Arabic and English, light and dark, phone, onboarding) are in `docs/screenshots/`. None of the pages scrolls horizontally at 390 px.
 
 ## 15. Example
 

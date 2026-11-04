@@ -12,13 +12,10 @@ export function LocaleSwitcher() {
   const pathname = usePathname();
   const [pending, start] = useTransition();
   return (
-    <label>
-      <span className="muted" style={{ marginInlineEnd: '.5rem' }}>{t('language')}</span>
-      <select
-        value={locale}
-        disabled={pending}
-        onChange={(e) => start(() => router.replace(pathname, { locale: e.target.value as Locale }))}
-      >
+    <label className="grid gap-1 text-xs text-sidebar-muted">
+      {t('language')}
+      <select value={locale} disabled={pending} onChange={(e) => start(() => router.replace(pathname, { locale: e.target.value as Locale }))}
+        className="h-8 w-full rounded-md border border-sidebar-border bg-sidebar-accent px-2 text-sm text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
         {locales.map((l) => <option key={l} value={l} lang={l}>{localeMeta[l].endonym}</option>)}
       </select>
     </label>
