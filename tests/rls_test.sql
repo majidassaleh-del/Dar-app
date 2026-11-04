@@ -506,8 +506,8 @@ SELECT pg_temp.expect('…and the error never reveals whether the foreign id exi
 
 -- ---- 9. double-entry ledger ----
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
-SELECT pg_temp.expect('chart of accounts seeded at provisioning (15 system accounts + 1 per float)',
-  (SELECT count(*) FROM ledger_accounts WHERE "isSystem" AND "pettyCashAccountId" IS NULL), 15);
+SELECT pg_temp.expect('chart of accounts seeded at provisioning (17 template accounts)',
+  (SELECT count(*) FROM ledger_accounts WHERE "isSystem" AND "pettyCashAccountId" IS NULL AND "financialAccountId" IS NULL), 17);
 SELECT pg_temp.expect('a PENDING expense posts nothing (only the top-up so far)',
   (SELECT count(*) FROM journal_entries WHERE source = 'PETTY_CASH'), 1);
 UPDATE petty_cash_logs SET status = 'APPROVED', "reviewedAt" = now() WHERE id = '50000000-0000-0000-0000-0000000000b1';
@@ -566,7 +566,68 @@ SELECT pg_temp.expect('…after which nothing can be dated inside the closed per
      pg_temp.q('h1'), pg_temp.q('head1'))), -2);
 SELECT pg_temp.expect('…and the lock only moves forward', pg_temp.try_rows($q$SELECT app.close_books(CURRENT_DATE - 30)$q$), -2);
 
--- ---- 10. tenant keys ----
+-- ---- 10. banking ----
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+SELECT pg_temp.expect('every bank account has its own ledger account under 1200',
+  (SELECT count(*) FROM ledger_accounts WHERE "financialAccountId" = '10000000-0000-0000-0000-000000000001' AND code ~ '^12[0-9]{2}$'), 1);
+SELECT pg_temp.expect('the 3 posted fixture expenses reduced the account balance (−155)',
+  (SELECT "currentBalance"::int FROM financial_accounts WHERE id = '10000000-0000-0000-0000-000000000001'), -155);
+SELECT pg_temp.expect('…and were posted to the ledger (Cr bank 155)',
+  (SELECT sum(l.credit)::int FROM journal_lines l JOIN ledger_accounts a ON a.id = l."ledgerAccountId"
+   WHERE a."financialAccountId" = '10000000-0000-0000-0000-000000000001'), 155);
+SELECT pg_temp.expect('nobody can set an account balance directly',
+  pg_temp.try_rows($q$UPDATE financial_accounts SET "currentBalance" = 1000000$q$), -1);
+SELECT pg_temp.expect('a posted transaction''s amount cannot change',
+  pg_temp.try_rows($q$UPDATE transactions SET amount = 1 WHERE "householdId" IS NOT NULL$q$), -2);
+SELECT pg_temp.expect('…nor be reversed by a plain UPDATE',
+  pg_temp.try_rows($q$UPDATE transactions SET status = 'REVERSED'$q$), -1);
+INSERT INTO cards (id,"householdId","accountId","holderId",type,last4,"expiryMonth","expiryYear","perTxnLimit","dailyLimit","updatedAt")
+VALUES ('a1000000-0000-0000-0000-000000000001', (SELECT v FROM ids WHERE k='h1'), '10000000-0000-0000-0000-000000000001',
+        (SELECT v FROM ids WHERE k='driver'), 'DEBIT', '4242', 12, 2030, 100, 120, now());
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000e','h1');
+SELECT pg_temp.expect('driver cannot spend from the bank account without a card',
+  pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId",type,amount,currency,"baseAmount","occurredAt","createdById")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000001', 'EXPENSE', 10, 'SAR', 10, now(), %s)$q$, pg_temp.q('h1'), pg_temp.q('driver'))), -1);
+SELECT pg_temp.expect('driver''s card refuses 150 (per-transaction limit 100)',
+  pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId","cardId",type,amount,currency,"baseAmount","occurredAt","createdById")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001', 'EXPENSE', 150, 'SAR', 150, now(), %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('driver'))), -2);
+INSERT INTO transactions (id,"householdId","accountId","cardId",type,amount,currency,"baseAmount","occurredAt","createdById")
+VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), '10000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',
+        'EXPENSE', 80, 'SAR', 80, now(), (SELECT v FROM ids WHERE k='driver'));
+SELECT pg_temp.expect('…allows 80, then the daily limit (120) refuses another 50',
+  pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId","cardId",type,amount,currency,"baseAmount","occurredAt","createdById")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001', 'EXPENSE', 50, 'SAR', 50, now(), %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('driver'))), -2);
+SELECT pg_temp.expect('the holder may freeze the card, but not raise its limit',
+  pg_temp.try_rows($q$UPDATE cards SET status = 'FROZEN' WHERE id = 'a1000000-0000-0000-0000-000000000001'$q$)
+  + pg_temp.try_rows($q$UPDATE cards SET "dailyLimit" = 99999 WHERE id = 'a1000000-0000-0000-0000-000000000001'$q$), 0);
+SELECT pg_temp.expect('staff cannot record owner funding',
+  pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId",type,"isFunding",amount,currency,"baseAmount","occurredAt","createdById")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000001', 'TRANSFER', true, 10, 'SAR', 10, now(), %s)$q$, pg_temp.q('h1'), pg_temp.q('driver'))), -1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+INSERT INTO transactions (id,"householdId","accountId",type,"isFunding",amount,currency,"baseAmount","occurredAt","createdById")
+VALUES ('a2000000-0000-0000-0000-000000000001', (SELECT v FROM ids WHERE k='h1'), '10000000-0000-0000-0000-000000000001', 'TRANSFER', true,
+        500, 'SAR', 500, now(), (SELECT v FROM ids WHERE k='head1'));
+RESET ROLE;
+INSERT INTO ids SELECT 'topupEntry', id FROM journal_entries WHERE source = 'PETTY_CASH' AND "householdId" = (SELECT v FROM ids WHERE k='h1') ORDER BY number LIMIT 1;
+SET LOCAL ROLE app_user;
+SELECT pg_temp.expect('a 500 funding withdrawal cannot match more than the 500 top-up it paid for',
+  pg_temp.try_rows(format($q$INSERT INTO funding_matches (id,"householdId","transactionId","journalEntryId",amount,"matchedById")
+     VALUES (gen_random_uuid(), %s, 'a2000000-0000-0000-0000-000000000001', %s, 501, %s)$q$, pg_temp.q('h1'), pg_temp.q('topupEntry'), pg_temp.q('head1'))), -2);
+SELECT pg_temp.expect('…and matches it exactly',
+  pg_temp.try_rows(format($q$INSERT INTO funding_matches (id,"householdId","transactionId","journalEntryId",amount,"matchedById")
+     VALUES (gen_random_uuid(), %s, 'a2000000-0000-0000-0000-000000000001', %s, 500, %s)$q$, pg_temp.q('h1'), pg_temp.q('topupEntry'), pg_temp.q('head1'))), 1);
+SELECT pg_temp.expect('a valid recurring bill template is accepted (positive case)',
+  pg_temp.try_rows(format($q$INSERT INTO recurring_rules (id,"householdId",template,frequency,"nextRunAt","createdById")
+     VALUES (gen_random_uuid(), %s, '{"accountId":"10000000-0000-0000-0000-000000000001","type":"EXPENSE","amount":50}', 'MONTHLY', now(), %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('head1'))), 1);
+SELECT pg_temp.expect('a recurring bill template cannot point at another household''s account',
+  pg_temp.try_rows(format($q$INSERT INTO recurring_rules (id,"householdId",template,frequency,"nextRunAt","createdById")
+     VALUES (gen_random_uuid(), %s, '{"accountId":"10000000-0000-0000-0000-000000000002","type":"EXPENSE","amount":50}', 'MONTHLY', now(), %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('head1'))), -3);
+
+-- ---- 11. tenant keys ----
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
 SELECT pg_temp.expect('API can read its own wrapped tenant key', (SELECT count(*) FROM tenant_keys), 1);
 SELECT pg_temp.expect('…but never write one', pg_temp.try_rows($q$UPDATE tenant_keys SET status = 'DESTROYED'$q$), -1);

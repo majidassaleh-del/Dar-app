@@ -1575,6 +1575,9 @@ BEGIN
   IF e.status = 'REVERSED' OR e.source = 'REVERSAL' THEN
     RAISE EXCEPTION 'entry % is already reversed or is itself a reversal', e.number USING ERRCODE = 'check_violation';
   END IF;
+  IF EXISTS (SELECT 1 FROM funding_matches WHERE "journalEntryId" = e.id) THEN
+    RAISE EXCEPTION 'JE-% is matched to owner funding; unmatch it first', lpad(e.number::text, 6, '0') USING ERRCODE = 'check_violation';
+  END IF;
   v_today := app.household_today(e."householdId");
   SELECT "booksClosedThrough" INTO v_closed FROM households WHERE id = e."householdId";
   INSERT INTO journal_entries (id, "householdId", "entryDate", "descriptionI18n", source, "reversalOfId", "reversalReason", "postedById", currency)
@@ -1747,6 +1750,336 @@ BEGIN
 END $$;
 CREATE TRIGGER salary_advances_ledger AFTER INSERT ON salary_advances FOR EACH ROW EXECUTE FUNCTION app.post_salary_advance();
 
+-- ============================================== BANKING & TRANSACTIONS ==
+-- Every bank / wallet / cash / card / loan account gets its own ledger
+-- account (12xx assets, 22xx liabilities). currentBalance uses one sign
+-- convention for all: asset value (a credit card's debt is negative).
+
+CREATE OR REPLACE FUNCTION app.bank_account_rules() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_base text;
+BEGIN
+  SELECT "baseCurrency" INTO v_base FROM households WHERE id = NEW."householdId";
+  IF NEW.currency <> v_base THEN
+    RAISE EXCEPTION 'account currency % differs from the household currency %; multi-currency is not supported yet', NEW.currency, v_base
+      USING ERRCODE = 'check_violation';
+  END IF;
+  NEW."currentBalance" := NEW."openingBalance";
+  RETURN NEW;
+END $$;
+CREATE TRIGGER financial_accounts_0_rules BEFORE INSERT ON financial_accounts FOR EACH ROW EXECUTE FUNCTION app.bank_account_rules();
+
+CREATE OR REPLACE FUNCTION app.create_bank_ledger_account() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_liab boolean := NEW.type IN ('CREDIT_CARD', 'LOAN'); v_prefix text; v_code text; v_acc uuid := gen_random_uuid(); v_name jsonb;
+BEGIN
+  PERFORM app.ensure_chart_of_accounts(NEW."householdId");
+  PERFORM pg_advisory_xact_lock(hashtext('coa:' || NEW."householdId"::text));
+  v_prefix := CASE WHEN v_liab THEN '22' ELSE '12' END;
+  SELECT lpad((COALESCE(max(code::int), (v_prefix || '00')::int) + 1)::text, 4, '0') INTO v_code
+    FROM ledger_accounts WHERE "householdId" = NEW."householdId" AND code ~ ('^' || v_prefix || '[0-9]{2}$') AND code <> v_prefix || '00';
+  v_name := CASE WHEN NEW."nameI18n" = '{}'::jsonb THEN jsonb_build_object('en', COALESCE(NEW.institution, NEW.type::text)) ELSE NEW."nameI18n" END;
+  INSERT INTO ledger_accounts (id, "householdId", code, "nameI18n", type, "parentId", "isSystem", "systemKey", currency, "financialAccountId")
+  VALUES (v_acc, NEW."householdId", v_code, v_name, CASE WHEN v_liab THEN 'LIABILITY' ELSE 'ASSET' END::"LedgerAccountType",
+          app.ledger_account(NEW."householdId", CASE WHEN v_liab THEN 'cards_loans' ELSE 'bank_accounts' END),
+          true, 'bank:' || NEW.id, NEW.currency, NEW.id);
+  IF NEW."openingBalance" <> 0 THEN
+    PERFORM app.post_journal(NEW."householdId", 'ACCOUNT_OPENING', NEW.id, app.household_today(NEW."householdId"),
+      jsonb_build_object('en', 'Opening balance', 'ar', 'رصيد افتتاحي'),
+      CASE WHEN NEW."openingBalance" > 0
+        THEN jsonb_build_array(jsonb_build_object('account', v_acc, 'debit', NEW."openingBalance"), jsonb_build_object('key', 'owner_equity', 'credit', NEW."openingBalance"))
+        ELSE jsonb_build_array(jsonb_build_object('key', 'owner_equity', 'debit', -NEW."openingBalance"), jsonb_build_object('account', v_acc, 'credit', -NEW."openingBalance")) END);
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER financial_accounts_ledger AFTER INSERT ON financial_accounts FOR EACH ROW EXECUTE FUNCTION app.create_bank_ledger_account();
+
+-- Type, currency, opening and current balance are not user-editable (balance is hook-maintained).
+REVOKE UPDATE ON financial_accounts FROM app_user;
+GRANT UPDATE ("nameI18n", institution, "ibanLast4", "ibanCiphertext", "ibanBlindIndex", "custodianId", "bankFeedRef", "isActive", "updatedAt")
+  ON financial_accounts TO app_user;
+
+-- ---- cards ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION app.card_holder(p_card uuid) RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$ SELECT "holderId" FROM cards WHERE id = p_card $$;
+CREATE OR REPLACE FUNCTION app.account_custodian(p_account uuid) RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$ SELECT "custodianId" FROM financial_accounts WHERE id = p_account $$;
+
+CREATE OR REPLACE FUNCTION app.card_rules() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_type "FinancialAccountType";
+BEGIN
+  SELECT type INTO v_type FROM financial_accounts WHERE id = NEW."accountId";
+  IF NEW.type = 'CREDIT' AND v_type <> 'CREDIT_CARD' THEN
+    RAISE EXCEPTION 'a credit card must belong to a CREDIT_CARD account' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.type <> 'CREDIT' AND v_type IN ('CREDIT_CARD', 'LOAN') THEN
+    RAISE EXCEPTION 'a % card must draw on a bank, wallet or cash account', NEW.type USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."expiryMonth" NOT BETWEEN 1 AND 12 THEN RAISE EXCEPTION 'expiryMonth must be 1–12' USING ERRCODE = 'check_violation'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER cards_1_rules BEFORE INSERT OR UPDATE OF "accountId", type ON cards FOR EACH ROW EXECUTE FUNCTION app.card_rules();
+
+-- Holders may freeze their own card (lost/stolen) but nothing else; guardians manage wards' cards.
+DROP POLICY card_upd ON cards;
+CREATE POLICY card_upd ON cards AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('finance.cards.manage')) = 'ALL'
+         OR ((SELECT app.perm_scope('finance.cards.manage')) = 'WARDS' AND "holderId" = ANY (app.my_wards()))
+         OR "holderId" = app.current_membership_id());
+CREATE OR REPLACE FUNCTION app.guard_card() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT app.caller_is_restricted() OR COALESCE(app.perm_scope('finance.cards.manage') = 'ALL', false)
+     OR (app.perm_scope('finance.cards.manage') = 'WARDS' AND OLD."holderId" = ANY (app.my_wards())) THEN
+    RETURN NEW;
+  END IF;
+  IF NOT (OLD.status = 'ACTIVE' AND NEW.status = 'FROZEN')
+     OR (NEW."accountId", NEW."holderId", NEW.type, NEW.last4, NEW."dailyLimit", NEW."monthlyLimit", NEW."perTxnLimit",
+         NEW."allowedCategoryIds", NEW."expiryMonth", NEW."expiryYear", NEW.nickname)
+        IS DISTINCT FROM
+        (OLD."accountId", OLD."holderId", OLD.type, OLD.last4, OLD."dailyLimit", OLD."monthlyLimit", OLD."perTxnLimit",
+         OLD."allowedCategoryIds", OLD."expiryMonth", OLD."expiryYear", OLD.nickname) THEN
+    RAISE EXCEPTION 'card holders can only freeze their own card' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER cards_0_guard BEFORE UPDATE ON cards FOR EACH ROW EXECUTE FUNCTION app.guard_card();
+
+-- ---- transactions: authorisation (invoker) -----------------------------------------
+CREATE OR REPLACE FUNCTION app.authorize_transaction() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_manager boolean; v_me uuid;
+BEGIN
+  IF NOT app.caller_is_restricted() THEN RETURN NEW; END IF;  -- workers (recurring bills, bank feeds)
+  v_manager := COALESCE(app.perm_scope('finance.accounts.manage') = 'ALL', false);
+  v_me := app.current_membership_id();
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.source NOT IN ('MANUAL', 'RECEIPT_OCR') OR NEW."recurringRuleId" IS NOT NULL THEN
+      RAISE EXCEPTION 'source % is reserved for system jobs', NEW.source USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NEW."isFunding" AND NOT v_manager THEN
+      RAISE EXCEPTION 'only account managers record owner funding' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    -- COALESCE: a missing custodian/holder makes the comparison NULL, and NOT NULL would skip the refusal.
+    IF NOT v_manager AND NOT COALESCE(
+         NEW.type = 'EXPENSE' AND NOT NEW."isFunding" AND
+         ((NEW."cardId" IS NOT NULL AND app.card_holder(NEW."cardId") = v_me) OR
+          (NEW."cardId" IS NULL AND app.account_custodian(NEW."accountId") = v_me)), false) THEN
+      RAISE EXCEPTION 'you can only spend with your own card or the cash you hold' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NOT v_manager THEN NEW."spentById" := v_me; END IF;
+    RETURN NEW;
+  END IF;
+  -- UPDATE
+  IF NEW.status = 'REVERSED' AND OLD.status <> 'REVERSED' THEN
+    RAISE EXCEPTION 'use POST /transactions/{id}/reverse' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER transactions_0_authorize BEFORE INSERT OR UPDATE ON transactions FOR EACH ROW EXECUTE FUNCTION app.authorize_transaction();
+
+-- ---- transactions: validation (definer: must see the card's account even when the caller cannot) ----
+CREATE OR REPLACE FUNCTION app.validate_transaction() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE a financial_accounts; c cards; v_tz text; v_base text; v_day numeric; v_month numeric; v_kind "TransactionType";
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.status <> 'PENDING' AND (NEW.amount, NEW."accountId", NEW."counterAccountId", NEW."cardId", NEW.type, NEW."isFunding",
+                                    NEW."occurredAt", NEW.currency, NEW."categoryId", NEW."householdId")
+          IS DISTINCT FROM (OLD.amount, OLD."accountId", OLD."counterAccountId", OLD."cardId", OLD.type, OLD."isFunding",
+                            OLD."occurredAt", OLD.currency, OLD."categoryId", OLD."householdId") THEN
+      RAISE EXCEPTION 'a posted transaction is immutable; reverse it and record a new one' USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status IS DISTINCT FROM OLD.status AND NOT (
+         (OLD.status, NEW.status) IN (('PENDING','POSTED'), ('POSTED','RECONCILED'), ('RECONCILED','POSTED'),
+                                      ('POSTED','REVERSED'), ('RECONCILED','REVERSED'))) THEN
+      RAISE EXCEPTION 'transaction % → % is not allowed', OLD.status, NEW.status USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status = 'RECONCILED' AND OLD.status <> 'RECONCILED' THEN NEW."reconciledAt" := now(); END IF;
+    IF NEW.status = 'POSTED' AND OLD.status = 'RECONCILED' THEN NEW."reconciledAt" := NULL; END IF;
+    IF OLD.status <> 'PENDING' THEN RETURN NEW; END IF;
+  END IF;
+
+  IF NEW.type = 'ADJUSTMENT' THEN
+    RAISE EXCEPTION 'use a ledger journal for adjustments' USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'INSERT' AND NEW.status NOT IN ('PENDING', 'POSTED') THEN
+    RAISE EXCEPTION 'new transactions are PENDING or POSTED' USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT * INTO a FROM financial_accounts WHERE id = NEW."accountId";
+  SELECT timezone, "baseCurrency" INTO v_tz, v_base FROM households WHERE id = NEW."householdId";
+  IF NOT a."isActive" THEN RAISE EXCEPTION 'account is inactive' USING ERRCODE = 'check_violation'; END IF;
+  IF NEW.currency <> a.currency OR NEW.currency <> v_base THEN
+    RAISE EXCEPTION 'transaction currency % must match the account and household currency (%)', NEW.currency, v_base USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."counterAccountId" IS NOT NULL AND NOT (SELECT "isActive" FROM financial_accounts WHERE id = NEW."counterAccountId") THEN
+    RAISE EXCEPTION 'counter account is inactive' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."categoryId" IS NOT NULL THEN
+    SELECT kind INTO v_kind FROM categories WHERE id = NEW."categoryId";
+    IF (NEW.type IN ('EXPENSE', 'ALLOWANCE') AND v_kind <> 'EXPENSE') OR (NEW.type IN ('INCOME', 'REFUND') AND v_kind <> 'INCOME') THEN
+      RAISE EXCEPTION 'category kind % does not fit a % transaction', v_kind, NEW.type USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF NEW."cardId" IS NOT NULL THEN
+    SELECT * INTO c FROM cards WHERE id = NEW."cardId" FOR UPDATE;   -- serialises concurrent spends on one card
+    IF c."accountId" <> NEW."accountId" THEN RAISE EXCEPTION 'card does not draw on this account' USING ERRCODE = 'check_violation'; END IF;
+    IF c.status <> 'ACTIVE' THEN RAISE EXCEPTION 'card is %', c.status USING ERRCODE = 'check_violation'; END IF;
+    IF make_date(c."expiryYear", c."expiryMonth", 1) + interval '1 month' <= (NEW."occurredAt" AT TIME ZONE v_tz)::date THEN
+      RAISE EXCEPTION 'card expired %/%', c."expiryMonth", c."expiryYear" USING ERRCODE = 'check_violation';
+    END IF;
+    IF cardinality(c."allowedCategoryIds") > 0 AND (NEW."categoryId" IS NULL OR NOT NEW."categoryId" = ANY (c."allowedCategoryIds")) THEN
+      RAISE EXCEPTION 'this card is not allowed for that category' USING ERRCODE = 'check_violation';
+    END IF;
+    IF c."perTxnLimit" IS NOT NULL AND NEW.amount > c."perTxnLimit" THEN
+      RAISE EXCEPTION 'amount % exceeds the per-transaction limit %', NEW.amount, c."perTxnLimit" USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT COALESCE(sum(amount) FILTER (WHERE ("occurredAt" AT TIME ZONE v_tz)::date = (NEW."occurredAt" AT TIME ZONE v_tz)::date), 0),
+           COALESCE(sum(amount) FILTER (WHERE date_trunc('month', "occurredAt" AT TIME ZONE v_tz) = date_trunc('month', NEW."occurredAt" AT TIME ZONE v_tz)), 0)
+      INTO v_day, v_month
+      FROM transactions WHERE "cardId" = NEW."cardId" AND type IN ('EXPENSE', 'ALLOWANCE') AND status <> 'REVERSED' AND id <> NEW.id;
+    IF c."dailyLimit" IS NOT NULL AND v_day + NEW.amount > c."dailyLimit" THEN
+      RAISE EXCEPTION 'daily limit % reached (spent % today)', c."dailyLimit", v_day USING ERRCODE = 'check_violation';
+    END IF;
+    IF c."monthlyLimit" IS NOT NULL AND v_month + NEW.amount > c."monthlyLimit" THEN
+      RAISE EXCEPTION 'monthly limit % reached (spent % this month)', c."monthlyLimit", v_month USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  NEW."baseAmount" := NEW.amount; NEW."fxRate" := NULL;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER transactions_1_validate BEFORE INSERT OR UPDATE ON transactions FOR EACH ROW EXECUTE FUNCTION app.validate_transaction();
+
+-- ---- transactions: balance + ledger posting (definer) ---------------------------------
+CREATE OR REPLACE FUNCTION app.post_transaction() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_posted boolean; v_reversed boolean; v_sign int; v_acc uuid; v_counter uuid; v_other uuid; v_entry uuid; v_date date; v_desc jsonb;
+BEGIN
+  v_posted := NEW.status IN ('POSTED', 'RECONCILED') AND (TG_OP = 'INSERT' OR OLD.status = 'PENDING');
+  v_reversed := TG_OP = 'UPDATE' AND NEW.status = 'REVERSED' AND OLD.status IN ('POSTED', 'RECONCILED');
+  IF NOT (v_posted OR v_reversed) THEN RETURN NULL; END IF;
+  v_sign := CASE WHEN v_posted THEN 1 ELSE -1 END;
+
+  UPDATE financial_accounts SET "currentBalance" = "currentBalance"
+         + v_sign * CASE WHEN NEW.type IN ('INCOME', 'REFUND') THEN NEW.amount ELSE -NEW.amount END, "updatedAt" = now()
+   WHERE id = NEW."accountId";
+  IF NEW."counterAccountId" IS NOT NULL THEN
+    UPDATE financial_accounts SET "currentBalance" = "currentBalance" + v_sign * NEW.amount, "updatedAt" = now() WHERE id = NEW."counterAccountId";
+  END IF;
+
+  IF v_reversed THEN
+    SELECT id INTO v_entry FROM journal_entries WHERE "householdId" = NEW."householdId" AND source = 'BANK_TRANSACTION' AND "sourceId" = NEW.id;
+    IF v_entry IS NOT NULL THEN
+      PERFORM app.reverse_entry_internal(v_entry, COALESCE(NULLIF(current_setting('app.reversal_reason', true), ''), 'transaction reversed'));
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  v_acc := (SELECT id FROM ledger_accounts WHERE "financialAccountId" = NEW."accountId");
+  v_date := (NEW."occurredAt" AT TIME ZONE (SELECT timezone FROM households WHERE id = NEW."householdId"))::date;
+  v_desc := CASE WHEN NEW."descriptionI18n" = '{}'::jsonb THEN jsonb_build_object('en', COALESCE(NEW."merchantName", NEW.type::text)) ELSE NEW."descriptionI18n" END;
+  IF NEW."isFunding" THEN
+    PERFORM app.post_journal(NEW."householdId", 'BANK_TRANSACTION', NEW.id, v_date, v_desc, jsonb_build_array(
+      jsonb_build_object('key', 'funding_clearing', 'debit', NEW.amount, 'memo', 'owner funding'), jsonb_build_object('account', v_acc, 'credit', NEW.amount)));
+  ELSIF NEW.type = 'TRANSFER' THEN
+    v_counter := (SELECT id FROM ledger_accounts WHERE "financialAccountId" = NEW."counterAccountId");
+    PERFORM app.post_journal(NEW."householdId", 'BANK_TRANSACTION', NEW.id, v_date, v_desc, jsonb_build_array(
+      jsonb_build_object('account', v_counter, 'debit', NEW.amount), jsonb_build_object('account', v_acc, 'credit', NEW.amount)));
+  ELSIF NEW.type IN ('INCOME', 'REFUND') THEN
+    v_other := COALESCE((SELECT id FROM ledger_accounts WHERE "categoryId" = NEW."categoryId" AND type = 'INCOME' AND "isActive" AND NOT "isHeader"),
+                        app.ledger_account(NEW."householdId", 'other_income'));
+    PERFORM app.post_journal(NEW."householdId", 'BANK_TRANSACTION', NEW.id, v_date, v_desc, jsonb_build_array(
+      jsonb_build_object('account', v_acc, 'debit', NEW.amount), jsonb_build_object('account', v_other, 'credit', NEW.amount)));
+  ELSE -- EXPENSE / ALLOWANCE
+    v_other := COALESCE((SELECT id FROM ledger_accounts WHERE "categoryId" = NEW."categoryId" AND type = 'EXPENSE' AND "isActive" AND NOT "isHeader"),
+                        app.ledger_account(NEW."householdId", 'household_expenses'));
+    PERFORM app.post_journal(NEW."householdId", 'BANK_TRANSACTION', NEW.id, v_date, v_desc, jsonb_build_array(
+      jsonb_build_object('account', v_other, 'debit', NEW.amount, 'memo', NEW."merchantName"), jsonb_build_object('account', v_acc, 'credit', NEW.amount)));
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER transactions_ledger AFTER INSERT OR UPDATE OF status ON transactions FOR EACH ROW EXECUTE FUNCTION app.post_transaction();
+
+CREATE OR REPLACE FUNCTION app.reverse_transaction(p_id uuid, p_reason text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE t transactions;
+BEGIN
+  IF COALESCE(app.perm_scope('finance.accounts.manage'), '') <> 'ALL' THEN
+    RAISE EXCEPTION 'reversing transactions needs finance.accounts.manage' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO t FROM transactions WHERE id = p_id AND "householdId" = app.current_household_id() FOR UPDATE;
+  IF t.id IS NULL THEN RAISE EXCEPTION 'transaction not found' USING ERRCODE = 'no_data_found'; END IF;
+  IF t.status NOT IN ('POSTED', 'RECONCILED') THEN
+    RAISE EXCEPTION 'only a posted transaction can be reversed (this one is %)', t.status USING ERRCODE = 'check_violation';
+  END IF;
+  IF length(trim(coalesce(p_reason, ''))) < 3 THEN RAISE EXCEPTION 'a reversal needs a reason' USING ERRCODE = 'check_violation'; END IF;
+  IF EXISTS (SELECT 1 FROM funding_matches WHERE "transactionId" = p_id) THEN
+    RAISE EXCEPTION 'this funding transaction is matched; unmatch it first' USING ERRCODE = 'check_violation';
+  END IF;
+  PERFORM set_config('app.reversal_reason', p_reason, true);
+  UPDATE transactions SET status = 'REVERSED' WHERE id = p_id;
+END $$;
+GRANT EXECUTE ON FUNCTION app.reverse_transaction(uuid, text) TO app_user;
+
+-- ---- funding clearing reconciliation -----------------------------------------------
+CREATE OR REPLACE FUNCTION app.funding_credit(p_entry uuid) RETURNS numeric
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT COALESCE(sum(l.credit - l.debit), 0) FROM journal_lines l JOIN ledger_accounts a ON a.id = l."ledgerAccountId"
+  WHERE l."entryId" = p_entry AND a."systemKey" = 'funding_clearing'
+$$;
+
+CREATE OR REPLACE FUNCTION app.validate_funding_match() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE t transactions; e journal_entries; v_item_left numeric; v_txn_left numeric;
+BEGIN
+  SELECT * INTO t FROM transactions WHERE id = NEW."transactionId" FOR UPDATE;
+  SELECT * INTO e FROM journal_entries WHERE id = NEW."journalEntryId" FOR UPDATE;
+  IF NOT t."isFunding" OR t.status NOT IN ('POSTED', 'RECONCILED') THEN
+    RAISE EXCEPTION 'only a posted funding transaction can be matched' USING ERRCODE = 'check_violation';
+  END IF;
+  IF e.status <> 'POSTED' THEN RAISE EXCEPTION 'that clearing entry was reversed' USING ERRCODE = 'check_violation'; END IF;
+  v_item_left := app.funding_credit(e.id) - COALESCE((SELECT sum(amount) FROM funding_matches WHERE "journalEntryId" = e.id), 0);
+  v_txn_left := t.amount - COALESCE((SELECT sum(amount) FROM funding_matches WHERE "transactionId" = t.id), 0);
+  IF v_item_left <= 0 THEN RAISE EXCEPTION 'JE-% has nothing left to clear on 1190', lpad(e.number::text, 6, '0') USING ERRCODE = 'check_violation'; END IF;
+  IF NEW.amount > v_item_left THEN
+    RAISE EXCEPTION 'match % exceeds what JE-% still owes the clearing account (%)', NEW.amount, lpad(e.number::text, 6, '0'), v_item_left USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.amount > v_txn_left THEN
+    RAISE EXCEPTION 'match % exceeds the transaction''s unmatched amount (%)', NEW.amount, v_txn_left USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER funding_matches_0_validate BEFORE INSERT ON funding_matches FOR EACH ROW EXECUTE FUNCTION app.validate_funding_match();
+
+CREATE POLICY fm_read ON funding_matches AS RESTRICTIVE FOR SELECT TO app_user USING ((SELECT app.perm_scope('finance.ledger.read')) = 'ALL');
+CREATE POLICY fm_ins ON funding_matches AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('finance.ledger.manage')) = 'ALL' AND "matchedById" = app.current_membership_id());
+CREATE POLICY fm_del ON funding_matches AS RESTRICTIVE FOR DELETE TO app_user USING ((SELECT app.perm_scope('finance.ledger.manage')) = 'ALL');
+REVOKE UPDATE ON funding_matches FROM app_user;
+
+-- ---- recurring bills: the JSON template must reference this household only -----------
+CREATE OR REPLACE FUNCTION app.validate_recurring_template() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE k text; tbl text; v uuid; v_ok boolean;
+BEGIN
+  IF NOT (NEW.template ? 'accountId') OR NOT (NEW.template->>'type') IN ('EXPENSE', 'INCOME', 'TRANSFER')
+     OR COALESCE((NEW.template->>'amount')::numeric, 0) <= 0 THEN
+    RAISE EXCEPTION 'template needs accountId, type (EXPENSE/INCOME/TRANSFER) and a positive amount' USING ERRCODE = 'check_violation';
+  END IF;
+  FOR k, tbl IN VALUES ('accountId', 'financial_accounts'), ('counterAccountId', 'financial_accounts'), ('categoryId', 'categories'), ('cardId', 'cards') LOOP
+    CONTINUE WHEN NOT (NEW.template ? k) OR NEW.template->>k IS NULL;
+    BEGIN v := (NEW.template->>k)::uuid; EXCEPTION WHEN invalid_text_representation THEN
+      RAISE EXCEPTION '% is not a uuid', k USING ERRCODE = 'check_violation'; END;
+    -- (EXECUTE does not set FOUND, so read the answer INTO a variable.)
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I WHERE id = $1 AND "householdId" = $2)', tbl) INTO v_ok USING v, NEW."householdId";
+    IF NOT v_ok THEN RAISE EXCEPTION '% does not exist in this household', k USING ERRCODE = 'foreign_key_violation'; END IF;
+  END LOOP;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER recurring_rules_0_template BEFORE INSERT OR UPDATE OF template ON recurring_rules FOR EACH ROW EXECUTE FUNCTION app.validate_recurring_template();
+
 -- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
 -- Foreign keys prove a referenced row EXISTS, not that it belongs to the same
 -- household. Without this, a request that guessed another household's UUID
@@ -1818,7 +2151,9 @@ INSERT INTO app.tenant_refs VALUES
   ('work_order_instructions', 'completedById',      'memberships',        false),
   ('salary_payments',         'recordedById',       'memberships',        false),
   ('attachments',             'uploadedById',       'memberships',        false),
-  ('journal_entries',         'postedById',         'memberships',        false)
+  ('journal_entries',         'postedById',         'memberships',        false),
+  ('recurring_rules',         'createdById',        'memberships',        false),
+  ('funding_matches',         'matchedById',        'memberships',        false)
 ON CONFLICT DO NOTHING;
 
 DO $$

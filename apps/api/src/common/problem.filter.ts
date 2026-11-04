@@ -67,6 +67,7 @@ export function postgresError(err: unknown): { code: string; message: string } |
     ?? err.message.match(/\b(42501|23514|23505|23503|P0002)\b/)?.[1];
   if (!code || !/^[0-9A-Z]{5}$/.test(code)) return undefined;
   const message = (meta?.message as string | undefined) ?? err.message.match(/Message: `([^`]*)`/)?.[1]
+    ?? err.message.match(/message: \\?"((?:[^"\\]|\\.)*?)\\?"/)?.[1]
     ?? err.message.match(/ERROR: ([^\n]*)/)?.[1] ?? err.message.split('\n').at(-1) ?? 'database error';
   return { code, message };
 }

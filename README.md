@@ -45,4 +45,4 @@ Every module follows the reference `src/members/members.controller.ts`:
 5. **Localisation.** Resolve `*I18n` columns with `resolveI18n(value, { locale: ctx.locale })`.
 6. **Encrypted fields.** Pass plaintext through `seal(crypto.cipher, 'table.field', householdId, value)` before writing and `unseal(…)` to read, inside `withRls`. Keys are loaded through the request's own RLS transaction. Never return `*Ciphertext` or `*BlindIndex` columns; map rows to DTOs.
 7. **Audit.** Use `audit(tx, ctx, {...})` (no RETURNING), so a caller can log their own action without reading the audit log.
-8. **Workers** (OCR, receipt confirmation, key provisioning, reminders) log in as `herp_worker`, act as `app_service` (BYPASSRLS) through `ServiceDb.run`, and must always filter by `householdId` explicitly. `node dist/worker.js keys:provision | reminders:documents`.
+8. **Workers** (OCR, receipt confirmation, key provisioning, reminders) log in as `herp_worker`, act as `app_service` (BYPASSRLS) through `ServiceDb.run`, and must always filter by `householdId` explicitly. `node dist/worker.js keys:provision | reminders:documents | recurring:run`.

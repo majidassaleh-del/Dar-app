@@ -546,6 +546,7 @@ model Household {
   ledgerAccounts        LedgerAccount[]
   journalEntries        JournalEntry[]
   journalLines          JournalLine[]
+  fundingMatches        FundingMatch[]
   policies              Policy[]
   codesOfEthics         CodeOfEthics[]
   privacyAgreements     PrivacyAgreement[]
@@ -1082,8 +1083,13 @@ model Transaction {
   vehicleId        String?           @db.Uuid // cost-centre tagging
   propertyId       String?           @db.Uuid
   reversalOfId     String?           @unique @db.Uuid
-  externalRef      String? // bank txn id — dedupe
+  externalRef      String? // bank txn id — dedupe; "recurring:<ruleId>:<date>" for recurring bills
   tags             String[]
+  /// Owner funding outflow (cash withdrawn for a float, a salary transfer…): posts
+  /// Dr 1190 Owner funding clearing / Cr bank, then is matched to clearing items.
+  isFunding        Boolean           @default(false)
+  recurringRuleId  String?           @db.Uuid
+  reconciledAt     DateTime?         @db.Timestamptz(6)
   createdAt        DateTime          @default(now()) @db.Timestamptz(6)
 
   household      Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
@@ -1102,6 +1108,8 @@ model Transaction {
   payrollLine    PayrollLine?
   maintenance    MaintenanceRecord?
   fuelLog        FuelLog?
+  fundingMatches FundingMatch[]
+  recurringRule  RecurringRule?     @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
   rentPayment    RentPayment?
   utilityBill    UtilityBill?
   pettyCashLog   PettyCashLog?
@@ -1178,8 +1186,12 @@ model RecurringRule {
   endsAt      DateTime?           @db.Timestamptz(6)
   autoPost    Boolean             @default(false) // false = create PENDING for review
   isActive    Boolean             @default(true)
+  nameI18n    Json                @default("{}")
+  createdById String              @db.Uuid // membership that set up the bill; recorded as the transactions' creator
+  lastRunAt   DateTime?           @db.Timestamptz(6)
 
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
 
   @@index([nextRunAt, isActive])
   @@map("recurring_rules")
@@ -2247,6 +2259,8 @@ enum JournalSource {
   PAYROLL
   SALARY_PAYMENT
   SALARY_ADVANCE
+  BANK_TRANSACTION
+  ACCOUNT_OPENING
 }
 
 enum JournalStatus {
@@ -2306,10 +2320,11 @@ model JournalEntry {
   currency        String        @default("SAR") @db.Char(3)
   createdAt       DateTime      @default(now()) @db.Timestamptz(6)
 
-  household  Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  reversalOf JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
-  reversedBy JournalEntry? @relation("JournalReversal")
-  lines      JournalLine[]
+  household      Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  reversalOf     JournalEntry?  @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversedBy     JournalEntry?  @relation("JournalReversal")
+  lines          JournalLine[]
+  fundingMatches FundingMatch[]
 
   @@unique([householdId, number])
   @@unique([householdId, source, sourceId]) // a source event posts exactly once (NULLs distinct for manual)
@@ -2338,6 +2353,28 @@ model JournalLine {
   @@index([householdId, ledgerAccountId])
   @@index([staffId])
   @@map("journal_lines")
+}
+
+/// Reconciliation of 1190 Owner funding clearing: links a funding bank
+/// transaction (Dr 1190) to the clearing entries it paid for (Cr 1190: petty
+/// cash top-ups, salary payments, advances). Amounts are capped by both sides'
+/// remaining balance in the database.
+model FundingMatch {
+  id             String   @id @default(uuid()) @db.Uuid
+  householdId    String   @db.Uuid
+  transactionId  String   @db.Uuid
+  journalEntryId String   @db.Uuid
+  amount         Decimal  @db.Decimal(18, 2)
+  matchedById    String   @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  household    Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  transaction  Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+
+  @@unique([transactionId, journalEntryId])
+  @@index([householdId, journalEntryId])
+  @@map("funding_matches")
 }
 
 // =============================================================================

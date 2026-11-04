@@ -115,6 +115,45 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 
 ## 4. Household accounting
 
+> **Status: implemented** in `apps/api/src/banking/`: accounts, cards, categories, transactions, budgets, recurring bills, plus funding-clearing reconciliation (below). E2E tests are in `apps/api/test/banking.e2e.test.ts`; the attack tests are in the DB suite.
+>
+> **Accounts and the ledger**
+> * Every account gets its own ledger account (12xx assets, 22xx cards and loans). A non-zero `openingBalance` is posted against 3100 Owner's equity.
+> * `balance` (`currentBalance`) uses one sign: asset value. A card's debt is negative. Type, currency, opening and current balance are not writable through the API (column grants).
+>
+> **Transactions**
+> * `EXPENSE` posts Dr the category's mapped account (else 6200) / Cr the account. `INCOME` posts Dr the account / Cr the mapped income account (else 4900). `TRANSFER` posts Dr counter / Cr account.
+> * Posting happens on insert as POSTED, or on PENDING → POSTED. Money fields and category are frozen afterwards. `/reverse` is the only correction: it restores the balance and mirrors the ledger entry, once.
+> * Who can record: staff and dependents only `EXPENSE`, with **their own card** or the **cash box they hold**. `source` RECURRING / BANK_FEED / SYSTEM is reserved for workers.
+> * Card rules, applied by the DB to every insert from anyone: account match, ACTIVE status, expiry, allowed categories, and per-transaction, daily and monthly limits in household-local days.
+> * Category kind must fit the type, and the currency must equal the household's (multi-currency is not supported yet).
+>
+> **Cards:** holders see their own card and can **freeze** it, but not unfreeze it or change limits.
+>
+> **Budgets:** `spent` covers posted bank and card expenses plus approved petty-cash expenses, across the category's whole subtree, in the current period. A personal budget (`ownerId`) counts only that member's spending. Responses include `percentUsed`, `alert` and `overBudget`. Rollover isn't computed yet.
+>
+> **Recurring bills:** the JSON template's references are validated against the household by the DB. The worker `node dist/worker.js recurring:run` posts one transaction per due occurrence, catching up at most 12, idempotent via `externalRef = recurring:<rule>:<date>`. A failing bill (for example, a card limit) is reported and retried, never skipped.
+>
+> **Not built yet:** `/transactions/import` (CSV/OFX), open-banking `bank-link`, `/accounts/{id}/top-up`, `/reports/*`.
+
+### 4.1 Owner funding clearing (reconciliation)
+
+Petty-cash top-ups, salary payments and salary advances credit **1190 Owner funding clearing**, because the platform doesn't know which bank paid them. Record the bank side as a **funding** transaction: `POST /transactions { type: "TRANSFER", isFunding: true, accountId, amount }`, which posts Dr 1190 / Cr bank. Then match it to the clearing entries it paid for.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/funding-clearing` | `finance.ledger.read` | `clearingBalance` (1190), `openItems` (entries crediting 1190 with `remaining`), `unmatchedFunding` |
+| GET | `/transactions/{id}/funding-suggestions` | `finance.ledger.read` | Open items, exact-amount matches first, then nearest date |
+| POST | `/transactions/{id}/funding-matches` | `finance.ledger.manage` | `{ matches: [{ journalEntryId, amount }] }`. The DB caps each match at both the item's and the transaction's remaining amount |
+| DELETE | `/transactions/{id}/funding-matches/{matchId}` | `finance.ledger.manage` | Unmatch |
+
+A matched funding transaction, or a matched clearing entry (such as the salary payment behind it), cannot be reversed until it is unmatched.
+
+### 4.2 Bank statement reconciliation
+
+`POST /accounts/{id}/reconcile { statementBalance, asOf, transactionIds? }` computes the cleared balance: opening + already RECONCILED + selected POSTED up to the end of `asOf` (household time). If it equals the statement, the selection becomes `RECONCILED`. Otherwise nothing changes and the response carries the `difference`.
+
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/accounts` | `finance.accounts.read` | Bank, cash box, wallet, credit card, loan. A custodian sees their own petty cash |

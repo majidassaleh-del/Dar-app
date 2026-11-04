@@ -1,7 +1,7 @@
 import { loadEnv } from '../config/env';
 import { createKms } from '../crypto/kms';
 import { ServiceDb } from './service-db';
-import { provisionTenantKeys, syncDocumentReminders } from './jobs';
+import { provisionTenantKeys, runRecurringBills, syncDocumentReminders } from './jobs';
 
 /** node dist/worker.js <keys:provision | reminders:documents> — run by Cloud Scheduler / cron. */
 void (async () => {
@@ -12,7 +12,8 @@ void (async () => {
     switch (process.argv[2]) {
       case 'keys:provision': console.log(`provisioned keys for ${await provisionTenantKeys(db, await createKms(env))} household(s)`); break;
       case 'reminders:documents': console.log(JSON.stringify(await syncDocumentReminders(db))); break;
-      default: console.error('usage: worker <keys:provision | reminders:documents>'); process.exitCode = 2;
+      case 'recurring:run': console.log(JSON.stringify(await runRecurringBills(db))); break;
+      default: console.error('usage: worker <keys:provision | reminders:documents | recurring:run>'); process.exitCode = 2;
     }
   } finally { await db.close(); }
 })();
