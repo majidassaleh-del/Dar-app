@@ -15,7 +15,7 @@ describe('catalogues', () => {
   });
   it.each(locales)('%s: every message is valid ICU and formats', (l) => {
     for (const [key, msg] of Object.entries(flatten(load(l)))) {
-      const out = new IntlMessageFormat(msg, localeMeta[l].intlTag).format({ name: 'X', count: 3, days: 30, date: 'D', amount: 'A', language: 'L', item: 'I', km: 1000, period: 'P' });
+      const out = new IntlMessageFormat(msg, localeMeta[l].intlTag).format({ name: 'X', count: 3, days: 30, date: 'D', amount: 'A', language: 'L', item: 'I', km: 1000, period: 'P', month: 'M', time: 'T' });
       expect(String(out), key).not.toMatch(/\{|\}/);
     }
   });

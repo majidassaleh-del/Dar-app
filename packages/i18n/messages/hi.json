@@ -1,6 +1,6 @@
 {
   "app": { "name": "हाउसहोल्ड ERP", "tagline": "घर से जुड़ी हर चीज़, एक ही जगह" },
-  "nav": { "dashboard": "होम", "staff": "कर्मचारी", "finance": "वित्त", "pettyCash": "पेटी कैश", "workOrders": "कार्य आदेश", "travel": "यात्रा", "policies": "नीतियाँ" },
+  "nav": { "dashboard": "होम", "staff": "कर्मचारी", "finance": "वित्त", "pettyCash": "पेटी कैश", "workOrders": "कार्य आदेश", "travel": "यात्रा", "policies": "नीतियाँ", "pulse": "दैनिक सारांश", "fleet": "वाहन" },
   "dashboard": {
     "greeting": "नमस्ते {name}",
     "pendingApprovals": "{count, plural, =0 {आपकी मंज़ूरी के लिए कोई अनुरोध नहीं} one {# अनुरोध आपकी मंज़ूरी का इंतज़ार कर रहा है} other {# अनुरोध आपकी मंज़ूरी का इंतज़ार कर रहे हैं}}",
@@ -91,5 +91,46 @@
     "vehicleDocsDue": "{count, plural, one {# वाहन दस्तावेज़ समाप्त या 15 दिनों में समाप्त} other {# वाहन दस्तावेज़ समाप्त या 15 दिनों में समाप्त}}",
     "vehicleServiceOverdue": "{count, plural, one {# वाहन सर्विस बकाया है} other {# वाहन सर्विस बकाया हैं}}",
     "fuelFlagged": "{count, plural, one {# ईंधन भराई संदिग्ध} other {# ईंधन भराई संदिग्ध}}"
+  },
+  "exec": {
+    "brand": "EFA निजी कार्यालय",
+    "office": "EFA कार्यालय — संचालन",
+    "attention": "आज निर्णय आवश्यक",
+    "allClear": "आज किसी निर्णय की आवश्यकता नहीं",
+    "updated": "{time} पर अपडेट",
+    "severity": {
+      "critical": "गंभीर",
+      "warning": "ध्यान दें",
+      "info": "सूचना हेतु"
+    },
+    "kpi": {
+      "payroll": "वेतन",
+      "payrollDue": "{month} का वेतन {days, plural, one {# दिन} other {# दिनों}} में देय",
+      "documents": "दस्तावेज़",
+      "documentsDue": "{count, plural, =0 {कोई समाप्त नहीं हो रहा} one {# समाप्त हो रहा} other {# समाप्त हो रहे}}",
+      "medical": "मेडिकल जाँच",
+      "medicalDue": "{count, plural, =0 {सभी वैध} one {# पर कार्रवाई आवश्यक} other {# पर कार्रवाई आवश्यक}}",
+      "workOrders": "कार्य आदेश",
+      "workOrdersOpen": "{count, plural, =0 {कोई खुला नहीं} one {# खुला} other {# खुले}}",
+      "pettyCash": "छोटा नकद",
+      "pettyCashReview": "{count, plural, =0 {समीक्षा हेतु कुछ नहीं} one {# समीक्षा हेतु} other {# समीक्षा हेतु}}",
+      "fleet": "वाहन",
+      "fleetDue": "{count, plural, =0 {सब ठीक} one {# मद देय} other {# मद देय}}",
+      "budgets": "बजट",
+      "budgetsOver": "{count, plural, =0 {बजट के भीतर} one {# बजट से अधिक} other {# बजट से अधिक}}",
+      "esb": "सेवा-समाप्ति देनदारी"
+    },
+    "onboarding": {
+      "title": "अपना खाता सुरक्षित करें",
+      "subtitle": "तीन एक-बार के चरण, फिर हर सुबह Face ID या Touch ID।",
+      "step": {
+        "phone": "फ़ोन (SMS कोड)",
+        "email": "ईमेल (कोड)",
+        "authenticator": "ऑथेंटिकेटर ऐप",
+        "device": "यह डिवाइस (Face ID / Touch ID)"
+      },
+      "done": "पूर्ण",
+      "next": "आगे"
+    }
   }
 }

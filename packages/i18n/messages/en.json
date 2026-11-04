@@ -1,6 +1,6 @@
 {
   "app": { "name": "Household ERP", "tagline": "Everything about the home, in one place" },
-  "nav": { "dashboard": "Home", "staff": "Staff", "finance": "Finance", "pettyCash": "Petty cash", "workOrders": "Work orders", "travel": "Travel", "policies": "Policies" },
+  "nav": { "dashboard": "Home", "staff": "Staff", "finance": "Finance", "pettyCash": "Petty cash", "workOrders": "Work orders", "travel": "Travel", "policies": "Policies", "pulse": "Daily Pulse", "fleet": "Fleet" },
   "dashboard": {
     "greeting": "Hello {name}",
     "pendingApprovals": "{count, plural, =0 {No requests waiting for you} one {# request waiting for your approval} other {# requests waiting for your approval}}",
@@ -91,5 +91,46 @@
     "vehicleDocsDue": "{count, plural, one {# vehicle document has expired or expires within 15 days} other {# vehicle documents have expired or expire within 15 days}}",
     "vehicleServiceOverdue": "{count, plural, one {# vehicle service is overdue} other {# vehicle services are overdue}}",
     "fuelFlagged": "{count, plural, one {# fuel fill-up was flagged} other {# fuel fill-ups were flagged}}"
+  },
+  "exec": {
+    "brand": "EFA Private Office",
+    "office": "EFA Office — Operations",
+    "attention": "Needs a decision today",
+    "allClear": "Nothing needs a decision today",
+    "updated": "Updated {time}",
+    "severity": {
+      "critical": "Critical",
+      "warning": "Attention",
+      "info": "For information"
+    },
+    "kpi": {
+      "payroll": "Payroll",
+      "payrollDue": "{month} payroll due in {days, plural, one {# day} other {# days}}",
+      "documents": "Documents",
+      "documentsDue": "{count, plural, =0 {None expiring} one {# expiring} other {# expiring}}",
+      "medical": "Medical checks",
+      "medicalDue": "{count, plural, =0 {All valid} one {# needs action} other {# need action}}",
+      "workOrders": "Work orders",
+      "workOrdersOpen": "{count, plural, =0 {None open} one {# open} other {# open}}",
+      "pettyCash": "Petty cash",
+      "pettyCashReview": "{count, plural, =0 {Nothing to review} one {# to review} other {# to review}}",
+      "fleet": "Fleet",
+      "fleetDue": "{count, plural, =0 {All in order} one {# item due} other {# items due}}",
+      "budgets": "Budgets",
+      "budgetsOver": "{count, plural, =0 {Within budget} one {# over budget} other {# over budget}}",
+      "esb": "End-of-service liability"
+    },
+    "onboarding": {
+      "title": "Secure your account",
+      "subtitle": "Three one-time steps, then Face ID or Touch ID each morning.",
+      "step": {
+        "phone": "Phone (SMS code)",
+        "email": "Email (code)",
+        "authenticator": "Authenticator app",
+        "device": "This device (Face ID / Touch ID)"
+      },
+      "done": "Done",
+      "next": "Next"
+    }
   }
 }

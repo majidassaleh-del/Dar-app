@@ -1,6 +1,6 @@
 {
   "app": { "name": "የቤት ኢአርፒ", "tagline": "የቤቱ ጉዳይ ሁሉ በአንድ ቦታ" },
-  "nav": { "dashboard": "መነሻ", "staff": "ሠራተኞች", "finance": "ፋይናንስ", "pettyCash": "አነስተኛ ገንዘብ", "workOrders": "የሥራ ትዕዛዞች", "travel": "ጉዞ", "policies": "መመሪያዎች" },
+  "nav": { "dashboard": "መነሻ", "staff": "ሠራተኞች", "finance": "ፋይናንስ", "pettyCash": "አነስተኛ ገንዘብ", "workOrders": "የሥራ ትዕዛዞች", "travel": "ጉዞ", "policies": "መመሪያዎች", "pulse": "ዕለታዊ ማጠቃለያ", "fleet": "ተሽከርካሪዎች" },
   "dashboard": {
     "greeting": "ሰላም {name}",
     "pendingApprovals": "{count, plural, =0 {ፈቃድዎን የሚጠብቅ ጥያቄ የለም} one {# ጥያቄ ፈቃድዎን እየጠበቀ ነው} other {# ጥያቄዎች ፈቃድዎን እየጠበቁ ነው}}",
@@ -91,5 +91,46 @@
     "vehicleDocsDue": "{count, plural, one {# የተሽከርካሪ ሰነድ ጊዜው አልፏል ወይም በ15 ቀናት ውስጥ ያልፋል} other {# የተሽከርካሪ ሰነዶች ጊዜያቸው አልፏል ወይም በ15 ቀናት ውስጥ ያልፋል}}",
     "vehicleServiceOverdue": "{count, plural, one {# የተሽከርካሪ አገልግሎት ዘግይቷል} other {# የተሽከርካሪ አገልግሎቶች ዘግይተዋል}}",
     "fuelFlagged": "{count, plural, one {# የነዳጅ ሙሌት ተጠቁሟል} other {# የነዳጅ ሙሌቶች ተጠቁመዋል}}"
+  },
+  "exec": {
+    "brand": "EFA የግል ቢሮ",
+    "office": "EFA ቢሮ — ኦፕሬሽን",
+    "attention": "ዛሬ ውሳኔ የሚፈልጉ",
+    "allClear": "ዛሬ ውሳኔ የሚፈልግ ነገር የለም",
+    "updated": "በ{time} ታድሷል",
+    "severity": {
+      "critical": "አስቸኳይ",
+      "warning": "ትኩረት",
+      "info": "ለመረጃ"
+    },
+    "kpi": {
+      "payroll": "ደመወዝ",
+      "payrollDue": "የ{month} ደመወዝ በ{days, plural, one {# ቀን} other {# ቀናት}} ውስጥ ይደርሳል",
+      "documents": "ሰነዶች",
+      "documentsDue": "{count, plural, =0 {ጊዜው የሚያልፍ የለም} one {# ጊዜው እያለፈ} other {# ጊዜያቸው እያለፈ}}",
+      "medical": "የሕክምና ምርመራዎች",
+      "medicalDue": "{count, plural, =0 {ሁሉም የሚሰሩ} one {# እርምጃ ይፈልጋል} other {# እርምጃ ይፈልጋሉ}}",
+      "workOrders": "የሥራ ትዕዛዞች",
+      "workOrdersOpen": "{count, plural, =0 {ክፍት የለም} one {# ክፍት} other {# ክፍት}}",
+      "pettyCash": "ጥቃቅን ገንዘብ",
+      "pettyCashReview": "{count, plural, =0 {የሚገመገም የለም} one {# የሚገመገም} other {# የሚገመገሙ}}",
+      "fleet": "ተሽከርካሪዎች",
+      "fleetDue": "{count, plural, =0 {ሁሉም በሥርዓት} one {# የሚደርስ} other {# የሚደርሱ}}",
+      "budgets": "በጀቶች",
+      "budgetsOver": "{count, plural, =0 {በበጀት ውስጥ} one {# ከበጀት በላይ} other {# ከበጀት በላይ}}",
+      "esb": "የአገልግሎት ማብቂያ ግዴታ"
+    },
+    "onboarding": {
+      "title": "መለያዎን ያስጠብቁ",
+      "subtitle": "ሶስት የአንድ ጊዜ ደረጃዎች፣ ከዚያ በየጠዋቱ Face ID ወይም Touch ID።",
+      "step": {
+        "phone": "ስልክ (SMS ኮድ)",
+        "email": "ኢሜይል (ኮድ)",
+        "authenticator": "የማረጋገጫ መተግበሪያ",
+        "device": "ይህ መሣሪያ (Face ID / Touch ID)"
+      },
+      "done": "ተጠናቋል",
+      "next": "ቀጣይ"
+    }
   }
 }

@@ -1,6 +1,6 @@
 {
   "app": { "name": "Household ERP", "tagline": "Lahat ng tungkol sa tahanan, sa iisang lugar" },
-  "nav": { "dashboard": "Home", "staff": "Mga kasambahay", "finance": "Pananalapi", "pettyCash": "Petty cash", "workOrders": "Mga gawain", "travel": "Biyahe", "policies": "Mga patakaran" },
+  "nav": { "dashboard": "Home", "staff": "Mga kasambahay", "finance": "Pananalapi", "pettyCash": "Petty cash", "workOrders": "Mga gawain", "travel": "Biyahe", "policies": "Mga patakaran", "pulse": "Pang-araw-araw na Buod", "fleet": "Mga sasakyan" },
   "dashboard": {
     "greeting": "Kumusta {name}",
     "pendingApprovals": "{count, plural, =0 {Walang request na naghihintay sa iyo} one {# request ang naghihintay ng iyong pag-apruba} other {# na request ang naghihintay ng iyong pag-apruba}}",
@@ -91,5 +91,46 @@
     "vehicleDocsDue": "{count, plural, one {# dokumento ng sasakyan ang expired o mag-e-expire sa 15 araw} other {# dokumento ng sasakyan ang expired o mag-e-expire sa 15 araw}}",
     "vehicleServiceOverdue": "{count, plural, one {# serbisyo ng sasakyan ang lampas na} other {# serbisyo ng sasakyan ang lampas na}}",
     "fuelFlagged": "{count, plural, one {# pagpapakarga ng gasolina ang na-flag} other {# pagpapakarga ng gasolina ang na-flag}}"
+  },
+  "exec": {
+    "brand": "EFA Private Office",
+    "office": "EFA Office — Operasyon",
+    "attention": "Kailangang pagpasyahan ngayon",
+    "allClear": "Walang kailangang pagpasyahan ngayon",
+    "updated": "Na-update {time}",
+    "severity": {
+      "critical": "Kritikal",
+      "warning": "Pansinin",
+      "info": "Para sa kaalaman"
+    },
+    "kpi": {
+      "payroll": "Payroll",
+      "payrollDue": "Ang payroll ng {month} ay dapat sa loob ng {days, plural, one {# araw} other {# araw}}",
+      "documents": "Mga dokumento",
+      "documentsDue": "{count, plural, =0 {Walang mag-e-expire} one {# mag-e-expire} other {# mag-e-expire}}",
+      "medical": "Mga medical check",
+      "medicalDue": "{count, plural, =0 {Lahat ay valid} one {# ang kailangang aksyunan} other {# ang kailangang aksyunan}}",
+      "workOrders": "Mga work order",
+      "workOrdersOpen": "{count, plural, =0 {Walang bukas} one {# bukas} other {# bukas}}",
+      "pettyCash": "Petty cash",
+      "pettyCashReview": "{count, plural, =0 {Walang susuriin} one {# susuriin} other {# susuriin}}",
+      "fleet": "Mga sasakyan",
+      "fleetDue": "{count, plural, =0 {Maayos lahat} one {# dapat gawin} other {# dapat gawin}}",
+      "budgets": "Mga budget",
+      "budgetsOver": "{count, plural, =0 {Pasok sa budget} one {# lampas sa budget} other {# lampas sa budget}}",
+      "esb": "Pananagutan sa end-of-service"
+    },
+    "onboarding": {
+      "title": "I-secure ang iyong account",
+      "subtitle": "Tatlong isang-beses na hakbang, pagkatapos Face ID o Touch ID tuwing umaga.",
+      "step": {
+        "phone": "Telepono (SMS code)",
+        "email": "Email (code)",
+        "authenticator": "Authenticator app",
+        "device": "Ang device na ito (Face ID / Touch ID)"
+      },
+      "done": "Tapos",
+      "next": "Susunod"
+    }
   }
 }

@@ -1,6 +1,6 @@
 {
   "app": { "name": "হাউসহোল্ড ইআরপি", "tagline": "ঘরের সবকিছু, এক জায়গায়" },
-  "nav": { "dashboard": "হোম", "staff": "কর্মী", "finance": "অর্থ", "pettyCash": "নগদ তহবিল", "workOrders": "কাজের আদেশ", "travel": "ভ্রমণ", "policies": "নীতিমালা" },
+  "nav": { "dashboard": "হোম", "staff": "কর্মী", "finance": "অর্থ", "pettyCash": "নগদ তহবিল", "workOrders": "কাজের আদেশ", "travel": "ভ্রমণ", "policies": "নীতিমালা", "pulse": "দৈনিক সারসংক্ষেপ", "fleet": "গাড়ি" },
   "dashboard": {
     "greeting": "হ্যালো {name}",
     "pendingApprovals": "{count, plural, =0 {আপনার অনুমোদনের অপেক্ষায় কোনো অনুরোধ নেই} one {# টি অনুরোধ আপনার অনুমোদনের অপেক্ষায়} other {# টি অনুরোধ আপনার অনুমোদনের অপেক্ষায়}}",
@@ -91,5 +91,46 @@
     "vehicleDocsDue": "{count, plural, one {# গাড়ির নথির মেয়াদ শেষ বা ১৫ দিনে শেষ হবে} other {# গাড়ির নথির মেয়াদ শেষ বা ১৫ দিনে শেষ হবে}}",
     "vehicleServiceOverdue": "{count, plural, one {# গাড়ির সার্ভিস বিলম্বিত} other {# গাড়ির সার্ভিস বিলম্বিত}}",
     "fuelFlagged": "{count, plural, one {# জ্বালানি ভরাট চিহ্নিত} other {# জ্বালানি ভরাট চিহ্নিত}}"
+  },
+  "exec": {
+    "brand": "EFA প্রাইভেট অফিস",
+    "office": "EFA অফিস — পরিচালনা",
+    "attention": "আজ সিদ্ধান্ত প্রয়োজন",
+    "allClear": "আজ কোনো সিদ্ধান্তের প্রয়োজন নেই",
+    "updated": "{time}-এ হালনাগাদ",
+    "severity": {
+      "critical": "জরুরি",
+      "warning": "মনোযোগ দিন",
+      "info": "তথ্যের জন্য"
+    },
+    "kpi": {
+      "payroll": "বেতন",
+      "payrollDue": "{month}-এর বেতন {days, plural, one {# দিনে} other {# দিনে}} প্রাপ্য",
+      "documents": "নথি",
+      "documentsDue": "{count, plural, =0 {কোনোটির মেয়াদ শেষ হচ্ছে না} one {#টির মেয়াদ শেষ হচ্ছে} other {#টির মেয়াদ শেষ হচ্ছে}}",
+      "medical": "মেডিকেল চেকআপ",
+      "medicalDue": "{count, plural, =0 {সব বৈধ} one {#টিতে পদক্ষেপ দরকার} other {#টিতে পদক্ষেপ দরকার}}",
+      "workOrders": "কাজের আদেশ",
+      "workOrdersOpen": "{count, plural, =0 {কোনোটি খোলা নেই} one {#টি খোলা} other {#টি খোলা}}",
+      "pettyCash": "খুচরা নগদ",
+      "pettyCashReview": "{count, plural, =0 {পর্যালোচনার কিছু নেই} one {#টি পর্যালোচনার জন্য} other {#টি পর্যালোচনার জন্য}}",
+      "fleet": "গাড়ি",
+      "fleetDue": "{count, plural, =0 {সব ঠিক আছে} one {#টি বাকি} other {#টি বাকি}}",
+      "budgets": "বাজেট",
+      "budgetsOver": "{count, plural, =0 {বাজেটের মধ্যে} one {#টি বাজেট ছাড়িয়েছে} other {#টি বাজেট ছাড়িয়েছে}}",
+      "esb": "চাকরি-শেষের দায়"
+    },
+    "onboarding": {
+      "title": "আপনার অ্যাকাউন্ট সুরক্ষিত করুন",
+      "subtitle": "তিনটি এককালীন ধাপ, তারপর প্রতিদিন সকালে Face ID বা Touch ID।",
+      "step": {
+        "phone": "ফোন (SMS কোড)",
+        "email": "ইমেইল (কোড)",
+        "authenticator": "অথেন্টিকেটর অ্যাপ",
+        "device": "এই ডিভাইস (Face ID / Touch ID)"
+      },
+      "done": "সম্পন্ন",
+      "next": "পরবর্তী"
+    }
   }
 }

@@ -691,6 +691,23 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 | `POST /webhooks/ocr/{provider}` | Async OCR completion → `processReceiptImage` merge (ZATCA QR authoritative) |
 | `POST /webhooks/billing` | Subscription events |
 
+## 16. Web: executive UI (Slate / Navy)
+
+The `apps/web` theme for EFA Private Office lives in `src/app/globals.css` and `src/components/AppShell.tsx`.
+
+**Tokens and modes:**
+* Design tokens on `:root`: slate surfaces, a navy brand sidebar, brass for the brand mark only, and severity colours for `critical` / `warning` / `info` / `ok`.
+* Dark mode follows the OS, or `data-theme`.
+* Logical CSS properties only, so Arabic RTL and LTR share one stylesheet.
+* Tabular numerals for figures.
+* The layout collapses to a top bar at phone width.
+
+**Pages:**
+* `/[locale]`: the **EFA Daily Pulse**, with the attention list (`pulse.*` labels, severity chips) and KPI tiles (`exec.kpi.*`) in all six languages, plus the Gregorian and Umm al-Qura dates.
+* `/[locale]/onboarding`: the onboarding steps.
+
+Both pages render **sample data** shaped like `GET /v1/dashboard/pulse` and `GET /v1/auth/onboarding`. The authenticated API client is not wired into the web app yet.
+
 ## 15. Example
 
 ```http
