@@ -57,7 +57,17 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 
 ## 3. Staff HR
 
-> **Status: implemented** in `apps/api/src/staff/` (profiles, documents, alerts, contracts, salary payments) with e2e tests in `apps/api/test/staff.e2e.test.ts`. Attendance, leave, payroll runs and tasks are next.
+> **Status: implemented**: everything in this section. Code is in `apps/api/src/staff/`, with e2e tests in `apps/api/test/staff.e2e.test.ts` and `hr.e2e.test.ts`. Notes on the implementation:
+> * **Attendance.** Workers check in and out for *today* (household time zone), once each, with server-stamped times. Only `staff.payroll.manage` can correct a day (`PUT /attendance/{staffId}/{date}`).
+> * **Leave.** Leave is requested with `POST /requests {type: "LEAVE", leaveType, startDate, endDate}`. Final approval creates the `LeaveRecord` in the database, and the request becomes `FULFILLED`. Filing for another worker needs `staff.payroll.manage`. `GET /staff/{id}/leave-balance?year=` returns the pro-rated annual entitlement minus approved ANNUAL days.
+> * **Payroll.** `POST /payroll-runs` generates the lines:
+>   * basic salary and each allowance, pro-rated by days employed;
+>   * unpaid leave deducted at basic ÷ 30 per day;
+>   * salary-advance instalments, capped at the pay.
+>
+>   Lines are editable only while DRAFT. `/pay` validates every worker's channel and reference **before** writing, then logs one `SalaryPayment` per worker and reduces the advances. PAID is final.
+> * **Payslips.** A worker sees only their own APPROVED or PAID payslips, never run totals. Line text follows the viewer's language.
+> * **Chores.** An assignee may only change `status` and `proofPhotoUrl`. Only the creator or a manager can cancel or delete.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
@@ -146,6 +156,13 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 | GET | `/reports/export?type=…&format=xlsx\|pdf\|csv` | `finance.reports.read` | Async job, signed download URL |
 
 ## 5. Requests & approvals (cross-module)
+
+> **Status: implemented** in `apps/api/src/requests/`: create, list (`?mine`, `?awaitingMe`), get, approve, reject, cancel. Routing, step advancement, final approval and fulfilment (LEAVE → leave record, SALARY_ADVANCE → advance with instalments) run as database triggers.
+>
+> Rules:
+> * Requesters can only edit a DRAFT, submit it, or cancel it. The v1.1 hole that let a requester set their own request to APPROVED is closed.
+> * Approvers decide once, at the current step only, and a rejection needs a comment.
+> * PATCH, delegate, comments and fulfil are not implemented yet.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|

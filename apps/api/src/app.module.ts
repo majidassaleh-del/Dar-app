@@ -4,6 +4,7 @@ import { ConfigModule } from './config/config.module';
 import { DbModule } from './db/db.module';
 import { CryptoModule } from './crypto/crypto.module';
 import { StaffModule } from './staff/staff.module';
+import { RequestsModule } from './requests/requests.module';
 import { JwtGuard } from './auth/jwt.guard';
 import { HouseholdGuard } from './tenancy/household.guard';
 import { ProblemFilter } from './common/problem.filter';
@@ -11,7 +12,7 @@ import { HealthController } from './health/health.controller';
 import { MembersController } from './members/members.controller';
 
 @Module({
-  imports: [ConfigModule, DbModule, CryptoModule, StaffModule],
+  imports: [ConfigModule, DbModule, CryptoModule, StaffModule, RequestsModule],
   controllers: [HealthController, MembersController],
   providers: [
     // Order matters: authenticate, then resolve the household membership.

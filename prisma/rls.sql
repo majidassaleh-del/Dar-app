@@ -580,42 +580,50 @@ CREATE TRIGGER memberships_guard BEFORE INSERT OR UPDATE ON memberships
 -- The requester is never their own approver.
 CREATE OR REPLACE FUNCTION app.route_request() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE v_pol approval_policies; v_step jsonb; v_n int := 0;
 BEGIN
-  IF NEW.status = 'DRAFT' THEN RETURN NEW; END IF;
+  IF NEW.status <> 'DRAFT' THEN PERFORM app.route_request_rows(NEW.id); END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.route_request_rows(p_request uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE r requests; v_pol approval_policies; v_step jsonb; v_n int := 0;
+BEGIN
+  SELECT * INTO r FROM requests WHERE id = p_request;
 
   SELECT * INTO v_pol FROM approval_policies p
-  WHERE p."householdId" = NEW."householdId" AND p."requestType" = NEW.type AND p."isActive"
-    AND (p."minAmount" IS NULL OR NEW.amount >= p."minAmount")
-    AND (p."maxAmount" IS NULL OR NEW.amount <  p."maxAmount")
+  WHERE p."householdId" = r."householdId" AND p."requestType" = r.type AND p."isActive"
+    AND (p."minAmount" IS NULL OR r.amount >= p."minAmount")
+    AND (p."maxAmount" IS NULL OR r.amount <  p."maxAmount")
   ORDER BY p."minAmount" DESC NULLS LAST LIMIT 1;
 
-  IF v_pol.id IS NOT NULL AND v_pol."autoApproveBelow" IS NOT NULL AND NEW.amount < v_pol."autoApproveBelow" THEN
-    UPDATE requests SET status = 'APPROVED', "resolvedAt" = now() WHERE id = NEW.id;
-    RETURN NEW;
+  IF v_pol.id IS NOT NULL AND v_pol."autoApproveBelow" IS NOT NULL AND r.amount < v_pol."autoApproveBelow" THEN
+    UPDATE requests SET status = 'APPROVED', "resolvedAt" = now() WHERE id = r.id;
+    PERFORM app.fulfil_request(r.id);
+    RETURN;
   END IF;
 
   IF v_pol.id IS NOT NULL THEN
     FOR v_step IN SELECT * FROM jsonb_array_elements(v_pol.steps) LOOP
       INSERT INTO approvals (id, "householdId", "requestId", step, "approverId")
-      SELECT gen_random_uuid(), NEW."householdId", NEW.id, (v_step->>'step')::int, m.id
-      FROM memberships m JOIN roles r ON r.id = m."roleId"
-      WHERE m."householdId" = NEW."householdId" AND m.status = 'ACTIVE' AND m.id <> NEW."requesterId"
-        AND (m.id::text = v_step->>'membershipId' OR r."systemRole"::text = v_step->>'approverRole');
+      SELECT gen_random_uuid(), r."householdId", r.id, (v_step->>'step')::int, m.id
+      FROM memberships m JOIN roles ro ON ro.id = m."roleId"
+      WHERE m."householdId" = r."householdId" AND m.status = 'ACTIVE' AND m.id <> r."requesterId"
+        AND (m.id::text = v_step->>'membershipId' OR ro."systemRole"::text = v_step->>'approverRole');
       GET DIAGNOSTICS v_n = ROW_COUNT;
     END LOOP;
   END IF;
 
-  IF v_pol.id IS NULL OR NOT EXISTS (SELECT 1 FROM approvals WHERE "requestId" = NEW.id) THEN
+  IF v_pol.id IS NULL OR NOT EXISTS (SELECT 1 FROM approvals WHERE "requestId" = r.id) THEN
     INSERT INTO approvals (id, "householdId", "requestId", step, "approverId")
-    SELECT gen_random_uuid(), NEW."householdId", NEW.id, 1, m.id
-    FROM memberships m JOIN roles r ON r.id = m."roleId"
-    WHERE m."householdId" = NEW."householdId" AND m.status = 'ACTIVE' AND m.id <> NEW."requesterId"
-      AND r."systemRole" IN ('HOUSEHOLD_HEAD', 'EFA_OFFICE_ADMIN');
+    SELECT gen_random_uuid(), r."householdId", r.id, 1, m.id
+    FROM memberships m JOIN roles ro ON ro.id = m."roleId"
+    WHERE m."householdId" = r."householdId" AND m.status = 'ACTIVE' AND m.id <> r."requesterId"
+      AND ro."systemRole" IN ('HOUSEHOLD_HEAD', 'EFA_OFFICE_ADMIN');
   END IF;
 
-  UPDATE requests SET status = 'IN_REVIEW', "currentStep" = 1 WHERE id = NEW.id;
-  RETURN NEW;
+  UPDATE requests SET status = 'IN_REVIEW', "currentStep" = (SELECT min(step) FROM approvals WHERE "requestId" = r.id)
+  WHERE id = r.id;
 END $$;
 CREATE TRIGGER requests_route AFTER INSERT ON requests
   FOR EACH ROW EXECUTE FUNCTION app.route_request();
@@ -1093,6 +1101,243 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.sync_document_reminders(uuid) FROM PUBLIC, app_user;
 GRANT EXECUTE ON FUNCTION app.sync_document_reminders(uuid) TO app_service;
+
+-- ======================================================= REQUEST WORKFLOW ==
+-- v1.1 hole: the requests UPDATE policy let a requester change ANY column of
+-- their own request, including status → APPROVED. Now: interactive users may
+-- only edit a DRAFT, submit it, or cancel it. Every other status change comes
+-- from the approval engine below (SECURITY DEFINER, so not "restricted").
+CREATE OR REPLACE FUNCTION app.guard_request() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_requester boolean;
+BEGIN
+  IF NOT app.caller_is_restricted() THEN RETURN NEW; END IF;
+  v_requester := OLD."requesterId" = app.current_membership_id();
+  IF (NEW."householdId", NEW."requesterId", NEW.type) IS DISTINCT FROM (OLD."householdId", OLD."requesterId", OLD.type) THEN
+    RAISE EXCEPTION 'request owner and type cannot change' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF OLD.status <> 'DRAFT' AND (NEW.payload, NEW.amount, NEW.currency, NEW."titleI18n", NEW."neededBy")
+       IS DISTINCT FROM (OLD.payload, OLD.amount, OLD.currency, OLD."titleI18n", OLD."neededBy") THEN
+    RAISE EXCEPTION 'a submitted request cannot be edited; cancel and resubmit' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."currentStep" IS DISTINCT FROM OLD."currentStep" OR NEW."resolvedAt" IS DISTINCT FROM OLD."resolvedAt" THEN
+    RAISE EXCEPTION 'workflow fields are managed by the approval engine' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF NEW.status = 'CANCELLED' AND v_requester AND OLD.status IN ('DRAFT', 'SUBMITTED', 'IN_REVIEW') THEN
+      NEW."resolvedAt" := now();
+    ELSIF NEW.status = 'SUBMITTED' AND v_requester AND OLD.status = 'DRAFT' THEN
+      NULL; -- routed by requests_route_on_submit
+    ELSIF NEW.status = 'FULFILLED' AND OLD.status = 'APPROVED' AND COALESCE(app.perm_scope('requests.approve') = 'ALL', false) THEN
+      NULL;
+    ELSE
+      RAISE EXCEPTION 'status % → % is not allowed for you', OLD.status, NEW.status USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER requests_0_guard BEFORE UPDATE ON requests FOR EACH ROW EXECUTE FUNCTION app.guard_request();
+
+-- DRAFT → SUBMITTED routes like a fresh submission.
+CREATE OR REPLACE FUNCTION app.route_request_on_submit() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED' THEN
+    PERFORM app.route_request_rows(NEW.id);
+  END IF;
+  RETURN NULL;
+END $$;
+
+-- Approvers: decide once, at the current step, only decision/comment.
+REVOKE UPDATE ON approvals FROM app_user;
+GRANT UPDATE (decision, comment) ON approvals TO app_user;
+
+CREATE OR REPLACE FUNCTION app.guard_approval() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_req requests;
+BEGIN
+  SELECT * INTO v_req FROM requests WHERE id = NEW."requestId";
+  IF OLD.decision <> 'PENDING' THEN
+    RAISE EXCEPTION 'this approval was already decided' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.decision NOT IN ('APPROVED', 'REJECTED') THEN
+    RAISE EXCEPTION 'decision must be APPROVED or REJECTED' USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_req.status <> 'IN_REVIEW' OR NEW.step <> v_req."currentStep" THEN
+    RAISE EXCEPTION 'request is not awaiting step % (status %, step %)', NEW.step, v_req.status, v_req."currentStep"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.decision = 'REJECTED' AND length(trim(coalesce(NEW.comment, ''))) = 0 THEN
+    RAISE EXCEPTION 'a rejection needs a comment' USING ERRCODE = 'check_violation';
+  END IF;
+  NEW."decidedAt" := now();
+  RETURN NEW;
+END $$;
+CREATE TRIGGER approvals_0_guard BEFORE UPDATE ON approvals FOR EACH ROW EXECUTE FUNCTION app.guard_approval();
+
+-- Fulfilment of approved requests that create HR records.
+CREATE OR REPLACE FUNCTION app.fulfil_request(p_request uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE r requests; v_staff uuid; v_start date; v_end date; v_n int;
+BEGIN
+  SELECT * INTO r FROM requests WHERE id = p_request;
+  v_staff := COALESCE((r.payload->>'staffId')::uuid,
+                      (SELECT id FROM staff_profiles WHERE "membershipId" = r."requesterId" AND "householdId" = r."householdId"));
+  IF r.type = 'LEAVE' THEN
+    IF v_staff IS NULL THEN RETURN; END IF;
+    v_start := (r.payload->>'startDate')::date; v_end := (r.payload->>'endDate')::date;
+    INSERT INTO leave_records (id, "householdId", "staffId", "requestId", type, "startDate", "endDate", days, paid)
+    VALUES (gen_random_uuid(), r."householdId", v_staff, r.id, (r.payload->>'leaveType')::"LeaveType", v_start, v_end,
+            v_end - v_start + 1, (r.payload->>'leaveType') <> 'UNPAID');
+    UPDATE staff_profiles SET status = 'ON_LEAVE'
+      WHERE id = v_staff AND status = 'ACTIVE' AND v_start <= CURRENT_DATE AND v_end >= CURRENT_DATE;
+  ELSIF r.type = 'SALARY_ADVANCE' THEN
+    IF v_staff IS NULL OR r.amount IS NULL THEN RETURN; END IF;
+    v_n := GREATEST(1, LEAST(12, COALESCE((r.payload->>'installments')::int, 1)));
+    INSERT INTO salary_advances (id, "householdId", "staffId", "requestId", amount, outstanding, "monthlyInstallment", currency, "issuedAt")
+    VALUES (gen_random_uuid(), r."householdId", v_staff, r.id, r.amount, r.amount, round(r.amount / v_n, 2),
+            COALESCE(r.currency, 'SAR'), CURRENT_DATE);
+  ELSE
+    RETURN; -- other types are fulfilled by their own module
+  END IF;
+  UPDATE requests SET status = 'FULFILLED' WHERE id = p_request;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.advance_request() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_next int;
+BEGIN
+  IF NEW.decision = 'REJECTED' THEN
+    UPDATE requests SET status = 'REJECTED', "resolvedAt" = now() WHERE id = NEW."requestId";
+  ELSIF NEW.decision = 'APPROVED' THEN
+    SELECT min(step) INTO v_next FROM approvals WHERE "requestId" = NEW."requestId" AND step > NEW.step;
+    IF v_next IS NOT NULL THEN
+      UPDATE requests SET "currentStep" = v_next WHERE id = NEW."requestId";
+    ELSE
+      UPDATE requests SET status = 'APPROVED', "resolvedAt" = now() WHERE id = NEW."requestId";
+      PERFORM app.fulfil_request(NEW."requestId");
+    END IF;
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER approvals_advance AFTER UPDATE OF decision ON approvals FOR EACH ROW EXECUTE FUNCTION app.advance_request();
+CREATE TRIGGER requests_route_on_submit AFTER UPDATE OF status ON requests FOR EACH ROW EXECUTE FUNCTION app.route_request_on_submit();
+
+-- =============================================================== PAYROLL ==
+CREATE OR REPLACE FUNCTION app.guard_payroll_line() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_status "PayrollStatus";
+BEGIN
+  SELECT status INTO v_status FROM payroll_runs WHERE id = COALESCE(NEW."payrollRunId", OLD."payrollRunId");
+  IF v_status <> 'DRAFT' THEN
+    RAISE EXCEPTION 'payroll run is % — lines can only change while DRAFT', v_status USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END $$;
+CREATE TRIGGER payroll_lines_0_guard BEFORE INSERT OR UPDATE OR DELETE ON payroll_lines
+  FOR EACH ROW EXECUTE FUNCTION app.guard_payroll_line();
+
+CREATE OR REPLACE FUNCTION app.payroll_total() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_run uuid := COALESCE(NEW."payrollRunId", OLD."payrollRunId");
+BEGIN
+  UPDATE payroll_runs SET "totalAmount" = COALESCE((SELECT sum(amount) FROM payroll_lines WHERE "payrollRunId" = v_run), 0)
+  WHERE id = v_run;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER payroll_lines_total AFTER INSERT OR UPDATE OR DELETE ON payroll_lines
+  FOR EACH ROW EXECUTE FUNCTION app.payroll_total();
+
+CREATE OR REPLACE FUNCTION app.guard_payroll_run() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF NOT ((OLD.status, NEW.status) IN (('DRAFT','APPROVED'), ('APPROVED','DRAFT'), ('APPROVED','PAID'),
+                                         ('DRAFT','CANCELLED'), ('APPROVED','CANCELLED'))) THEN
+      RAISE EXCEPTION 'payroll run % → % is not allowed', OLD.status, NEW.status USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status = 'APPROVED' THEN NEW."approvedAt" := now(); NEW."approvedById" := app.current_membership_id(); END IF;
+    IF NEW.status = 'DRAFT' THEN NEW."approvedAt" := NULL; NEW."approvedById" := NULL; END IF;
+    IF NEW.status = 'PAID' THEN NEW."paidAt" := now(); END IF;
+  ELSIF OLD.status <> 'DRAFT' AND app.caller_is_restricted()
+        AND (NEW."periodYear", NEW."periodMonth", NEW.currency) IS DISTINCT FROM (OLD."periodYear", OLD."periodMonth", OLD.currency) THEN
+    RAISE EXCEPTION 'payroll run is %', OLD.status USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER payroll_runs_0_guard BEFORE UPDATE ON payroll_runs FOR EACH ROW EXECUTE FUNCTION app.guard_payroll_run();
+
+-- ============================================================ ATTENDANCE ==
+-- Staff check in for TODAY (household-local) and check out once; times are
+-- server-stamped. Managers (staff.payroll.manage) can correct anything.
+DROP POLICY payroll_upd ON attendance;
+CREATE OR REPLACE FUNCTION app.household_today(p_household uuid) RETURNS date
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT (now() AT TIME ZONE timezone)::date FROM households WHERE id = p_household
+$$;
+CREATE POLICY attendance_upd ON attendance AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('staff.payroll.manage')) = 'ALL'
+         OR (app.can_access((SELECT app.perm_scope('staff.attendance.manage')), app.staff_member("staffId"))
+             AND date = app.household_today("householdId")));
+
+CREATE OR REPLACE FUNCTION app.guard_attendance() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT app.caller_is_restricted() OR COALESCE(app.perm_scope('staff.payroll.manage') = 'ALL', false) THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.date <> app.household_today(NEW."householdId") THEN
+      RAISE EXCEPTION 'you can only check in for today' USING ERRCODE = 'check_violation';
+    END IF;
+    NEW."checkInAt" := now(); NEW."checkOutAt" := NULL; NEW.status := 'PRESENT';
+  ELSE
+    IF (NEW."staffId", NEW.date, NEW.status, NEW."checkInAt", NEW."checkInGeo") IS DISTINCT FROM
+       (OLD."staffId", OLD.date, OLD.status, OLD."checkInAt", OLD."checkInGeo") THEN
+      RAISE EXCEPTION 'only a manager can correct attendance' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF OLD."checkOutAt" IS NOT NULL THEN
+      RAISE EXCEPTION 'already checked out' USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."checkOutAt" IS NOT NULL THEN NEW."checkOutAt" := now(); END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER attendance_0_guard BEFORE INSERT OR UPDATE ON attendance FOR EACH ROW EXECUTE FUNCTION app.guard_attendance();
+
+-- Payslips: staff may read their own payroll LINES but not payroll RUNS (a
+-- run's total would reveal everyone's pay). This returns only status/period of
+-- runs that contain the caller's own lines.
+CREATE OR REPLACE FUNCTION app.my_payslip_runs()
+RETURNS TABLE (id uuid, period_year int, period_month int, status text, paid_at timestamptz, currency text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT DISTINCT r.id, r."periodYear", r."periodMonth", r.status::text, r."paidAt", r.currency
+  FROM payroll_runs r
+  JOIN payroll_lines l ON l."payrollRunId" = r.id
+  JOIN staff_profiles s ON s.id = l."staffId"
+  WHERE s."membershipId" = app.current_membership_id() AND r."householdId" = app.current_household_id()
+$$;
+GRANT EXECUTE ON FUNCTION app.my_payslip_runs() TO app_user;
+
+-- ================================================================ CHORES ==
+CREATE OR REPLACE FUNCTION app.guard_task() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT app.caller_is_restricted() OR COALESCE(app.perm_scope('staff.tasks.manage') = 'ALL', false)
+     OR OLD."createdById" = app.current_membership_id() THEN
+    IF NEW.status = 'DONE' AND OLD.status <> 'DONE' THEN NEW."completedAt" := now(); END IF;
+    RETURN NEW;
+  END IF;
+  -- Assignee: progress and proof only.
+  IF (NEW."titleI18n", NEW.description, NEW."assigneeId", NEW."dueAt", NEW.recurrence, NEW."createdById")
+     IS DISTINCT FROM (OLD."titleI18n", OLD.description, OLD."assigneeId", OLD."dueAt", OLD.recurrence, OLD."createdById") THEN
+    RAISE EXCEPTION 'assignees can only update status and photo proof' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NEW.status = 'CANCELLED' THEN
+    RAISE EXCEPTION 'only the creator can cancel a task' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NEW.status = 'DONE' AND OLD.status <> 'DONE' THEN NEW."completedAt" := now(); END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER household_tasks_0_guard BEFORE UPDATE ON household_tasks FOR EACH ROW EXECUTE FUNCTION app.guard_task();
 
 -- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
 -- Foreign keys prove a referenced row EXISTS, not that it belongs to the same

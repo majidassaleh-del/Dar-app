@@ -346,6 +346,16 @@ SELECT pg_temp.expect('  …verified as superuser: 2 approvers, both admins',
    JOIN roles ro ON ro.id=m."roleId" WHERE r.type='SALARY_ADVANCE' AND ro."systemRole" IN ('HOUSEHOLD_HEAD','EFA_OFFICE_ADMIN')), 2);
 SET LOCAL ROLE app_user;
 
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h1');
+SELECT pg_temp.expect('maid cannot self-approve her advance request (v1.1 hole)',
+  pg_temp.try_rows($q$UPDATE requests SET status = 'APPROVED' WHERE type = 'SALARY_ADVANCE'$q$), -1);
+SELECT pg_temp.expect('…nor raise its amount after submission',
+  pg_temp.try_rows($q$UPDATE requests SET amount = 99999 WHERE type = 'SALARY_ADVANCE'$q$), -2);
+SELECT pg_temp.expect('…nor decide an approval row',
+  pg_temp.try_rows($q$UPDATE approvals SET decision = 'APPROVED'$q$), 0);
+SELECT pg_temp.expect('…but she can cancel her own request',
+  pg_temp.try_rows($q$UPDATE requests SET status = 'CANCELLED' WHERE type = 'SALARY_ADVANCE'$q$), 1);
+
 -- ---- 4. governance & acknowledgments ----
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000e','h1');
 SELECT pg_temp.expect('driver sees published policy, not drafts', (SELECT count(*) FROM policies), 1);
