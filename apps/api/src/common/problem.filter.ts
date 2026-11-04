@@ -25,7 +25,8 @@ export class ProblemFilter implements ExceptionFilter {
     res.status(p.status).type('application/problem+json').json({ ...p, instance: req.originalUrl, requestId: req.ctx?.requestId });
   }
 
-  private toProblem(err: unknown): { type: string; title: string; status: number; code: string; detail?: string } {
+  /** Also used by batch endpoints (offline sync) to report per-item failures in the same shape. */
+  toProblem(err: unknown): { type: string; title: string; status: number; code: string; detail?: string } {
     if (err instanceof HttpException) {
       const status = err.getStatus();
       const body = err.getResponse();

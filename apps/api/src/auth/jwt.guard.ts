@@ -35,7 +35,8 @@ export class JwtGuard implements CanActivate {
         algorithms: this.env.AUTH_JWKS_URL ? ['RS256', 'ES256', 'EdDSA'] : ['HS256'],
       });
       if (!payload.sub || !UUID.test(payload.sub)) throw new Error('sub is not a user id');
-      req.ctx = { userId: payload.sub, locale, requestId };
+      const authTime = typeof payload.auth_time === 'number' ? payload.auth_time : payload.iat;
+      req.ctx = { userId: payload.sub, locale, requestId, authTime };
       return true;
     } catch {
       throw new UnauthorizedException('invalid or expired token');

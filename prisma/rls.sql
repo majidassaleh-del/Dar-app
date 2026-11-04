@@ -2464,6 +2464,7 @@ GRANT EXECUTE ON FUNCTION app.sync_staff_compliance_reminders(uuid) TO app_servi
 -- their own notifications read.
 REVOKE INSERT, UPDATE, DELETE ON notifications FROM app_user;
 GRANT UPDATE ("readAt") ON notifications TO app_user;
+REVOKE UPDATE, DELETE ON sync_operations FROM app_user;
 
 -- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
 -- Foreign keys prove a referenced row EXISTS, not that it belongs to the same
@@ -2504,6 +2505,49 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
+
+-- ========================================================= OFFLINE SYNC ==
+-- Row versions are kept by the database, so a device can neither fake nor skip
+-- one; offline pushes send the version they last saw (baseVersion) and the API
+-- reports a CONFLICT when the server copy moved on. Runs last among the BEFORE
+-- triggers (name "z_…"), after the guards have normalised NEW.
+CREATE OR REPLACE FUNCTION app.bump_row_version() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.version := 1; NEW."updatedAt" := clock_timestamp();
+  ELSIF (to_jsonb(NEW) - 'version' - 'updatedAt') IS DISTINCT FROM (to_jsonb(OLD) - 'version' - 'updatedAt') THEN
+    NEW.version := OLD.version + 1; NEW."updatedAt" := clock_timestamp();
+  ELSE
+    NEW.version := OLD.version; NEW."updatedAt" := OLD."updatedAt";
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS z_row_version ON household_tasks;
+CREATE TRIGGER z_row_version BEFORE INSERT OR UPDATE ON household_tasks FOR EACH ROW EXECUTE FUNCTION app.bump_row_version();
+DROP TRIGGER IF EXISTS z_row_version ON work_order_instructions;
+CREATE TRIGGER z_row_version BEFORE INSERT OR UPDATE ON work_order_instructions FOR EACH ROW EXECUTE FUNCTION app.bump_row_version();
+
+-- Sync journal: a member reads and appends only their own operations; rows are immutable.
+CREATE POLICY syncop_read ON sync_operations AS RESTRICTIVE FOR SELECT TO app_user
+  USING ("membershipId" = app.current_membership_id());
+CREATE POLICY syncop_ins ON sync_operations AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ("membershipId" = app.current_membership_id());
+
+-- entityId is polymorphic (no FK): it must name a row of the matching kind in the same household.
+CREATE OR REPLACE FUNCTION app.validate_sync_entity() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, app AS $$
+BEGIN
+  IF NOT (CASE NEW.kind
+           WHEN 'TASK_UPDATE' THEN EXISTS (SELECT 1 FROM household_tasks t WHERE t.id = NEW."entityId" AND t."householdId" = NEW."householdId")
+           WHEN 'INSTRUCTION_COMPLETE' THEN EXISTS (SELECT 1 FROM work_order_instructions i WHERE i.id = NEW."entityId" AND i."householdId" = NEW."householdId")
+           ELSE false END) THEN
+    RAISE EXCEPTION 'sync operation entity % is not a % of this household', NEW."entityId", NEW.kind USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS sync_operations_entity ON sync_operations;
+CREATE TRIGGER sync_operations_entity BEFORE INSERT OR UPDATE ON sync_operations FOR EACH ROW EXECUTE FUNCTION app.validate_sync_entity();
 
 CREATE TABLE IF NOT EXISTS app.tenant_refs (tbl text, col text, parent text, is_array boolean, PRIMARY KEY (tbl, col));
 TRUNCATE app.tenant_refs;

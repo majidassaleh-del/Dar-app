@@ -20,6 +20,8 @@ const Env = z.object({
   STORAGE_DIR: z.string().default('.storage'),
   /** HMAC key for short-lived download links (≥ 32 chars). Random per process when unset outside production. */
   FILE_SIGNING_SECRET: z.string().min(32).optional(),
+  /** HMAC key for per-device offline fallback keys (≥ 32 chars). Random per process when unset outside production. */
+  OFFLINE_KEY_SECRET: z.string().min(32).optional(),
   /** Notification providers (worker). Unset ⇒ deliveries are built and stored, but stay QUEUED. */
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_TOKEN: z.string().optional(),
@@ -32,7 +34,8 @@ const Env = z.object({
   .refine((e) => e.HERP_KMS !== 'local' || e.HERP_LOCAL_KEK, { message: 'HERP_KMS=local needs HERP_LOCAL_KEK (32 bytes, base64)' })
   .refine((e) => e.HERP_KMS !== 'gcp' || e.HERP_KMS_KEY, { message: 'HERP_KMS=gcp needs HERP_KMS_KEY' })
   .refine((e) => e.NODE_ENV !== 'production' || e.HERP_KMS === 'gcp', { message: 'production requires HERP_KMS=gcp' })
-  .refine((e) => e.NODE_ENV !== 'production' || e.FILE_SIGNING_SECRET, { message: 'production requires FILE_SIGNING_SECRET' });
+  .refine((e) => e.NODE_ENV !== 'production' || e.FILE_SIGNING_SECRET, { message: 'production requires FILE_SIGNING_SECRET' })
+  .refine((e) => e.NODE_ENV !== 'production' || e.OFFLINE_KEY_SECRET, { message: 'production requires OFFLINE_KEY_SECRET' });
 
 export type Env = z.infer<typeof Env>;
 export const ENV = Symbol('ENV');

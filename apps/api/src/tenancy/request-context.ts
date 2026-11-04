@@ -7,6 +7,8 @@ export interface RequestContext {
   membershipId?: string;
   locale: Locale;
   requestId: string;
+  /** When the user last actually authenticated (JWT auth_time, else iat), epoch seconds. */
+  authTime?: number;
 }
 
 declare global {

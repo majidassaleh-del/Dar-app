@@ -474,7 +474,8 @@ Request `payload` schemas by `type`:
 | GET | `/dashboard/pulse` | Head / EFA | EFA Daily Pulse (see §13b) |
 | GET | `/dashboard` | member | Role-aware widgets: head = cash, approvals, expiries; maid = tasks, payslip, requests; driver = vehicle, trips, fuel card balance |
 | GET | `/search?q=` | member | Global search across permitted entities (pg_trgm, Arabic-normalised) |
-| GET | `/sync?since=<cursor>` · POST `/sync` | member | WatermelonDB pull/push protocol for offline mobile (tasks, trips, fuel, receipts, attendance) |
+| GET | `/sync/pull?since=<cursor>` · POST `/sync/push` | member | Offline queue for chores and work-order instructions (see §13c); trips, fuel, receipts and attendance to follow |
+| POST | `/sync/offline-key` | self, fresh sign-in | Per-device fallback key for the offline data key (see §13c) |
 | POST | `/ai/ask` | member | Natural-language question over permitted data (runs under the same RLS context) |
 | POST | `/translate` | member | `{ text, to }` translates a staff chat or request message |
 
@@ -511,6 +512,33 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 | `fundingClearing` | owner-funding clearing balance and unmatched items |
 | `handovers`, `salaryDisputes`, `remindersDueNow` | counts |
 | `attention[]` | `{ severity: critical·warning·info, key, count, deepLink }`, most severe first; labels are `pulse.<key>` ICU messages in all six languages |
+
+## 13c. Offline sync and biometric unlock
+
+**Device side (`packages/offline`, adapters in `apps/mobile/src/offline`).**
+* Worker chore and instruction updates made offline go into an encrypted outbox: AES-256-GCM per op, with AAD = member + slot, so entries cannot be swapped, reordered or read without the key.
+* The data key (DEK) is random per device and member. It is kept in two places:
+  * The biometric vault: iOS Keychain or Android Keystore, `requireAuthentication`, this-device-only. This copy gives the daily Face ID / Touch ID unlock, which needs no network.
+  * Wrapped under a per-device fallback key. The server derives that key (HMAC with `OFFLINE_KEY_SECRET`) and returns it from `POST /sync/offline-key` only within 10 minutes of a real sign-in (JWT `auth_time` / `iat`).
+* If biometrics are re-enrolled, the OS destroys the vault item. One OTP sign-in unwraps the DEK and re-enrols the vault, and queued work survives.
+* The Expo adapters have **not** been run on a device. The unlock and queue logic is tested with fake vaults.
+
+**`POST /sync/push`** `{ deviceId, ops: [{ opId, kind, entityId, baseVersion, clientAt, data }] }`, up to 100 ops, answered in order.
+* Kinds:
+  * `TASK_UPDATE`: `status` TODO / IN_PROGRESS / DONE, `proofPhotoUrl`.
+  * `INSTRUCTION_COMPLETE`: `note`, `photoStorageKey`. `completedAt` = `clientAt`, capped to now and at most 7 days back.
+* Each op runs in its own RLS transaction, so the online rules apply unchanged (assignee-only edits, photo-required instructions).
+* Results:
+  * `APPLIED { version }`.
+  * `CONFLICT { version, server }`: someone else changed the row after `baseVersion`. Versions produced by the member's own earlier ops count as seen, so a chain of offline edits applies in order.
+  * `REJECTED { problem }`: a 403 or 422 from the database, or 404 when the row is not visible.
+* Idempotent on (member, `opId`): a replay returns the stored outcome with `replayed: true`.
+* Outcomes are kept in `sync_operations`. The table is append-only and readable only by the member, and its entity must belong to the same household (DB trigger).
+
+**`GET /sync/pull?since=`** returns the caller's own chores (as assignee) and the instructions of work orders assigned to them, changed after `since`, each with `version`.
+* `version` and `updatedAt` are maintained by a trigger (`app.bump_row_version`). Clients cannot set them, and no-op updates do not bump them.
+* The returned `cursor` overlaps by 2 minutes, so late commits are not missed. Clients merge by `version`.
+* Hard-deleted chores are not tombstoned yet: clients should do a full pull (no `since`) on login.
 
 ## 14. Realtime & webhooks
 

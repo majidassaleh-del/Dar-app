@@ -9,6 +9,11 @@
     "expo-localization": "*",
     "expo-updates": "*",
     "react": "19.1.10",
-    "react-native": "*"
+    "react-native": "*",
+    "@herp/offline": "workspace:*",
+    "expo-secure-store": "*",
+    "expo-local-authentication": "*",
+    "@react-native-async-storage/async-storage": "*",
+    "react-native-quick-crypto": "*"
   }
 }

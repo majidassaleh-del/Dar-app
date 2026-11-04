@@ -689,4 +689,45 @@ SELECT pg_temp.expect('…but never write one', pg_temp.try_rows($q$UPDATE tenan
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
 SELECT pg_temp.expect('other household cannot see H1 key', (SELECT count(*) FROM tenant_keys), 0);
 
+-- ---- 13. offline sync ----
+RESET ROLE;
+INSERT INTO household_tasks (id,"householdId","titleI18n","assigneeId","createdById")
+VALUES ('d3000000-0000-0000-0000-000000000001',(SELECT v FROM ids WHERE k='h1'),'{"ar":"تنظيف المطبخ"}',(SELECT v FROM ids WHERE k='maid'),(SELECT v FROM ids WHERE k='head1'));
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h1');
+UPDATE household_tasks SET status = 'IN_PROGRESS' WHERE id = 'd3000000-0000-0000-0000-000000000001';
+SELECT pg_temp.expect('maid moves her chore along; the DB bumps the row version',
+  (SELECT version FROM household_tasks WHERE id = 'd3000000-0000-0000-0000-000000000001' AND status = 'IN_PROGRESS'), 2);
+UPDATE household_tasks SET status = 'IN_PROGRESS' WHERE id = 'd3000000-0000-0000-0000-000000000001';
+SELECT pg_temp.expect('…a no-op update keeps the version',
+  (SELECT version FROM household_tasks WHERE id = 'd3000000-0000-0000-0000-000000000001'), 2);
+UPDATE household_tasks SET version = 99, "updatedAt" = now() - interval '1 year' WHERE id = 'd3000000-0000-0000-0000-000000000001';
+SELECT pg_temp.expect('…a forged version / timestamp is ignored',
+  (SELECT version FROM household_tasks WHERE id = 'd3000000-0000-0000-0000-000000000001' AND "updatedAt" > now() - interval '1 hour'), 2);
+INSERT INTO sync_operations (id,"householdId","membershipId","deviceId","opId",kind,"entityId",result,"clientAt")
+VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), (SELECT v FROM ids WHERE k='maid'), 'dev-1', 'd3100000-0000-0000-0000-000000000001',
+        'TASK_UPDATE', 'd3000000-0000-0000-0000-000000000001', 'APPLIED', now());
+SELECT pg_temp.expect('maid records and reads her own sync operation', (SELECT count(*) FROM sync_operations), 1);
+SELECT pg_temp.expect('…not one in another member''s name',
+  pg_temp.try_rows(format($q$INSERT INTO sync_operations (id,"householdId","membershipId","deviceId","opId",kind,"entityId",result,"clientAt")
+     VALUES (gen_random_uuid(), %s, %s, 'dev-1', gen_random_uuid(), 'TASK_UPDATE', 'd3000000-0000-0000-0000-000000000001', 'APPLIED', now())$q$,
+     pg_temp.q('h1'), pg_temp.q('driver'))), -1);
+SELECT pg_temp.expect('…the same opId twice is refused (unique)',
+  pg_temp.try_rows(format($q$INSERT INTO sync_operations (id,"householdId","membershipId","deviceId","opId",kind,"entityId",result,"clientAt")
+     VALUES (gen_random_uuid(), %s, %s, 'dev-2', 'd3100000-0000-0000-0000-000000000001', 'TASK_UPDATE', 'd3000000-0000-0000-0000-000000000001', 'APPLIED', now())$q$,
+     pg_temp.q('h1'), pg_temp.q('maid'))), -2);
+SELECT pg_temp.expect('…the entity must exist in the household (a work-order id is not a task)',
+  pg_temp.try_rows(format($q$INSERT INTO sync_operations (id,"householdId","membershipId","deviceId","opId",kind,"entityId",result,"clientAt")
+     VALUES (gen_random_uuid(), %s, %s, 'dev-1', gen_random_uuid(), 'TASK_UPDATE', '60000000-0000-0000-0000-000000000001', 'APPLIED', now())$q$,
+     pg_temp.q('h1'), pg_temp.q('maid'))), -3);
+SELECT pg_temp.expect('sync journal is append-only',
+  pg_temp.try_rows($q$UPDATE sync_operations SET result = 'REJECTED'$q$) + pg_temp.try_rows($q$DELETE FROM sync_operations$q$), -2);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+SELECT pg_temp.expect('even the Head cannot read a worker''s sync journal', (SELECT count(*) FROM sync_operations), 0);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
+SELECT pg_temp.expect('other household cannot reference an H1 task',
+  pg_temp.try_rows(format($q$INSERT INTO sync_operations (id,"householdId","membershipId","deviceId","opId",kind,"entityId",result,"clientAt")
+     VALUES (gen_random_uuid(), %s, %s, 'dev-9', gen_random_uuid(), 'TASK_UPDATE', 'd3000000-0000-0000-0000-000000000001', 'APPLIED', now())$q$,
+     pg_temp.q('h2'), pg_temp.q('head2'))), -3);
+
 ROLLBACK;
