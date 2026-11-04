@@ -141,9 +141,28 @@ BEGIN
     WHEN SQLSTATE 'P0001' THEN RETURN SQLERRM::bigint;
     WHEN insufficient_privilege THEN RETURN -1;
     WHEN check_violation OR unique_violation OR raise_exception THEN RETURN -2;
+    WHEN foreign_key_violation THEN RETURN -3;
   END;
 END $$;
 CREATE FUNCTION pg_temp.q(k text) RETURNS text LANGUAGE sql AS $$ SELECT quote_literal(v) FROM ids WHERE ids.k = $1 $$;
+
+-- ---------- coverage: every tenant FK has a same-household trigger ----------
+DO $$
+DECLARE missing text; n int;
+BEGIN
+  SELECT string_agg(ch.relname||'.'||a.attname, ', '), count(*) INTO missing, n
+  FROM pg_constraint c
+  JOIN pg_class ch ON ch.oid = c.conrelid JOIN pg_class pa ON pa.oid = c.confrelid
+  JOIN pg_namespace ns ON ns.oid = ch.relnamespace
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+  WHERE c.contype = 'f' AND ns.nspname = 'public' AND a.attname <> 'householdId'
+    AND EXISTS (SELECT 1 FROM pg_attribute x WHERE x.attrelid = ch.oid AND x.attname = 'householdId')
+    AND EXISTS (SELECT 1 FROM pg_attribute x WHERE x.attrelid = pa.oid AND x.attname = 'householdId')
+    AND NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = ch.oid AND t.tgname = left('a_tenant_ref_' || a.attname, 63));
+  IF missing IS NOT NULL THEN RAISE EXCEPTION 'FAIL  tenant references without same-household trigger: %', missing; END IF;
+  RAISE NOTICE 'PASS  reference isolation: % same-household triggers (all tenant FKs + uuid arrays/columns)',
+    (SELECT count(*) FROM pg_trigger WHERE tgname LIKE 'a_tenant_ref_%');
+END $$;
 
 -- ---------- coverage: no RLS table may have an un-policed write path ----------
 DO $$
@@ -219,7 +238,7 @@ DO $$ BEGIN
   VALUES (gen_random_uuid(),(SELECT v FROM ids WHERE k='h2'),'10000000-0000-0000-0000-000000000002','EXPENSE',1,'SAR',1,now(),
           (SELECT v FROM ids WHERE k='maid'));
   RAISE EXCEPTION 'FAIL  maid inserted into another household';
-EXCEPTION WHEN insufficient_privilege THEN RAISE NOTICE 'PASS  maid cannot write into H2';
+EXCEPTION WHEN insufficient_privilege OR foreign_key_violation THEN RAISE NOTICE 'PASS  maid cannot write into H2';
 END $$;
 DO $$ BEGIN
   UPDATE payroll_lines SET amount = 9999;
@@ -439,7 +458,35 @@ SELECT pg_temp.expect('other household sees none of it',
   (SELECT count(*) FROM trips) + (SELECT count(*) FROM work_orders) + (SELECT count(*) FROM petty_cash_logs)
   + (SELECT count(*) FROM policy_acknowledgments), 0);
 
--- ---- 8. tenant keys ----
+-- ---- 8. cross-household references ----
+RESET ROLE;
+INSERT INTO categories (id,"householdId",kind,"nameI18n") VALUES ('90000000-0000-0000-0000-000000000002',(SELECT v FROM ids WHERE k='h2'),'EXPENSE','{"en":"H2 cat"}');
+INSERT INTO categories (id,"householdId",kind,"nameI18n") VALUES ('90000000-0000-0000-0000-000000000001',(SELECT v FROM ids WHERE k='h1'),'EXPENSE','{"en":"H1 cat"}');
+SELECT pg_temp.expect('even a superuser/worker cannot link H1 data to an H2 account',
+  pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId",type,amount,currency,"baseAmount","occurredAt","createdById")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000002', 'EXPENSE', 1, 'SAR', 1, now(), %s)$q$, pg_temp.q('h1'), pg_temp.q('head1'))), -3);
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+SELECT pg_temp.expect('head cannot record an H1 expense on H2''s bank account (guessed UUID)',
+  pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId",type,amount,currency,"baseAmount","occurredAt","createdById")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000002', 'EXPENSE', 1, 'SAR', 1, now(), %s)$q$, pg_temp.q('h1'), pg_temp.q('head1'))), -3);
+SELECT pg_temp.expect('…nor re-point an existing transaction to it (UPDATE)',
+  pg_temp.try_rows($q$UPDATE transactions SET "counterAccountId" = '10000000-0000-0000-0000-000000000002'$q$), -3);
+SELECT pg_temp.expect('…nor assign a work order to another household''s member',
+  pg_temp.try_rows(format($q$UPDATE work_orders SET "assigneeId" = %s WHERE id = '60000000-0000-0000-0000-000000000002'$q$, pg_temp.q('head2'))), -3);
+SELECT pg_temp.expect('…nor allow a card to spend in another household''s category (uuid array)',
+  pg_temp.try_rows(format($q$INSERT INTO cards (id,"householdId","accountId",type,last4,"expiryMonth","expiryYear","allowedCategoryIds","updatedAt")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000001', 'PREPAID', '1234', 1, 2030,
+             ARRAY['90000000-0000-0000-0000-000000000001','90000000-0000-0000-0000-000000000002']::uuid[], now())$q$, pg_temp.q('h1'))), -3);
+SELECT pg_temp.expect('…while own-household references still work',
+  pg_temp.try_rows(format($q$INSERT INTO cards (id,"householdId","accountId",type,last4,"expiryMonth","expiryYear","allowedCategoryIds","updatedAt")
+     VALUES (gen_random_uuid(), %s, '10000000-0000-0000-0000-000000000001', 'PREPAID', '1234', 1, 2030,
+             ARRAY['90000000-0000-0000-0000-000000000001']::uuid[], now())$q$, pg_temp.q('h1'))), 1);
+SELECT pg_temp.expect('…and the error never reveals whether the foreign id exists',
+  (SELECT count(*) FROM (SELECT 1) x WHERE pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId",type,amount,currency,"baseAmount","occurredAt","createdById")
+     VALUES (gen_random_uuid(), %s, gen_random_uuid(), 'EXPENSE', 1, 'SAR', 1, now(), %s)$q$, pg_temp.q('h1'), pg_temp.q('head1'))) = -3), 1);
+
+-- ---- 9. tenant keys ----
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
 SELECT pg_temp.expect('API can read its own wrapped tenant key', (SELECT count(*) FROM tenant_keys), 1);
 SELECT pg_temp.expect('…but never write one', pg_temp.try_rows($q$UPDATE tenant_keys SET status = 'DESTROYED'$q$), -1);

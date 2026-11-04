@@ -956,10 +956,7 @@ LANGUAGE plpgsql AS $$
 DECLARE v_worker boolean; v_manager boolean;
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    -- Staff must belong to the same household (FKs do not check tenancy).
-    IF (SELECT "householdId" FROM staff_profiles WHERE id = NEW."staffId") IS DISTINCT FROM NEW."householdId" THEN
-      RAISE EXCEPTION 'staff member not found in this household' USING ERRCODE = 'insufficient_privilege';
-    END IF;
+    -- (staffId tenancy is enforced by the generic a_tenant_ref trigger.)
     NEW.status := 'RECORDED'; NEW."acknowledgedAt" := NULL; NEW."ackMethod" := NULL;
     NEW."reversedAt" := NULL; NEW."disputeReason" := NULL;
     IF NEW."paidAt" > now() + interval '1 day' THEN
@@ -1096,6 +1093,90 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.sync_document_reminders(uuid) FROM PUBLIC, app_user;
 GRANT EXECUTE ON FUNCTION app.sync_document_reminders(uuid) TO app_service;
+
+-- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
+-- Foreign keys prove a referenced row EXISTS, not that it belongs to the same
+-- household. Without this, a request that guessed another household's UUID
+-- could link to it (a transaction on their bank account, an allowance paid to
+-- their card, a work order assigned to their driver). One generic trigger per
+-- reference checks parent."householdId" = NEW."householdId".
+-- Installed for:
+--   * every single-column FK whose child and parent both have "householdId"
+--     (discovered from the catalogue, so new FKs are covered automatically);
+--   * uuid columns/arrays that have no FK (listed below).
+-- It runs for every role (workers too): this is integrity, not authorisation.
+-- tests/rls_test.sql asserts that every eligible reference has its trigger.
+CREATE OR REPLACE FUNCTION app.enforce_same_household() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  col text := TG_ARGV[0];
+  parent text := TG_ARGV[1];
+  is_array boolean := COALESCE(TG_ARGV[2], '') = 'array';
+  v jsonb := to_jsonb(NEW) -> col;
+  ok boolean;
+BEGIN
+  IF v IS NULL OR v = 'null'::jsonb OR (is_array AND jsonb_array_length(v) = 0) THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' AND (to_jsonb(OLD) -> col) IS NOT DISTINCT FROM v AND OLD."householdId" = NEW."householdId" THEN
+    RETURN NEW;  -- reference unchanged
+  END IF;
+  IF is_array THEN
+    EXECUTE format('SELECT count(*) = (SELECT count(DISTINCT x) FROM jsonb_array_elements_text($1) x)
+                    FROM %I WHERE id IN (SELECT x::uuid FROM jsonb_array_elements_text($1) x) AND "householdId" = $2', parent)
+      INTO ok USING v, NEW."householdId";
+  ELSE
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I WHERE id = $1 AND "householdId" = $2)', parent)
+      INTO ok USING (v #>> '{}')::uuid, NEW."householdId";
+  END IF;
+  IF NOT ok THEN
+    -- Same message whether the id exists elsewhere or not at all: no cross-tenant oracle.
+    RAISE EXCEPTION '% does not exist in this household', col USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TABLE IF NOT EXISTS app.tenant_refs (tbl text, col text, parent text, is_array boolean, PRIMARY KEY (tbl, col));
+TRUNCATE app.tenant_refs;
+INSERT INTO app.tenant_refs
+SELECT ch.relname, a.attname, pa.relname, false
+FROM pg_constraint c
+JOIN pg_class ch ON ch.oid = c.conrelid JOIN pg_class pa ON pa.oid = c.confrelid
+JOIN pg_namespace n ON n.oid = ch.relnamespace
+JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+WHERE c.contype = 'f' AND n.nspname = 'public' AND array_length(c.conkey, 1) = 1 AND a.attname <> 'householdId'
+  AND EXISTS (SELECT 1 FROM pg_attribute x WHERE x.attrelid = ch.oid AND x.attname = 'householdId')
+  AND EXISTS (SELECT 1 FROM pg_attribute x WHERE x.attrelid = pa.oid AND x.attname = 'householdId');
+INSERT INTO app.tenant_refs VALUES
+  -- uuid arrays (no FK possible)
+  ('cards',                   'allowedCategoryIds', 'categories',         true),
+  ('trip_logs',               'passengers',         'memberships',        true),
+  ('trip_bookings',           'passengerIds',       'trip_passengers',    true),
+  -- uuid columns without an FK
+  ('allowance_plans',         'targetCardId',       'cards',              false),
+  ('salary_payments',         'proofFileId',        'attachments',        false),
+  ('leave_records',           'exitReentryVisaId',  'identity_documents', false),
+  ('payroll_runs',            'approvedById',       'memberships',        false),
+  ('memberships',             'invitedById',        'memberships',        false),
+  ('policies',                'createdById',        'memberships',        false),
+  ('codes_of_ethics',         'createdById',        'memberships',        false),
+  ('privacy_agreements',      'createdById',        'memberships',        false),
+  ('trip_bookings',           'createdById',        'memberships',        false),
+  ('petty_cash_logs',         'reviewedById',       'memberships',        false),
+  ('work_orders',             'verifiedById',       'memberships',        false),
+  ('work_order_instructions', 'completedById',      'memberships',        false),
+  ('salary_payments',         'recordedById',       'memberships',        false),
+  ('attachments',             'uploadedById',       'memberships',        false)
+ON CONFLICT DO NOTHING;
+
+DO $$
+DECLARE r record; trg text;
+BEGIN
+  FOR r IN SELECT * FROM app.tenant_refs LOOP
+    trg := left('a_tenant_ref_' || r.col, 63);
+    EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I', trg, r.tbl);
+    EXECUTE format('CREATE TRIGGER %I BEFORE INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION app.enforce_same_household(%L, %L%s)',
+                   trg, r.tbl, r.col, r.parent, CASE WHEN r.is_array THEN ', ''array''' ELSE '' END);
+  END LOOP;
+END $$;
 
 -- ============================================================ PROVISIONING =
 -- Creates a household, its default roles + permission matrix, and the owner
