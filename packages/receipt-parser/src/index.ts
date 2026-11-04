@@ -4,3 +4,4 @@ export * from './merge';
 export * from './pipeline';
 export * from './ocr/provider';
 export { JsQrDetector } from './ocr/jsqr-detector';
+export { ClaudeVisionOcr } from './ocr/claude-vision';

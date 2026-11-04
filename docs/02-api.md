@@ -421,6 +421,36 @@ Request `payload` schemas by `type`:
 | POST | `/petty-cash/logs/{logId}/review` | `finance.pettycash.manage` | `{ decision: APPROVED \| REJECTED, categoryId? }`. On approval, posts to the ledger. A rejection can create a payroll deduction |
 | POST | `/petty-cash/{id}/reconcile` | `finance.pettycash.manage` | `{ countedCash }` → variance, then an ADJUSTMENT |
 
+### 10a. Receipt scanner (OCR → petty-cash expense)
+
+> **Status: implemented** in `apps/api/src/receipts/` and `packages/receipt-parser`, with e2e tests in `apps/api/test/receipts.e2e.test.ts`.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/receipts?mimeType=&pettyCashAccountId=&vehicleId=` | `finance.receipts.upload` | Raw bytes (`application/octet-stream`, at most 10 MB), JPEG, PNG, WebP or PDF. The content is checked against `mimeType`, and a duplicate (same SHA-256) is refused with 409. Returns `{ receipt, expense, autoFilled }` |
+| GET | `/receipts/{id}` | uploader / `finance.transactions.read` | The extraction: `merchantName`, `vatNumber`, `date`, `total`, `vat`, `source`, `needsReview`, `warnings`, `ocrError` |
+| POST | `/receipts/{id}/process` | uploader / admin | Retries OCR after an outage, or once OCR has been configured |
+| POST | `/receipts/{id}/expense` | custodian | `{ accountId, amount?, merchantName?, description?, occurredAt?, vehicleId?, categoryId? }`. Creates the expense from the receipt; any field may be corrected. One receipt backs at most one entry |
+
+**How extraction works:**
+* **Vision OCR.** `OCR_PROVIDER=claude` (model `OCR_MODEL`, default `claude-opus-5-5`) sends the image or PDF and receives JSON-schema output: a transcript plus the fields. Server-side refusal fallback is on.
+* **Field merge.** The transcript also goes through the deterministic Arabic/English receipt parser. The two reads are merged field by field:
+  * Agreement raises confidence.
+  * A disagreement on money, the date or the VAT number sets `needsReview` and records a warning.
+  * A field only the model read gets a confidence of 0.9.
+  * Implausible values are dropped: an invalid VAT id, a non-numeric amount, or an impossible date.
+* **ZATCA QR.** A QR on the receipt is decoded locally and is authoritative for seller, VAT number, date, total and VAT.
+* **Sanity checks.** VAT should be 15% of the total; otherwise a warning is recorded. A receipt dated in the future or more than 90 days ago is booked today, with a warning.
+
+**What happens next:**
+* If the total can be read, the expense is created as `PENDING_REVIEW` with amount, merchant, date and `receiptId`, so the worker types nothing. The manager's review queue shows `needsReview` and the warnings.
+* With no total, or something that is not a receipt, nothing is booked and the worker completes it with `/receipts/{id}/expense`.
+* With no OCR provider, or during a provider outage, the receipt is stored (`UPLOADED`, `ocrError`) and can be processed later.
+
+**Database rules:**
+* OCR results are written only through `app.record_receipt_extraction`: by the uploader or an admin, and once.
+* A petty-cash entry may cite only a receipt its recorder uploaded (trigger `petty_cash_logs_receipt`).
+
 ## 11. Work orders
 
 > **Status: implemented** in `apps/api/src/work-orders/`, except `POST /maintenance-tickets/{id}/work-order`, which waits for the property module.

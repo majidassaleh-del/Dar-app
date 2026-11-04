@@ -22,6 +22,9 @@ const Env = z.object({
   FILE_SIGNING_SECRET: z.string().min(32).optional(),
   /** HMAC key for per-device offline fallback keys (≥ 32 chars). Random per process when unset outside production. */
   OFFLINE_KEY_SECRET: z.string().min(32).optional(),
+  /** Receipt OCR: 'claude' uses Claude vision (credentials from ANTHROPIC_API_KEY or the SDK's usual sources); 'none' stores receipts for manual entry. */
+  OCR_PROVIDER: z.enum(['none', 'claude']).default('none'),
+  OCR_MODEL: z.string().default('claude-opus-5-5'),
   /** Notification providers (worker). Unset ⇒ deliveries are built and stored, but stay QUEUED. */
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_TOKEN: z.string().optional(),

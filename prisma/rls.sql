@@ -2506,6 +2506,48 @@ BEGIN
   RETURN NEW;
 END $$;
 
+-- ========================================================= OCR RECEIPTS ==
+-- Receipts are admin-only for UPDATE (protected table); OCR results are written
+-- through this function, which lets the uploader (or an admin) record the
+-- extraction once per processing attempt and nothing else.
+CREATE OR REPLACE FUNCTION app.record_receipt_extraction(p_id uuid, p_status text, p_provider text, p_extracted jsonb,
+                                                         p_confidence double precision, p_qr text)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, app AS $$
+DECLARE r receipts;
+BEGIN
+  SELECT * INTO r FROM receipts WHERE id = p_id AND "householdId" = app.current_household_id();
+  IF NOT FOUND THEN RAISE EXCEPTION 'receipt not found' USING ERRCODE = 'P0002'; END IF;
+  IF r."uploadedById" IS DISTINCT FROM app.current_membership_id() AND NOT COALESCE(app.is_household_admin(), false) THEN
+    RAISE EXCEPTION 'only the uploader or the household office can process this receipt' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF r.status NOT IN ('UPLOADED', 'PROCESSING') THEN
+    RAISE EXCEPTION 'receipt already processed (%)', r.status USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_status NOT IN ('PROCESSING', 'EXTRACTED', 'UPLOADED') THEN
+    RAISE EXCEPTION 'invalid OCR status %', p_status USING ERRCODE = 'check_violation';
+  END IF;
+  UPDATE receipts SET status = p_status::"ReceiptStatus", "ocrProvider" = p_provider, extracted = p_extracted,
+         confidence = p_confidence, "zatcaQr" = p_qr, "processedAt" = CASE WHEN p_status = 'EXTRACTED' THEN now() END
+   WHERE id = p_id;
+END $$;
+REVOKE ALL ON FUNCTION app.record_receipt_extraction(uuid, text, text, jsonb, double precision, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.record_receipt_extraction(uuid, text, text, jsonb, double precision, text) TO app_user;
+
+-- A petty-cash entry may only cite a receipt its recorder uploaded (or any, for the household office);
+-- one receipt backs one entry (unique column).
+CREATE OR REPLACE FUNCTION app.check_petty_cash_receipt() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW."receiptId" IS NOT NULL AND (TG_OP = 'INSERT' OR NEW."receiptId" IS DISTINCT FROM OLD."receiptId")
+     AND app.caller_is_restricted() AND NOT COALESCE(app.is_household_admin(), false)
+     AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.id = NEW."receiptId" AND r."uploadedById" = app.current_membership_id()) THEN
+    RAISE EXCEPTION 'you can only attach a receipt you uploaded' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS petty_cash_logs_receipt ON petty_cash_logs;
+CREATE TRIGGER petty_cash_logs_receipt BEFORE INSERT OR UPDATE ON petty_cash_logs FOR EACH ROW EXECUTE FUNCTION app.check_petty_cash_receipt();
+
 -- ========================================================= OFFLINE SYNC ==
 -- Row versions are kept by the database, so a device can neither fake nor skip
 -- one; offline pushes send the version they last saw (baseVersion) and the API

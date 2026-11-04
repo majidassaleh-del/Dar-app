@@ -7,6 +7,20 @@ export interface OcrResult {
   /** Barcodes/QRs the provider itself detected (Document AI and Textract can). */
   qrPayloads?: string[];
   provider: string;
+  /** Fields a model-based provider read directly (vision LLM); used where the text parser is unsure. */
+  fields?: ReceiptFields;
+  /** false when the provider judged the image not to be a receipt at all. */
+  isReceipt?: boolean;
+}
+
+export interface ReceiptFields {
+  merchantName?: string;
+  vatNumber?: string;
+  /** YYYY-MM-DD */
+  date?: string;
+  total?: string;
+  vat?: string;
+  currency?: string;
 }
 
 export interface OcrProvider {
