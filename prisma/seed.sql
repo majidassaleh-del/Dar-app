@@ -48,7 +48,9 @@ INSERT INTO permissions (id, module, description) VALUES
   ('workorders.read',            'workorders', 'View work orders'),
   ('workorders.manage',          'workorders', 'Assign, edit, cancel any work order'),
   ('travel.read',                'travel',   'View trips, passengers, bookings'),
-  ('travel.manage',              'travel',   'Plan trips and manage bookings')
+  ('travel.manage',              'travel',   'Plan trips and manage bookings'),
+  ('finance.ledger.read',        'finance',  'Read the chart of accounts, journals, trial balance'),
+  ('finance.ledger.manage',      'finance',  'Manage accounts, post manual journals, reverse entries')
 ON CONFLICT (id) DO UPDATE SET module = EXCLUDED.module, description = EXCLUDED.description;
 
 DROP TABLE IF EXISTS app.role_template;
@@ -131,6 +133,7 @@ INSERT INTO app.role_template (system_role, permission_id, scope) VALUES
   ('ACCOUNTANT', 'property.read',             'ALL'),
   ('ACCOUNTANT', 'requests.read',             'ALL'),
   ('ACCOUNTANT', 'finance.pettycash.read',    'ALL'),
+  ('ACCOUNTANT', 'finance.ledger.read',       'ALL'),
   -- GUEST: can report issues only
   ('GUEST', 'property.tickets.create', 'OWN');
 
@@ -146,3 +149,23 @@ INSERT INTO app.role_names VALUES
   ('DRIVER',         '{"ar":"السائق","en":"Driver","hi":"ड्राइवर","tl":"Drayber","am":"ሹፌር","bn":"চালক"}'),
   ('ACCOUNTANT',     '{"ar":"المحاسب","en":"Accountant","hi":"लेखाकार","tl":"Accountant","am":"የሂሳብ ባለሙያ","bn":"হিসাবরক্ষক"}'),
   ('GUEST',          '{"ar":"ضيف","en":"Guest","hi":"अतिथि","tl":"Bisita","am":"እንግዳ","bn":"অতিথি"}');
+
+-- Chart-of-accounts template, copied into each household by app.ensure_chart_of_accounts().
+DROP TABLE IF EXISTS app.coa_template;
+CREATE TABLE app.coa_template (code text PRIMARY KEY, system_key text UNIQUE, type text, parent_key text, is_header boolean, name_i18n jsonb);
+INSERT INTO app.coa_template VALUES
+  ('1000', 'assets',             'ASSET',     NULL,          true,  '{"ar":"الأصول","en":"Assets"}'),
+  ('1100', 'petty_cash',         'ASSET',     'assets',      true,  '{"ar":"العهد النقدية","en":"Petty cash floats"}'),
+  ('1190', 'funding_clearing',   'ASSET',     'assets',      false, '{"ar":"حساب تمويل المالك (وسيط)","en":"Owner funding clearing"}'),
+  ('1300', 'staff_receivables',  'ASSET',     'assets',      false, '{"ar":"ذمم العمالة المدينة","en":"Staff receivables"}'),
+  ('1310', 'staff_advances',     'ASSET',     'assets',      false, '{"ar":"سلف رواتب العمالة","en":"Staff salary advances"}'),
+  ('2000', 'liabilities',        'LIABILITY', NULL,          true,  '{"ar":"الالتزامات","en":"Liabilities"}'),
+  ('2100', 'salaries_payable',   'LIABILITY', 'liabilities', false, '{"ar":"رواتب مستحقة الدفع","en":"Salaries payable"}'),
+  ('3000', 'equity',             'EQUITY',    NULL,          true,  '{"ar":"حقوق الملكية","en":"Equity"}'),
+  ('3100', 'owner_equity',       'EQUITY',    'equity',      false, '{"ar":"حقوق المالك","en":"Owner''s equity"}'),
+  ('4000', 'income',             'INCOME',    NULL,          true,  '{"ar":"الإيرادات","en":"Income"}'),
+  ('4900', 'other_income',       'INCOME',    'income',      false, '{"ar":"إيرادات أخرى","en":"Other income"}'),
+  ('6000', 'expenses',           'EXPENSE',   NULL,          true,  '{"ar":"المصروفات","en":"Expenses"}'),
+  ('6100', 'salaries_expense',   'EXPENSE',   'expenses',    false, '{"ar":"الرواتب والأجور","en":"Salaries & wages"}'),
+  ('6200', 'household_expenses', 'EXPENSE',   'expenses',    false, '{"ar":"مصروفات المنزل","en":"Household expenses"}'),
+  ('6950', 'cash_shortage',      'EXPENSE',   'expenses',    false, '{"ar":"عجز النقدية","en":"Cash shortages"}');

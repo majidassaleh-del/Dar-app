@@ -37,6 +37,7 @@ export class ProblemFilter implements ExceptionFilter {
     if (pg) {
       const map: Record<string, [number, string]> = {
         '42501': [403, 'FORBIDDEN'], '23514': [422, 'BUSINESS_RULE'], '23505': [409, 'CONFLICT'], '23503': [422, 'INVALID_REFERENCE'],
+        'P0002': [404, 'NOT_FOUND'],
       };
       const [status, code] = map[pg.code] ?? [500, 'DATABASE_ERROR'];
       if (status < 500) {
@@ -63,7 +64,7 @@ export function postgresError(err: unknown): { code: string; message: string } |
   if (!(err instanceof Error)) return undefined;
   const meta = (err as { meta?: Record<string, unknown> }).meta;
   const code = (meta?.code as string | undefined) ?? err.message.match(/Code: `?(\w{5})`?/)?.[1]
-    ?? err.message.match(/\b(42501|23514|23505|23503)\b/)?.[1];
+    ?? err.message.match(/\b(42501|23514|23505|23503|P0002)\b/)?.[1];
   if (!code || !/^[0-9A-Z]{5}$/.test(code)) return undefined;
   const message = (meta?.message as string | undefined) ?? err.message.match(/Message: `([^`]*)`/)?.[1]
     ?? err.message.match(/ERROR: ([^\n]*)/)?.[1] ?? err.message.split('\n').at(-1) ?? 'database error';

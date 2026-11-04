@@ -7,6 +7,7 @@ import { StaffModule } from './staff/staff.module';
 import { RequestsModule } from './requests/requests.module';
 import { PettyCashModule } from './petty-cash/petty-cash.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
+import { LedgerModule } from './ledger/ledger.module';
 import { JwtGuard } from './auth/jwt.guard';
 import { HouseholdGuard } from './tenancy/household.guard';
 import { ProblemFilter } from './common/problem.filter';
@@ -14,7 +15,7 @@ import { HealthController } from './health/health.controller';
 import { MembersController } from './members/members.controller';
 
 @Module({
-  imports: [ConfigModule, DbModule, CryptoModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule],
+  imports: [ConfigModule, DbModule, CryptoModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule, LedgerModule],
   controllers: [HealthController, MembersController],
   providers: [
     // Order matters: authenticate, then resolve the household membership.

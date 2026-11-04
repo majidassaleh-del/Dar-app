@@ -1388,6 +1388,365 @@ BEGIN
 END $$;
 CREATE TRIGGER household_tasks_0_guard BEFORE UPDATE ON household_tasks FOR EACH ROW EXECUTE FUNCTION app.guard_task();
 
+-- ================================================== DOUBLE-ENTRY LEDGER ==
+-- Chart of accounts per household (copied from app.coa_template).
+CREATE OR REPLACE FUNCTION app.ensure_chart_of_accounts(p_household uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE t record;
+BEGIN
+  FOR t IN SELECT * FROM app.coa_template ORDER BY code LOOP
+    INSERT INTO ledger_accounts (id, "householdId", code, "nameI18n", type, "parentId", "isHeader", "isSystem", "systemKey")
+    VALUES (gen_random_uuid(), p_household, t.code, t.name_i18n, t.type::"LedgerAccountType",
+            (SELECT id FROM ledger_accounts WHERE "householdId" = p_household AND "systemKey" = t.parent_key),
+            t.is_header, true, t.system_key)
+    ON CONFLICT ("householdId", code) DO NOTHING;
+  END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.ledger_account(p_household uuid, p_key text) RETURNS uuid
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v uuid;
+BEGIN
+  SELECT id INTO v FROM ledger_accounts WHERE "householdId" = p_household AND "systemKey" = p_key;
+  IF v IS NULL THEN RAISE EXCEPTION 'ledger account % missing for household', p_key; END IF;
+  RETURN v;
+END $$;
+
+-- One ledger account per petty-cash float (1101, 1102, … under 1100).
+CREATE OR REPLACE FUNCTION app.create_float_account() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_code text; v_name text;
+BEGIN
+  PERFORM app.ensure_chart_of_accounts(NEW."householdId");
+  PERFORM pg_advisory_xact_lock(hashtext('coa:' || NEW."householdId"::text));
+  SELECT lpad((COALESCE(max(code::int), 1100) + 1)::text, 4, '0') INTO v_code
+    FROM ledger_accounts WHERE "householdId" = NEW."householdId" AND code ~ '^11[0-8][0-9]$' AND code <> '1100';
+  v_name := COALESCE(NEW."nameI18n"->>'ar', NEW."nameI18n"->>'en', NEW."nameI18n"->>(SELECT k FROM jsonb_object_keys(NEW."nameI18n") k LIMIT 1), '');
+  INSERT INTO ledger_accounts (id, "householdId", code, "nameI18n", type, "parentId", "isSystem", "systemKey", currency, "pettyCashAccountId")
+  VALUES (gen_random_uuid(), NEW."householdId", v_code,
+          jsonb_build_object('ar', 'عهدة نقدية – ' || v_name,
+                             'en', 'Petty cash – ' || COALESCE(NEW."nameI18n"->>'en', v_name)),
+          'ASSET', app.ledger_account(NEW."householdId", 'petty_cash'), true, 'float:' || NEW.id, NEW.currency, NEW.id);
+  RETURN NULL;
+END $$;
+CREATE TRIGGER petty_cash_accounts_ledger AFTER INSERT ON petty_cash_accounts FOR EACH ROW EXECUTE FUNCTION app.create_float_account();
+
+-- ---- entry / line invariants ------------------------------------------------
+CREATE OR REPLACE FUNCTION app.journal_entry_rules() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_closed date;
+BEGIN
+  SELECT "booksClosedThrough" INTO v_closed FROM households WHERE id = NEW."householdId";
+  IF v_closed IS NOT NULL AND NEW."entryDate" <= v_closed THEN
+    RAISE EXCEPTION 'books are closed through %; date the entry after it', v_closed USING ERRCODE = 'check_violation';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtext('je:' || NEW."householdId"::text));
+  SELECT COALESCE(max(number), 0) + 1 INTO NEW.number FROM journal_entries WHERE "householdId" = NEW."householdId";
+  NEW."createdAt" := now();
+  RETURN NEW;
+END $$;
+CREATE TRIGGER journal_entries_0_rules BEFORE INSERT ON journal_entries FOR EACH ROW EXECUTE FUNCTION app.journal_entry_rules();
+
+CREATE OR REPLACE FUNCTION app.journal_line_rules() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_entry journal_entries; v_acc ledger_accounts;
+BEGIN
+  SELECT * INTO v_entry FROM journal_entries WHERE id = NEW."entryId";
+  -- Lines can only be added in the transaction that created the entry: a posted
+  -- entry can never be extended later, even with a balanced pair.
+  IF v_entry."createdAt" <> now() THEN
+    RAISE EXCEPTION 'journal entry % is already posted; post a new entry instead', v_entry.number USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT * INTO v_acc FROM ledger_accounts WHERE id = NEW."ledgerAccountId";
+  IF v_acc."isHeader" THEN
+    RAISE EXCEPTION 'account % is a header; post to one of its sub-accounts', v_acc.code USING ERRCODE = 'check_violation';
+  END IF;
+  IF NOT v_acc."isActive" THEN
+    RAISE EXCEPTION 'account % is inactive', v_acc.code USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER journal_lines_0_rules BEFORE INSERT ON journal_lines FOR EACH ROW EXECUTE FUNCTION app.journal_line_rules();
+
+-- Balanced and at least two lines, checked at COMMIT (deferred), so an entry
+-- and its lines can be inserted in any order inside one transaction.
+CREATE OR REPLACE FUNCTION app.check_entry_balanced() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_id uuid := COALESCE((to_jsonb(NEW) ->> 'entryId')::uuid, NEW.id);  -- fires for entries and lines
+        v_dr numeric; v_cr numeric; v_n int;
+BEGIN
+  SELECT COALESCE(sum(debit), 0), COALESCE(sum(credit), 0), count(*) INTO v_dr, v_cr, v_n FROM journal_lines WHERE "entryId" = v_id;
+  IF v_n < 2 OR v_dr <> v_cr THEN
+    RAISE EXCEPTION 'journal entry does not balance (debits %, credits %, % line(s))', v_dr, v_cr, v_n USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER journal_entries_balanced AFTER INSERT ON journal_entries
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.check_entry_balanced();
+CREATE CONSTRAINT TRIGGER journal_lines_balanced AFTER INSERT ON journal_lines
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.check_entry_balanced();
+
+-- System accounts keep their identity.
+CREATE OR REPLACE FUNCTION app.guard_ledger_account() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD."isSystem" THEN RAISE EXCEPTION 'system accounts cannot be deleted' USING ERRCODE = 'check_violation'; END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD."isSystem" AND (NEW.code, NEW.type, NEW."systemKey", NEW."isHeader", NEW."parentId", NEW."pettyCashAccountId")
+       IS DISTINCT FROM (OLD.code, OLD.type, OLD."systemKey", OLD."isHeader", OLD."parentId", OLD."pettyCashAccountId") THEN
+    RAISE EXCEPTION 'system accounts: only the name and active flag can change' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.type IS DISTINCT FROM OLD.type AND EXISTS (SELECT 1 FROM journal_lines WHERE "ledgerAccountId" = OLD.id) THEN
+    RAISE EXCEPTION 'account % has postings; its type cannot change', OLD.code USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW."isHeader" AND NOT OLD."isHeader" AND EXISTS (SELECT 1 FROM journal_lines WHERE "ledgerAccountId" = OLD.id) THEN
+    RAISE EXCEPTION 'account % has postings; it cannot become a header', OLD.code USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER ledger_accounts_0_guard BEFORE UPDATE OR DELETE ON ledger_accounts FOR EACH ROW EXECUTE FUNCTION app.guard_ledger_account();
+
+-- ---- RLS ----------------------------------------------------------------------
+CREATE POLICY coa_read ON ledger_accounts AS RESTRICTIVE FOR SELECT TO app_user
+  USING ((SELECT app.perm_scope('finance.ledger.read')) = 'ALL');
+CREATE POLICY coa_ins ON ledger_accounts AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('finance.ledger.manage')) = 'ALL' AND NOT "isSystem" AND "systemKey" IS NULL AND "pettyCashAccountId" IS NULL);
+CREATE POLICY coa_upd ON ledger_accounts AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.perm_scope('finance.ledger.manage')) = 'ALL');
+CREATE POLICY coa_del ON ledger_accounts AS RESTRICTIVE FOR DELETE TO app_user
+  USING ((SELECT app.perm_scope('finance.ledger.manage')) = 'ALL');
+
+CREATE POLICY je_read ON journal_entries AS RESTRICTIVE FOR SELECT TO app_user
+  USING ((SELECT app.perm_scope('finance.ledger.read')) = 'ALL');
+-- Interactive users post MANUAL / OPENING_BALANCE entries only; hook sources are definer-only.
+CREATE POLICY je_ins ON journal_entries AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('finance.ledger.manage')) = 'ALL' AND source IN ('MANUAL', 'OPENING_BALANCE')
+              AND "sourceId" IS NULL AND "postedById" = app.current_membership_id() AND status = 'POSTED');
+CREATE POLICY jl_read ON journal_lines AS RESTRICTIVE FOR SELECT TO app_user
+  USING ((SELECT app.perm_scope('finance.ledger.read')) = 'ALL');
+CREATE POLICY jl_ins ON journal_lines AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.perm_scope('finance.ledger.manage')) = 'ALL'
+              AND (SELECT source FROM journal_entries e WHERE e.id = "entryId") IN ('MANUAL', 'OPENING_BALANCE'));
+-- Posted means immutable: no UPDATE / DELETE for interactive users at all.
+REVOKE UPDATE, DELETE ON journal_entries, journal_lines FROM app_user;
+
+-- ---- posting primitive (hooks) ---------------------------------------------------
+-- p_lines: [{ "key": "<systemKey>" | "account": "<uuid>", "debit": n, "credit": n, "staffId": uuid?, "memo": text? }]
+-- Idempotent per (household, source, source id). A hook dated inside a closed
+-- period is moved to the day after the lock (and says so in the description).
+CREATE OR REPLACE FUNCTION app.post_journal(p_household uuid, p_source "JournalSource", p_source_id uuid, p_date date,
+                                            p_description jsonb, p_lines jsonb) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_id uuid := gen_random_uuid(); v_closed date; v_date date := p_date; v_desc jsonb := p_description; l jsonb; v_n int := 0;
+BEGIN
+  IF EXISTS (SELECT 1 FROM journal_entries WHERE "householdId" = p_household AND source = p_source AND "sourceId" = p_source_id) THEN
+    RETURN NULL;
+  END IF;
+  SELECT "booksClosedThrough" INTO v_closed FROM households WHERE id = p_household;
+  IF v_closed IS NOT NULL AND v_date <= v_closed THEN
+    v_date := v_closed + 1;
+    v_desc := v_desc || jsonb_build_object('en', COALESCE(v_desc->>'en', '') || ' (dated after period lock ' || v_closed || ')');
+  END IF;
+  INSERT INTO journal_entries (id, "householdId", "entryDate", "descriptionI18n", source, "sourceId", "postedById")
+  VALUES (v_id, p_household, v_date, v_desc, p_source, p_source_id, NULL);
+  FOR l IN SELECT * FROM jsonb_array_elements(p_lines) LOOP
+    IF COALESCE((l->>'debit')::numeric, 0) = 0 AND COALESCE((l->>'credit')::numeric, 0) = 0 THEN CONTINUE; END IF;
+    INSERT INTO journal_lines (id, "householdId", "entryId", "ledgerAccountId", debit, credit, "staffId", memo)
+    VALUES (gen_random_uuid(), p_household, v_id,
+            COALESCE((l->>'account')::uuid, app.ledger_account(p_household, l->>'key')),
+            round(COALESCE((l->>'debit')::numeric, 0), 2), round(COALESCE((l->>'credit')::numeric, 0), 2),
+            NULLIF(l->>'staffId', '')::uuid, l->>'memo');
+    v_n := v_n + 1;
+  END LOOP;
+  IF v_n = 0 THEN  -- nothing to post (all-zero): drop the empty header
+    DELETE FROM journal_entries WHERE id = v_id; RETURN NULL;
+  END IF;
+  RETURN v_id;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.reverse_entry_internal(p_entry uuid, p_reason text) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE e journal_entries; v_id uuid := gen_random_uuid(); v_today date; v_closed date;
+BEGIN
+  SELECT * INTO e FROM journal_entries WHERE id = p_entry FOR UPDATE;
+  IF e.id IS NULL THEN RAISE EXCEPTION 'journal entry not found' USING ERRCODE = 'no_data_found'; END IF;
+  IF e.status = 'REVERSED' OR e.source = 'REVERSAL' THEN
+    RAISE EXCEPTION 'entry % is already reversed or is itself a reversal', e.number USING ERRCODE = 'check_violation';
+  END IF;
+  v_today := app.household_today(e."householdId");
+  SELECT "booksClosedThrough" INTO v_closed FROM households WHERE id = e."householdId";
+  INSERT INTO journal_entries (id, "householdId", "entryDate", "descriptionI18n", source, "reversalOfId", "reversalReason", "postedById", currency)
+  VALUES (v_id, e."householdId", GREATEST(v_today, COALESCE(v_closed + 1, v_today)),
+          jsonb_build_object('en', 'Reversal of JE-' || lpad(e.number::text, 6, '0'), 'ar', 'عكس القيد ' || e.number),
+          'REVERSAL', e.id, p_reason, app.current_membership_id(), e.currency);
+  INSERT INTO journal_lines (id, "householdId", "entryId", "ledgerAccountId", debit, credit, "staffId", memo)
+  SELECT gen_random_uuid(), "householdId", v_id, "ledgerAccountId", credit, debit, "staffId", memo
+  FROM journal_lines WHERE "entryId" = e.id;
+  UPDATE journal_entries SET status = 'REVERSED' WHERE id = e.id;
+  RETURN v_id;
+END $$;
+
+-- Public reversal for the API: finance.ledger.manage, own household only.
+CREATE OR REPLACE FUNCTION app.reverse_journal_entry(p_entry uuid, p_reason text) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF COALESCE(app.perm_scope('finance.ledger.manage'), '') <> 'ALL' THEN
+    RAISE EXCEPTION 'reversing entries needs finance.ledger.manage' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM journal_entries WHERE id = p_entry AND "householdId" = app.current_household_id()) THEN
+    RAISE EXCEPTION 'journal entry not found' USING ERRCODE = 'no_data_found';
+  END IF;
+  IF length(trim(coalesce(p_reason, ''))) < 3 THEN
+    RAISE EXCEPTION 'a reversal needs a reason' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN app.reverse_entry_internal(p_entry, p_reason);
+END $$;
+GRANT EXECUTE ON FUNCTION app.reverse_journal_entry(uuid, text) TO app_user;
+
+-- Period lock: Head / EFA only; forward only; never today or later.
+CREATE OR REPLACE FUNCTION app.close_books(p_through date) RETURNS date
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_hh uuid := app.current_household_id(); v_old date;
+BEGIN
+  IF NOT app.is_household_admin() THEN
+    RAISE EXCEPTION 'only the Household Head or EFA Office Admin can close the books' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  SELECT "booksClosedThrough" INTO v_old FROM households WHERE id = v_hh;
+  IF p_through >= app.household_today(v_hh) THEN
+    RAISE EXCEPTION 'books can only be closed through a past date' USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_old IS NOT NULL AND p_through <= v_old THEN
+    RAISE EXCEPTION 'books are already closed through %; a period lock only moves forward', v_old USING ERRCODE = 'check_violation';
+  END IF;
+  UPDATE households SET "booksClosedThrough" = p_through WHERE id = v_hh;
+  INSERT INTO audit_logs ("householdId", "actorUserId", action, "entityType", "entityId", before, after)
+  VALUES (v_hh, app.current_user_id(), 'UPDATE', 'households.booksClosedThrough', v_hh::text,
+          jsonb_build_object('through', v_old), jsonb_build_object('through', p_through));
+  RETURN p_through;
+END $$;
+GRANT EXECUTE ON FUNCTION app.close_books(date) TO app_user;
+-- The lock column is only writable through close_books().
+REVOKE UPDATE ON households FROM app_user;
+GRANT UPDATE ("nameI18n", "defaultLocale", "enabledLocales", "baseCurrency", "countryCode", timezone, "weekStartDay",
+              "fiscalYearStart", settings, "updatedAt", "deletedAt") ON households TO app_user;
+
+-- ---- posting hooks ----------------------------------------------------------------
+CREATE OR REPLACE FUNCTION app.custodian_staff(p_float uuid) RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT s.id FROM petty_cash_accounts a JOIN staff_profiles s ON s."membershipId" = a."custodianId" WHERE a.id = p_float
+$$;
+
+CREATE OR REPLACE FUNCTION app.post_petty_cash() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_float uuid; v_exp uuid; v_date date; v_desc jsonb; v_staff uuid;
+BEGIN
+  SELECT id INTO v_float FROM ledger_accounts WHERE "pettyCashAccountId" = NEW."accountId";
+  v_date := (NEW."occurredAt" AT TIME ZONE (SELECT timezone FROM households WHERE id = NEW."householdId"))::date;
+  v_desc := NEW."descriptionI18n";
+  IF NEW.type = 'TOP_UP' AND TG_OP = 'INSERT' THEN
+    PERFORM app.post_journal(NEW."householdId", 'PETTY_CASH', NEW.id, v_date, v_desc, jsonb_build_array(
+      jsonb_build_object('account', v_float, 'debit', NEW.amount), jsonb_build_object('key', 'funding_clearing', 'credit', NEW.amount)));
+  ELSIF NEW.type = 'RETURN' AND TG_OP = 'INSERT' THEN
+    PERFORM app.post_journal(NEW."householdId", 'PETTY_CASH', NEW.id, v_date, v_desc, jsonb_build_array(
+      jsonb_build_object('key', 'funding_clearing', 'debit', NEW.amount), jsonb_build_object('account', v_float, 'credit', NEW.amount)));
+  ELSIF NEW.type = 'ADJUSTMENT' AND TG_OP = 'INSERT' THEN
+    IF NEW.amount > 0 THEN
+      PERFORM app.post_journal(NEW."householdId", 'PETTY_CASH', NEW.id, v_date, v_desc, jsonb_build_array(
+        jsonb_build_object('account', v_float, 'debit', NEW.amount), jsonb_build_object('key', 'other_income', 'credit', NEW.amount)));
+    ELSE
+      PERFORM app.post_journal(NEW."householdId", 'PETTY_CASH', NEW.id, v_date, v_desc, jsonb_build_array(
+        jsonb_build_object('key', 'cash_shortage', 'debit', -NEW.amount), jsonb_build_object('account', v_float, 'credit', -NEW.amount)));
+    END IF;
+  ELSIF NEW.type = 'EXPENSE' AND NEW.status = 'APPROVED' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'APPROVED') THEN
+    v_exp := COALESCE((SELECT id FROM ledger_accounts WHERE "categoryId" = NEW."categoryId" AND type = 'EXPENSE' AND "isActive" AND NOT "isHeader"),
+                      app.ledger_account(NEW."householdId", 'household_expenses'));
+    PERFORM app.post_journal(NEW."householdId", 'PETTY_CASH', NEW.id, v_date, v_desc, jsonb_build_array(
+      jsonb_build_object('account', v_exp, 'debit', NEW.amount, 'memo', NEW."merchantName"),
+      jsonb_build_object('account', v_float, 'credit', NEW.amount)));
+  ELSIF NEW.type = 'EXPENSE' AND NEW.status = 'REJECTED' AND TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM 'REJECTED' THEN
+    -- Cash is gone but the expense is not accepted: the custodian owes it.
+    v_staff := app.custodian_staff(NEW."accountId");
+    PERFORM app.post_journal(NEW."householdId", 'PETTY_CASH', NEW.id, v_date,
+      v_desc || jsonb_build_object('en', 'Rejected expense — owed by custodian: ' || COALESCE(v_desc->>'en', v_desc->>'ar', '')),
+      jsonb_build_array(jsonb_build_object('key', 'staff_receivables', 'debit', NEW.amount, 'staffId', v_staff),
+                        jsonb_build_object('account', v_float, 'credit', NEW.amount)));
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER petty_cash_logs_ledger AFTER INSERT OR UPDATE OF status ON petty_cash_logs
+  FOR EACH ROW EXECUTE FUNCTION app.post_petty_cash();
+
+-- A reviewed expense stays reviewed (the ledger already reflects the decision).
+CREATE OR REPLACE FUNCTION app.guard_petty_cash_review() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status AND OLD.status <> 'PENDING_REVIEW' THEN
+    RAISE EXCEPTION 'this entry was already %', OLD.status USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER petty_cash_logs_0_review BEFORE UPDATE ON petty_cash_logs FOR EACH ROW EXECUTE FUNCTION app.guard_petty_cash_review();
+
+CREATE OR REPLACE FUNCTION app.post_payroll_run() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_lines jsonb;
+BEGIN
+  IF NEW.status <> 'PAID' OR OLD.status = 'PAID' THEN RETURN NULL; END IF;
+  WITH per_staff AS (
+    SELECT "staffId",
+           sum(amount) FILTER (WHERE amount > 0)                              AS earnings,
+           -sum(amount) FILTER (WHERE amount < 0 AND type <> 'ADVANCE_RECOVERY') AS deductions,
+           -sum(amount) FILTER (WHERE type = 'ADVANCE_RECOVERY')              AS recovered,
+           sum(amount)                                                        AS net
+    FROM payroll_lines WHERE "payrollRunId" = NEW.id GROUP BY "staffId")
+  SELECT COALESCE(jsonb_agg(x), '[]') INTO v_lines FROM (
+    SELECT jsonb_build_object('key', 'salaries_expense', 'debit', earnings, 'staffId', "staffId", 'memo', 'earnings') x FROM per_staff WHERE earnings > 0
+    UNION ALL SELECT jsonb_build_object('key', 'salaries_expense', 'credit', deductions, 'staffId', "staffId", 'memo', 'deductions') FROM per_staff WHERE deductions > 0
+    UNION ALL SELECT jsonb_build_object('key', 'staff_advances', 'credit', recovered, 'staffId', "staffId", 'memo', 'advance recovery') FROM per_staff WHERE recovered > 0
+    UNION ALL SELECT jsonb_build_object('key', 'salaries_payable', 'credit', net, 'staffId', "staffId", 'memo', 'net pay') FROM per_staff WHERE net > 0
+  ) t;
+  PERFORM app.post_journal(NEW."householdId", 'PAYROLL', NEW.id, app.household_today(NEW."householdId"),
+    jsonb_build_object('en', format('Payroll %s-%s', NEW."periodYear", lpad(NEW."periodMonth"::text, 2, '0')),
+                       'ar', format('مسير رواتب %s-%s', NEW."periodYear", lpad(NEW."periodMonth"::text, 2, '0'))), v_lines);
+  RETURN NULL;
+END $$;
+CREATE TRIGGER payroll_runs_ledger AFTER UPDATE OF status ON payroll_runs FOR EACH ROW EXECUTE FUNCTION app.post_payroll_run();
+
+CREATE OR REPLACE FUNCTION app.post_salary_payment() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_entry uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM app.post_journal(NEW."householdId", 'SALARY_PAYMENT', NEW.id,
+      (NEW."paidAt" AT TIME ZONE (SELECT timezone FROM households WHERE id = NEW."householdId"))::date,
+      jsonb_build_object('en', format('Salary %s-%s via %s', NEW."periodYear", lpad(NEW."periodMonth"::text, 2, '0'), NEW.channel),
+                         'ar', format('راتب %s-%s عبر %s', NEW."periodYear", lpad(NEW."periodMonth"::text, 2, '0'), NEW.channel)),
+      jsonb_build_array(
+        jsonb_build_object('key', CASE WHEN NEW."payrollRunId" IS NOT NULL THEN 'salaries_payable' ELSE 'salaries_expense' END,
+                           'debit', NEW.amount, 'staffId', NEW."staffId"),
+        jsonb_build_object('key', 'funding_clearing', 'credit', NEW.amount,
+                           'memo', NEW.channel || COALESCE(' ' || NEW."externalRef", ''))));
+  ELSIF NEW.status = 'REVERSED' AND OLD.status <> 'REVERSED' THEN
+    SELECT id INTO v_entry FROM journal_entries WHERE "householdId" = NEW."householdId" AND source = 'SALARY_PAYMENT' AND "sourceId" = NEW.id;
+    IF v_entry IS NOT NULL THEN PERFORM app.reverse_entry_internal(v_entry, COALESCE(NEW."reversalReason", 'salary payment reversed')); END IF;
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER salary_payments_ledger AFTER INSERT OR UPDATE OF status ON salary_payments FOR EACH ROW EXECUTE FUNCTION app.post_salary_payment();
+
+CREATE OR REPLACE FUNCTION app.post_salary_advance() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM app.post_journal(NEW."householdId", 'SALARY_ADVANCE', NEW.id, NEW."issuedAt",
+    jsonb_build_object('en', 'Salary advance', 'ar', 'سلفة راتب'),
+    jsonb_build_array(jsonb_build_object('key', 'staff_advances', 'debit', NEW.amount, 'staffId', NEW."staffId"),
+                      jsonb_build_object('key', 'funding_clearing', 'credit', NEW.amount)));
+  RETURN NULL;
+END $$;
+CREATE TRIGGER salary_advances_ledger AFTER INSERT ON salary_advances FOR EACH ROW EXECUTE FUNCTION app.post_salary_advance();
+
 -- =================================== CROSS-HOUSEHOLD REFERENCE ISOLATION ==
 -- Foreign keys prove a referenced row EXISTS, not that it belongs to the same
 -- household. Without this, a request that guessed another household's UUID
@@ -1458,7 +1817,8 @@ INSERT INTO app.tenant_refs VALUES
   ('work_orders',             'verifiedById',       'memberships',        false),
   ('work_order_instructions', 'completedById',      'memberships',        false),
   ('salary_payments',         'recordedById',       'memberships',        false),
-  ('attachments',             'uploadedById',       'memberships',        false)
+  ('attachments',             'uploadedById',       'memberships',        false),
+  ('journal_entries',         'postedById',         'memberships',        false)
 ON CONFLICT DO NOTHING;
 
 DO $$
@@ -1502,6 +1862,8 @@ BEGIN
   INSERT INTO memberships (id, "householdId", "userId", "roleId", status, "joinedAt", "updatedAt")
   SELECT gen_random_uuid(), v_hh, p_owner, id, 'ACTIVE', now(), now()
   FROM roles WHERE "householdId" = v_hh AND "systemRole" = 'HOUSEHOLD_HEAD';
+
+  PERFORM app.ensure_chart_of_accounts(v_hh);
 
   RETURN v_hh;
 END $$;

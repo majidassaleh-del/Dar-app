@@ -48,7 +48,7 @@ describe('platform', () => {
 describe('tenancy', () => {
   it('head lists their household; role names are localised (official EFA label)', async () => {
     const r = await request(app.getHttpServer()).get('/v1/members').set(await as(HEAD)).expect(200);
-    expect(r.body.data).toHaveLength(5);
+    expect(r.body.data).toHaveLength(6);
     expect(r.body.data.map((m: { role: { name: string } }) => m.role.name)).toContain('مكتب EFA - الإدارة التشغيلية');
   });
 

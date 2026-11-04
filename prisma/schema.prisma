@@ -479,22 +479,24 @@ model UserDevice {
 
 /// The tenant.
 model Household {
-  id              String           @id @default(uuid()) @db.Uuid
-  slug            String           @unique
-  nameI18n        Json             @default("{}")
-  defaultLocale   Locale           @default(ar)
-  enabledLocales  Locale[]         @default([ar, en])
-  baseCurrency    String           @default("SAR") @db.Char(3)
-  countryCode     String           @default("SA") @db.Char(2)
-  timezone        String           @default("Asia/Riyadh")
-  weekStartDay    Int              @default(0) // 0 = Sunday
-  fiscalYearStart Int              @default(1) // month 1..12
-  plan            SubscriptionPlan @default(FREE)
-  planRenewsAt    DateTime?        @db.Timestamptz(6)
-  settings        Json             @default("{}") // feature flags, approval thresholds
-  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
-  deletedAt       DateTime?        @db.Timestamptz(6)
+  id                 String           @id @default(uuid()) @db.Uuid
+  slug               String           @unique
+  nameI18n           Json             @default("{}")
+  defaultLocale      Locale           @default(ar)
+  enabledLocales     Locale[]         @default([ar, en])
+  baseCurrency       String           @default("SAR") @db.Char(3)
+  countryCode        String           @default("SA") @db.Char(2)
+  timezone           String           @default("Asia/Riyadh")
+  weekStartDay       Int              @default(0) // 0 = Sunday
+  fiscalYearStart    Int              @default(1) // month 1..12
+  plan               SubscriptionPlan @default(FREE)
+  planRenewsAt       DateTime?        @db.Timestamptz(6)
+  settings           Json             @default("{}") // feature flags, approval thresholds
+  /// Ledger period lock: no journal entry may be dated on or before this date. Set via app.close_books().
+  booksClosedThrough DateTime?        @db.Date
+  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?        @db.Timestamptz(6)
 
   memberships           Membership[]
   roles                 Role[]
@@ -541,6 +543,9 @@ model Household {
   notifications         Notification[]
   auditLogs             AuditLog[]
   tenantKeys            TenantKey[]
+  ledgerAccounts        LedgerAccount[]
+  journalEntries        JournalEntry[]
+  journalLines          JournalLine[]
   policies              Policy[]
   codesOfEthics         CodeOfEthics[]
   privacyAgreements     PrivacyAgreement[]
@@ -722,6 +727,7 @@ model StaffProfile {
   violations     TrafficViolation[]
   tripSeats      TripPassenger[]
   salaryPayments SalaryPayment[]
+  journalLines   JournalLine[]
 
   @@index([householdId, status])
   @@index([householdId, staffType])
@@ -984,12 +990,13 @@ model FinancialAccount {
   createdAt      DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime             @updatedAt @db.Timestamptz(6)
 
-  household    Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  custodian    Membership?       @relation("AccountCustodian", fields: [custodianId], references: [id], onDelete: SetNull)
-  cards        Card[]
-  transactions Transaction[]     @relation("TxnAccount")
-  transfersIn  Transaction[]     @relation("TxnCounterAccount")
-  pettyCash    PettyCashAccount?
+  household     Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  custodian     Membership?       @relation("AccountCustodian", fields: [custodianId], references: [id], onDelete: SetNull)
+  cards         Card[]
+  transactions  Transaction[]     @relation("TxnAccount")
+  transfersIn   Transaction[]     @relation("TxnCounterAccount")
+  pettyCash     PettyCashAccount?
+  ledgerAccount LedgerAccount?
 
   @@index([householdId, type])
   @@map("financial_accounts")
@@ -1042,6 +1049,7 @@ model Category {
   transactions  Transaction[]
   budgets       Budget[]
   pettyCashLogs PettyCashLog[]
+  ledgerAccount LedgerAccount?
 
   @@index([householdId, kind])
   @@map("categories")
@@ -1912,6 +1920,7 @@ model PettyCashAccount {
   custodian        Membership        @relation("PettyCashCustodian", fields: [custodianId], references: [id])
   financialAccount FinancialAccount? @relation(fields: [financialAccountId], references: [id])
   logs             PettyCashLog[]
+  ledgerAccount    LedgerAccount?
 
   @@index([householdId, custodianId])
   @@map("petty_cash_accounts")
@@ -2207,6 +2216,128 @@ model TripBooking {
 
   @@index([tripId, startAt])
   @@map("trip_bookings")
+}
+
+// =============================================================================
+//  MODULE 9 — DOUBLE-ENTRY LEDGER
+// -----------------------------------------------------------------------------
+//  The operational tables (petty cash, payroll, salary payments, advances)
+//  stay the source of truth for their workflows; the ledger is posted from
+//  them by database triggers, exactly once per source event.
+//  Invariants (all DB-enforced, see prisma/rls.sql):
+//    * every entry balances (Σ debit = Σ credit, ≥ 2 lines) — deferred check;
+//    * posted entries/lines are immutable; corrections are reversal entries;
+//    * nothing is dated on/before households.booksClosedThrough;
+//    * every account/line/entry reference stays inside the household.
+// =============================================================================
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum JournalSource {
+  MANUAL
+  OPENING_BALANCE
+  REVERSAL
+  PETTY_CASH
+  PAYROLL
+  SALARY_PAYMENT
+  SALARY_ADVANCE
+}
+
+enum JournalStatus {
+  POSTED
+  REVERSED
+}
+
+/// Chart of accounts. System accounts (isSystem) are seeded per household and
+/// cannot be deleted or re-typed; one account per petty-cash float is created
+/// automatically. An EXPENSE account mapped to a Category receives that
+/// category's petty-cash expenses.
+model LedgerAccount {
+  id                 String            @id @default(uuid()) @db.Uuid
+  householdId        String            @db.Uuid
+  code               String            @db.VarChar(10)
+  nameI18n           Json              @default("{}")
+  type               LedgerAccountType
+  parentId           String?           @db.Uuid
+  isHeader           Boolean           @default(false) // groups only; no postings
+  isSystem           Boolean           @default(false)
+  systemKey          String? // stable key for hooks, e.g. "salaries_payable"
+  currency           String            @default("SAR") @db.Char(3)
+  categoryId         String?           @unique @db.Uuid
+  financialAccountId String?           @unique @db.Uuid
+  pettyCashAccountId String?           @unique @db.Uuid
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(6)
+
+  household        Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  parent           LedgerAccount?    @relation("LedgerTree", fields: [parentId], references: [id])
+  children         LedgerAccount[]   @relation("LedgerTree")
+  category         Category?         @relation(fields: [categoryId], references: [id])
+  financialAccount FinancialAccount? @relation(fields: [financialAccountId], references: [id])
+  pettyCashAccount PettyCashAccount? @relation(fields: [pettyCashAccountId], references: [id])
+  lines            JournalLine[]
+
+  @@unique([householdId, code])
+  @@unique([householdId, systemKey])
+  @@index([householdId, type])
+  @@map("ledger_accounts")
+}
+
+model JournalEntry {
+  id              String        @id @default(uuid()) @db.Uuid
+  householdId     String        @db.Uuid
+  number          Int           @default(0) // per-household sequence (JE-000001), set by trigger
+  entryDate       DateTime      @db.Date
+  descriptionI18n Json          @default("{}")
+  source          JournalSource @default(MANUAL)
+  /// Id of the operational row that produced the entry (petty_cash_logs, payroll_runs,
+  /// salary_payments, salary_advances). Set only by posting hooks; NULL for manual entries.
+  sourceId        String?       @db.Uuid
+  status          JournalStatus @default(POSTED)
+  reversalOfId    String?       @unique @db.Uuid
+  reversalReason  String?
+  postedById      String?       @db.Uuid // membership; NULL when posted by a system hook
+  currency        String        @default("SAR") @db.Char(3)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+
+  household  Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  reversalOf JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversedBy JournalEntry? @relation("JournalReversal")
+  lines      JournalLine[]
+
+  @@unique([householdId, number])
+  @@unique([householdId, source, sourceId]) // a source event posts exactly once (NULLs distinct for manual)
+  @@index([householdId, entryDate])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id              String   @id @default(uuid()) @db.Uuid
+  householdId     String   @db.Uuid
+  entryId         String   @db.Uuid
+  ledgerAccountId String   @db.Uuid
+  debit           Decimal  @default(0) @db.Decimal(18, 2)
+  credit          Decimal  @default(0) @db.Decimal(18, 2)
+  /// Sub-ledger: which worker a receivable / advance / salary line concerns.
+  staffId         String?  @db.Uuid
+  memo            String?
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  entry     JournalEntry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account   LedgerAccount @relation(fields: [ledgerAccountId], references: [id])
+  staff     StaffProfile? @relation(fields: [staffId], references: [id])
+
+  @@index([entryId])
+  @@index([householdId, ledgerAccountId])
+  @@index([staffId])
+  @@map("journal_lines")
 }
 
 // =============================================================================

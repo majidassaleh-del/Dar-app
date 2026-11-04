@@ -504,7 +504,69 @@ SELECT pg_temp.expect('…and the error never reveals whether the foreign id exi
   (SELECT count(*) FROM (SELECT 1) x WHERE pg_temp.try_rows(format($q$INSERT INTO transactions (id,"householdId","accountId",type,amount,currency,"baseAmount","occurredAt","createdById")
      VALUES (gen_random_uuid(), %s, gen_random_uuid(), 'EXPENSE', 1, 'SAR', 1, now(), %s)$q$, pg_temp.q('h1'), pg_temp.q('head1'))) = -3), 1);
 
--- ---- 9. tenant keys ----
+-- ---- 9. double-entry ledger ----
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+SELECT pg_temp.expect('chart of accounts seeded at provisioning (15 system accounts + 1 per float)',
+  (SELECT count(*) FROM ledger_accounts WHERE "isSystem" AND "pettyCashAccountId" IS NULL), 15);
+SELECT pg_temp.expect('a PENDING expense posts nothing (only the top-up so far)',
+  (SELECT count(*) FROM journal_entries WHERE source = 'PETTY_CASH'), 1);
+UPDATE petty_cash_logs SET status = 'APPROVED', "reviewedAt" = now() WHERE id = '50000000-0000-0000-0000-0000000000b1';
+SELECT pg_temp.expect('approving it posts Dr expense / Cr float',
+  (SELECT count(*) FROM journal_entries WHERE source = 'PETTY_CASH'), 2);
+SELECT pg_temp.expect('the ledger balances: Σ debit = Σ credit',
+  (SELECT count(*) FROM (SELECT 1 HAVING (SELECT sum(debit) FROM journal_lines) = (SELECT sum(credit) FROM journal_lines)) x), 1);
+SELECT pg_temp.expect('driver float ledger balance = physical float balance (380)',
+  (SELECT (sum(l.debit) - sum(l.credit))::int FROM journal_lines l JOIN ledger_accounts a ON a.id = l."ledgerAccountId"
+   WHERE a."pettyCashAccountId" = '50000000-0000-0000-0000-000000000001'), 380);
+DO $$
+DECLARE e uuid := gen_random_uuid();
+BEGIN
+  BEGIN
+    INSERT INTO journal_entries (id, "householdId", "entryDate", "postedById") VALUES (e, (SELECT v FROM ids WHERE k='h1'), CURRENT_DATE, (SELECT v FROM ids WHERE k='head1'));
+    INSERT INTO journal_lines (id, "householdId", "entryId", "ledgerAccountId", debit)
+      VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), e, app.ledger_account((SELECT v FROM ids WHERE k='h1'), 'household_expenses'), 100);
+    INSERT INTO journal_lines (id, "householdId", "entryId", "ledgerAccountId", credit)
+      VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), e, app.ledger_account((SELECT v FROM ids WHERE k='h1'), 'owner_equity'), 90);
+    SET CONSTRAINTS journal_entries_balanced, journal_lines_balanced IMMEDIATE;
+    RAISE EXCEPTION 'FAIL  unbalanced entry accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'PASS  an unbalanced manual entry (100 / 90) is refused at commit';
+  END;
+  SET CONSTRAINTS ALL DEFERRED;
+END $$;
+SELECT pg_temp.expect('posted lines cannot be edited',  pg_temp.try_rows($q$UPDATE journal_lines SET debit = debit + 1$q$), -1);
+SELECT pg_temp.expect('posted entries cannot be deleted', pg_temp.try_rows($q$DELETE FROM journal_entries$q$), -1);
+SELECT pg_temp.expect('hook sources cannot be forged by users',
+  pg_temp.try_rows(format($q$INSERT INTO journal_entries (id,"householdId","entryDate",source,"sourceId","postedById")
+     VALUES (gen_random_uuid(), %s, CURRENT_DATE, 'PAYROLL', gen_random_uuid(), %s)$q$, pg_temp.q('h1'), pg_temp.q('head1'))), -1);
+SELECT pg_temp.expect('a header account takes no postings',
+  pg_temp.try_rows(format($q$WITH e AS (INSERT INTO journal_entries (id,"householdId","entryDate","postedById") VALUES (gen_random_uuid(), %s, CURRENT_DATE, %s) RETURNING id)
+     INSERT INTO journal_lines (id,"householdId","entryId","ledgerAccountId",debit) SELECT gen_random_uuid(), %s, e.id, app.ledger_account(%s, 'assets'), 1 FROM e$q$,
+     pg_temp.q('h1'), pg_temp.q('head1'), pg_temp.q('h1'), pg_temp.q('h1'))), -2);
+RESET ROLE;
+INSERT INTO ids SELECT 'h2acct', app.ledger_account((SELECT v FROM ids WHERE k='h2'), 'owner_equity');
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+SELECT pg_temp.expect('a line cannot post to another household''s account',
+  pg_temp.try_rows(format($q$WITH e AS (INSERT INTO journal_entries (id,"householdId","entryDate","postedById") VALUES (gen_random_uuid(), %s, CURRENT_DATE, %s) RETURNING id)
+     INSERT INTO journal_lines (id,"householdId","entryId","ledgerAccountId",credit) SELECT gen_random_uuid(), %s, e.id, %s, 1 FROM e$q$,
+     pg_temp.q('h1'), pg_temp.q('head1'), pg_temp.q('h1'), pg_temp.q('h2acct'))), -3);
+SELECT pg_temp.expect('system accounts cannot be deleted or re-typed',
+  pg_temp.try_rows($q$UPDATE ledger_accounts SET type = 'INCOME' WHERE "systemKey" = 'salaries_expense'$q$)
+  + pg_temp.try_rows($q$DELETE FROM ledger_accounts WHERE "systemKey" = 'owner_equity'$q$), -4);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000e','h1');
+SELECT pg_temp.expect('staff cannot read the ledger', (SELECT count(*) FROM journal_lines) + (SELECT count(*) FROM ledger_accounts), 0);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000f','h1');
+SELECT pg_temp.expect('spouse cannot close the books', pg_temp.try_rows($q$SELECT app.close_books(CURRENT_DATE - 1)$q$), -1);
+SELECT pg_temp.expect('…nor write the lock column directly', pg_temp.try_rows($q$UPDATE households SET "booksClosedThrough" = CURRENT_DATE - 1$q$), -1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+SELECT pg_temp.expect('Head closes the books through yesterday (for real, not a dry run)',
+  (SELECT count(*) FROM (SELECT app.close_books(CURRENT_DATE - 1)) x), 1);
+SELECT pg_temp.expect('…after which nothing can be dated inside the closed period',
+  pg_temp.try_rows(format($q$INSERT INTO journal_entries (id,"householdId","entryDate","postedById") VALUES (gen_random_uuid(), %s, CURRENT_DATE - 1, %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('head1'))), -2);
+SELECT pg_temp.expect('…and the lock only moves forward', pg_temp.try_rows($q$SELECT app.close_books(CURRENT_DATE - 30)$q$), -2);
+
+-- ---- 10. tenant keys ----
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
 SELECT pg_temp.expect('API can read its own wrapped tenant key', (SELECT count(*) FROM tenant_keys), 1);
 SELECT pg_temp.expect('…but never write one', pg_temp.try_rows($q$UPDATE tenant_keys SET status = 'DESTROYED'$q$), -1);

@@ -155,6 +155,46 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 | GET | `/reports/staff-cost?year=` | `finance.reports.read` | Salaries, advances, tickets, iqama fees |
 | GET | `/reports/export?type=…&format=xlsx\|pdf\|csv` | `finance.reports.read` | Async job, signed download URL |
 
+## 4a. Double-entry ledger (`/v1/ledger`)
+
+> **Status: implemented** in `apps/api/src/ledger/`, with e2e tests in `apps/api/test/ledger.e2e.test.ts` and attack tests in the DB suite. The single-entry `/transactions` API in §4 is not built yet. When it is, it will post through the same hooks.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/ledger/accounts?asOf=` | `finance.ledger.read` | Chart of accounts with debits, credits and balance in the normal direction. The 15 system accounts are seeded at provisioning, plus one account per petty-cash float |
+| POST | `/ledger/accounts` | `finance.ledger.manage` | `{ code, name, type, parentId?, isHeader?, categoryId? }`. An EXPENSE account mapped to a category receives that category's petty-cash expenses |
+| PATCH | `/ledger/accounts/{id}` | `finance.ledger.manage` | Name, active flag, parent, category. System accounts can only be renamed or deactivated. An account with postings can't change type or become a header |
+| GET | `/ledger/accounts/{id}/statement?from=&to=` | `finance.ledger.read` | Opening balance, lines with running balance, closing balance |
+| GET | `/ledger/journal?from=&to=&source=&sourceId=&accountId=&staffId=` | `finance.ledger.read` | Entries with lines. `sourceId` finds the entry a petty-cash log, payroll run, salary payment or advance produced |
+| GET | `/ledger/journal/{id}` | `finance.ledger.read` | |
+| POST | `/ledger/journal` | `finance.ledger.manage` | MANUAL (or `opening: true` → OPENING_BALANCE). `{ entryDate, description, lines: [{ accountId, debit \| credit, staffId?, memo? }] }`. Must balance (`400` with the totals). Header or foreign-household accounts → `422` |
+| POST | `/ledger/journal/{id}/reverse` | `finance.ledger.manage` | `{ reason }`. Posts a mirror entry dated today (or the day after the lock) and marks the original REVERSED. Only once |
+| GET | `/ledger/trial-balance?asOf=` | `finance.ledger.read` | Debit and credit balances per account, totals, and `balanced` |
+| GET | `/ledger/staff/{staffId}` | `finance.ledger.read` | Worker sub-ledger: advances outstanding, owed by the worker (rejected petty cash), salary payable, salary cost to date |
+| GET | `/ledger/settings` · POST `/ledger/close-books` | read / **Head or EFA** | `{ through }`: a past date, forward only, audited. Nothing can be dated on or before it |
+
+**Automatic postings** (database triggers; once per source event, unique on `(household, source, sourceId)`):
+
+| Event | Entry |
+|---|---|
+| Petty-cash top-up / return | Dr float / Cr 1190 Owner funding clearing (return is the reverse) |
+| Expense **approved** (or recorded by a manager) | Dr the category's mapped account, else 6200 Household expenses / Cr float |
+| Expense **rejected** | Dr 1300 Staff receivables (the custodian's sub-ledger) / Cr float |
+| Count variance | Shortage: Dr 6950 / Cr float. Surplus: Dr float / Cr 4900 |
+| Payroll run → **PAID** | Per worker: Dr 6100 earnings, Cr 6100 unpaid-leave deductions, Cr 1310 advance recovery, Cr 2100 net |
+| Salary payment | Dr 2100 (inside a run) or Dr 6100 (outside a run) / Cr 1190. Reversing the payment reverses its entry |
+| Salary advance issued | Dr 1310 (the worker's sub-ledger) / Cr 1190 |
+
+**Database invariants:**
+* Every entry balances with at least 2 lines (deferred constraint).
+* A line is a debit XOR a credit.
+* Lines can only be added in the transaction that created the entry. A posted entry can't be extended later, even with a balanced pair.
+* No UPDATE or DELETE on entries or lines for any interactive user.
+* Users can't post hook sources.
+* Header accounts take no postings.
+* All references stay inside the household (same-household triggers).
+* The period lock is only writable through `app.close_books()`.
+
 ## 5. Requests & approvals (cross-module)
 
 > **Status: implemented** in `apps/api/src/requests/`: create, list (`?mine`, `?awaitingMe`), get, approve, reject, cancel. Routing, step advancement, final approval and fulfilment (LEAVE → leave record, SALARY_ADVANCE → advance with instalments) run as database triggers.
