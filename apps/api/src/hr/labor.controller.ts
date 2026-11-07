@@ -6,7 +6,7 @@ import { Ctx } from '../common/decorators';
 import { ZodQuery } from '../common/zod.pipe';
 import { money } from '../common/rls-write';
 import type { RequestContext } from '../tenancy/request-context';
-import { esbFor } from './esb';
+import { esbFor, leaveFor } from './esb';
 
 const AsOf = z.object({ asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
 const todayRiyadh = () => new Date(`${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date())}T00:00:00Z`);
@@ -30,6 +30,29 @@ export class LaborController {
       const history = await tx.esbAccrual.findMany({ where: { staffId: id }, orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }], take: 24 });
       return { staffId: id, name: resolveI18n(s.fullNameI18n as I18nText, { locale: ctx.locale }).text, asOf: asOf.toISOString().slice(0, 10), ...r,
         accruals: history.map((h) => ({ period: `${h.periodYear}-${String(h.periodMonth).padStart(2, '0')}`, vested: money(h.vested), provision: money(h.provision), delta: money(h.delta) })) };
+    });
+  }
+
+  /**
+   * Final settlement if the contract ended on `asOf`: ESB vested (Art. 16) + unused
+   * leave ((monthly wage / 30) × unused days, Art. 10). Outstanding salary advances
+   * are listed separately: recovering them from the settlement is an agreement with
+   * the worker, not an automatic deduction.
+   */
+  @Get('staff/:id/final-settlement')
+  settlement(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string, @Query(new ZodQuery(AsOf)) q: z.infer<typeof AsOf>) {
+    return this.db.withRls(ctx, async (tx) => {
+      if (!(await tx.staffProfile.findFirst({ where: { id }, select: { id: true } }))) throw new NotFoundException('staff member not found');
+      const asOf = q.asOf ? new Date(`${q.asOf}T00:00:00Z`) : todayRiyadh();
+      const [esb, leave] = await Promise.all([esbFor(tx, id, asOf), leaveFor(tx, id, asOf)]);
+      if (!esb || !leave) throw new NotFoundException('no employment contract visible for this worker');
+      const advances = await tx.salaryAdvance.aggregate({ where: { staffId: id, settledAt: null }, _sum: { outstanding: true } });
+      const outstanding = Number(advances._sum.outstanding ?? 0);
+      const total = Number(esb.vested) + Number(leave.unusedLeavePayout);
+      return { staffId: id, asOf: asOf.toISOString().slice(0, 10), currency: 'SAR',
+        endOfService: { rule: esb.rule, basis: esb.basis, serviceStart: esb.serviceStart, completedFourYearPeriods: esb.completedFourYearPeriods, amount: esb.vested },
+        unusedLeave: { basis: leave.basis, days: Math.max(0, leave.balanceDays), dailyRate: leave.dailyRate, amount: leave.unusedLeavePayout },
+        totalDue: total.toFixed(2), advancesOutstanding: outstanding.toFixed(2), totalAfterAdvances: Math.max(0, total - outstanding).toFixed(2) };
     });
   }
 

@@ -77,11 +77,13 @@ describe('leave via the approval workflow', () => {
     expect(r.body.detail).toMatch(/already FULFILLED/);
   });
 
-  it('leave balance: pro-rated entitlement, 3 days taken', async () => {
-    const r = await http().get(`/v1/staff/${workerStaffId}/leave-balance`).query({ year: 2026 }).set(await as(USERS.nanny)).expect(200);
-    expect(r.body.annual.taken).toBe(3);
-    expect(r.body.annual.entitlement).toBeGreaterThan(28); // 30 days × (Jan 10 – Dec 31)/365
-    expect(r.body.annual.remaining).toBeCloseTo(r.body.annual.entitlement - 3, 1);
+  it('leave balance (Art. 10): accrues 15 days a year by default, 3 days taken, nothing vested before 2 years', async () => {
+    const r = await http().get(`/v1/staff/${workerStaffId}/leave-balance`).query({ asOf: '2026-12-31' }).set(await as(USERS.nanny)).expect(200);
+    expect(r.body).toMatchObject({ daysPerYear: 15, daysPerTwoYears: 30, takenDays: 3, completedTwoYearCycles: 0, vestedDays: 0, availableNowDays: -3,
+      nextEntitlementDate: '2028-01-09' });
+    expect(r.body.accruedDays).toBeCloseTo((15 * 356) / 365.25, 2); // 10 Jan – 31 Dec 2026 (356 days); the 20–22 Dec leave is taken
+    expect(r.body.balanceDays).toBeCloseTo(r.body.accruedDays - 3, 2);
+    expect(r.body.byType.ANNUAL).toBe(3);
   });
 
   it('a rejection needs a comment', async () => {

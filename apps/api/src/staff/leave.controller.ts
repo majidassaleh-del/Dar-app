@@ -5,9 +5,10 @@ import { Ctx } from '../common/decorators';
 import { ZodQuery } from '../common/zod.pipe';
 import { isoDate } from '../common/rls-write';
 import type { RequestContext } from '../tenancy/request-context';
+import { leaveFor } from '../hr/esb';
 
 const ListQuery = z.object({ staffId: z.guid().optional(), year: z.coerce.number().int().optional() });
-const YearQuery = z.object({ year: z.coerce.number().int().min(2000).max(2100) });
+const BalanceQuery = z.object({ asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), year: z.coerce.number().int().min(2000).max(2100).optional() });
 
 /** Leave records are created by approving a LEAVE request (POST /v1/requests); this is the read side. */
 @Controller()
@@ -25,25 +26,21 @@ export class LeaveController {
   }
 
   /**
-   * Annual leave: entitlement from the active contract (annualLeaveDays,
-   * pro-rated for the part of the year employed), taken = approved ANNUAL days.
+   * Art. 10 leave position: 30 paid days per 2 completed years of service (accruing at
+   * 15 days a year unless the contract grants more), days taken, balance, what is
+   * already vested, and the unused-leave payout if the contract ended on `asOf`
+   * ((monthly wage / 30) × unused days). `year` adds that year's days by leave type.
    */
   @Get('staff/:staffId/leave-balance')
-  balance(@Ctx() ctx: RequestContext, @Param('staffId', ParseUUIDPipe) staffId: string, @Query(new ZodQuery(YearQuery)) q: z.infer<typeof YearQuery>) {
+  balance(@Ctx() ctx: RequestContext, @Param('staffId', ParseUUIDPipe) staffId: string, @Query(new ZodQuery(BalanceQuery)) q: z.infer<typeof BalanceQuery>) {
     return this.db.withRls(ctx, async (tx) => {
-      const staff = await tx.staffProfile.findFirst({ where: { id: staffId }, select: { hireDate: true, terminationDate: true } });
-      if (!staff) throw new NotFoundException('staff member not found');
-      const contract = await tx.employmentContract.findFirst({ where: { staffId, isActive: true } });
-      const yStart = Date.UTC(q.year, 0, 1), yEnd = Date.UTC(q.year, 11, 31);
-      const from = Math.max(yStart, staff.hireDate?.getTime() ?? yStart, contract?.startDate.getTime() ?? yStart);
-      const to = Math.min(yEnd, staff.terminationDate?.getTime() ?? yEnd);
-      const fraction = to < from ? 0 : (to - from + 86_400_000) / (yEnd - yStart + 86_400_000);
-      const entitlement = Math.round((contract?.annualLeaveDays ?? 0) * fraction * 10) / 10;
-      const taken = (await tx.leaveRecord.findMany({ where: { staffId, type: 'ANNUAL', startDate: { gte: new Date(yStart), lte: new Date(yEnd) } }, select: { days: true } }))
-        .reduce((s, l) => s + Number(l.days), 0);
-      const byType = await tx.leaveRecord.groupBy({ by: ['type'], where: { staffId, startDate: { gte: new Date(yStart), lte: new Date(yEnd) } }, _sum: { days: true } });
-      return { staffId, year: q.year, annual: { entitlement, taken, remaining: Math.round((entitlement - taken) * 10) / 10 },
-               byType: Object.fromEntries(byType.map((t) => [t.type, Number(t._sum.days ?? 0)])) };
+      if (!(await tx.staffProfile.findFirst({ where: { id: staffId }, select: { id: true } }))) throw new NotFoundException('staff member not found');
+      const asOf = q.asOf ? new Date(`${q.asOf}T00:00:00Z`) : new Date(`${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date())}T00:00:00Z`);
+      const leave = await leaveFor(tx, staffId, asOf);
+      if (!leave) throw new NotFoundException('no employment contract visible for this worker');
+      const year = q.year ?? asOf.getUTCFullYear();
+      const byType = await tx.leaveRecord.groupBy({ by: ['type'], where: { staffId, startDate: { gte: new Date(Date.UTC(year, 0, 1)), lte: new Date(Date.UTC(year, 11, 31)) } }, _sum: { days: true } });
+      return { staffId, asOf: isoDate(asOf), ...leave, year, byType: Object.fromEntries(byType.map((t) => [t.type, Number(t._sum.days ?? 0)])) };
     });
   }
 }

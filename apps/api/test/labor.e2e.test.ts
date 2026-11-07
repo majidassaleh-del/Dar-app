@@ -4,7 +4,7 @@ import type { INestApplication } from '@nestjs/common';
 import { createApp } from '../src/app.factory';
 import { ServiceDb } from '../src/worker/service-db';
 import { accrueEndOfService } from '../src/worker/jobs';
-import { computeEsb, unpaidLeaveDeduction } from '../src/hr/esb';
+import { computeEsb, computeLeave, unpaidLeaveDeduction } from '../src/hr/esb';
 import { buildLines } from '../src/staff/payroll.controller';
 import { dispatchNotifications } from '../src/notifications/dispatch';
 import { H1, H2, MEMBERSHIPS, USERS, as, testEnv } from './helpers';
@@ -36,8 +36,28 @@ describe('end-of-service rules (unit)', () => {
     expect(computeEsb({ contracts: [c('2022-11-05', null)], asOf: D('2026-11-04'), unpaidLeaveDays: 10 })).toMatchObject({ serviceDays: 1451, vested: '0.00', nextVestingDate: '2026-11-14' });
     const broken = computeEsb({ contracts: [c('2018-01-01', '2021-12-31'), c('2022-03-01', null)], asOf: D('2026-02-27') })!; // one day short of 4 years
     expect(broken).toMatchObject({ serviceStart: '2022-03-01', vested: '0.00' });
-    expect(Number(broken.provision)).toBeCloseTo((2300 * 1460) / 1461, 1);
+    expect(broken).toMatchObject({ serviceMonths: 47, provision: '2252.08', monthlyProvision: '47.92' }); // 47 completed months × 2,300 / 48
     expect(computeEsb({ contracts: [c('2021-01-01', '2023-12-31'), c('2024-01-01', null)], asOf: D('2026-01-01') })!.serviceStart).toBe('2021-01-01');
+  });
+
+  it('liability provisioning is monthly wage / 48 per completed month; Labor Law stays a contract override', () => {
+    expect(computeEsb({ contracts: [c('2025-01-01', null)], asOf: D('2025-12-31') })).toMatchObject({ serviceMonths: 12, provision: '575.00', monthlyProvision: '47.92', vested: '0.00' });
+    expect(computeEsb({ contracts: [c('2025-01-01', null)], asOf: D('2026-01-30') })).toMatchObject({ serviceMonths: 12 }); // not yet 13
+    expect(computeEsb({ rule: 'SA_LABOR_LAW', contracts: [c('2025-01-01', null)], asOf: D('2025-12-31') })!.basis).toBe('Labor Law Art. 84 (contract override)');
+    expect(computeEsb({ rule: 'anything-else', contracts: [c('2025-01-01', null)], asOf: D('2025-12-31') })!.rule).toBe('SA_DOMESTIC');
+  });
+
+  it('Art. 10 leave: 15 days a year accrued, 30 vested per 2 completed years; unused leave paid at wage / 30', () => {
+    const lc = (perYear: number) => [{ ...c('2023-01-01', null), annualLeaveDays: perYear }];
+    const two = computeLeave({ contracts: lc(15), asOf: D('2024-12-31'), takenDays: 0 })!;
+    expect(two).toMatchObject({ daysPerTwoYears: 30, serviceDays: 731, completedTwoYearCycles: 1, vestedDays: 30, dailyRate: '76.67' });
+    expect(two.accruedDays).toBeCloseTo(30.02, 2);
+    const used = computeLeave({ contracts: lc(15), asOf: D('2024-12-31'), takenDays: 20 })!;
+    expect(used).toMatchObject({ balanceDays: 10.02, availableNowDays: 10, unusedLeavePayout: '768.20' }); // 2,300 / 30 × 10.02
+    expect(computeLeave({ contracts: lc(15), asOf: D('2024-12-30'), takenDays: 0 })!.completedTwoYearCycles).toBe(0);
+    expect(computeLeave({ contracts: lc(30), asOf: D('2024-12-31'), takenDays: 0 })).toMatchObject({ daysPerYear: 30, vestedDays: 60, basis: 'Contract (above the Art. 10 minimum)' });
+    expect(computeLeave({ contracts: lc(5), asOf: D('2024-12-31'), takenDays: 0 })!.daysPerYear).toBe(15); // never below the statutory minimum
+    expect(computeLeave({ contracts: lc(15), asOf: D('2024-12-31'), takenDays: 0, unpaidLeaveDays: 10 })!.completedTwoYearCycles).toBe(0); // unpaid leave delays the cycle
   });
 
   it('unpaid leave deduction = (monthly wage / 30) × days, exact to the halala', () => {
@@ -86,7 +106,7 @@ describe('ESB, advances and salary acknowledgment (API)', () => {
     await accrueEndOfService(worker, 2026, 10, H1);
     const rows = await worker.run((tx) => tx.esbAccrual.findMany({ where: { staffId }, orderBy: { periodMonth: 'asc' } }));
     expect(rows.map((r) => r.periodMonth)).toEqual([9, 10]);
-    expect(Number(rows[1]!.delta)).toBeCloseTo((2300 * 31) / 1461, 1); // 31 more days of service in October
+    expect(Number(rows[1]!.delta)).toBeCloseTo(2300 / 48, 1); // one more month: monthly wage / 48 (deltas sum exactly to the rounded provision)
     expect((await http().get(`/v1/staff/${staffId}/end-of-service`).set(await as(USERS.driver))).body.accruals[0]).toMatchObject({ period: '2026-10' });
   });
 
@@ -99,6 +119,16 @@ describe('ESB, advances and salary acknowledgment (API)', () => {
     await http().get('/v1/me/advances').set(await as(USERS.spouse)).expect(404);
     await http().get(`/v1/staff/${staffId}/advances`).set(await as(USERS.maid)).expect(404);
     expect((await http().get(`/v1/staff/${staffId}/advances`).set(await as(USERS.head)).expect(200)).body.currentOutstanding).toBe('900.00');
+  });
+
+  it('final settlement: ESB (1 × wage) + unused leave at wage / 30; advances shown separately; contracts cannot go below Art. 10', async () => {
+    const r = await http().get(`/v1/staff/${staffId}/final-settlement`).query({ asOf: '2026-11-04' }).set(await as(USERS.efa)).expect(200);
+    expect(r.body).toMatchObject({ endOfService: { rule: 'SA_DOMESTIC', amount: '2300.00' }, unusedLeave: { dailyRate: '76.67', amount: '6533.53' },
+      totalDue: '8833.53', advancesOutstanding: '900.00', totalAfterAdvances: '7933.53' });
+    expect(r.body.unusedLeave.days).toBeCloseTo((15 * 2075) / 365.25, 2); // 1 Mar 2021 – 4 Nov 2026, nothing taken
+    await http().get(`/v1/staff/${staffId}/final-settlement`).set(await as(USERS.maid)).expect(404);
+    const bad = await http().post(`/v1/staff/${staffId}/contracts`).set(await as(USERS.head)).send({ startDate: '2027-01-01', basicSalary: 2000, annualLeaveDays: 10 }).expect(400);
+    expect(JSON.stringify(bad.body)).toMatch(/Art\. 10/);
   });
 
   it('a recorded salary asks the worker to confirm (now, +3 d, +7 d); acknowledging withdraws the rest', async () => {

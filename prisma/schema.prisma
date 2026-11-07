@@ -886,7 +886,7 @@ model EmploymentContract {
   basicSalary        Decimal   @db.Decimal(18, 2)
   currency           String    @default("SAR") @db.Char(3)
   allowances         Json      @default("[]") // [{ code: "FOOD", amount: 200 }]
-  annualLeaveDays    Int       @default(30)
+  annualLeaveDays    Int       @default(15) // Art. 10: days accrued per year (statutory 15 = 30 per 2 years); contracts may grant more, never less
   ticketEntitlement  Boolean   @default(true) // home-country air ticket
   endOfServiceRule   String    @default("SA_DOMESTIC") // pluggable calc strategy
   workingHoursPerDay Int?

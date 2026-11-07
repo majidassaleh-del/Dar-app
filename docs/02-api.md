@@ -101,7 +101,7 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 
 > **Status: implemented**: everything in this section. Code is in `apps/api/src/staff/`, with e2e tests in `apps/api/test/staff.e2e.test.ts` and `hr.e2e.test.ts`. Notes on the implementation:
 > * **Attendance.** Workers check in and out for *today* (household time zone), once each, with server-stamped times. Only `staff.payroll.manage` can correct a day (`PUT /attendance/{staffId}/{date}`).
-> * **Leave.** Leave is requested with `POST /requests {type: "LEAVE", leaveType, startDate, endDate}`. Final approval creates the `LeaveRecord` in the database, and the request becomes `FULFILLED`. Filing for another worker needs `staff.payroll.manage`. `GET /staff/{id}/leave-balance?year=` returns the pro-rated annual entitlement minus approved ANNUAL days.
+> * **Leave.** Leave is requested with `POST /requests {type: "LEAVE", leaveType, startDate, endDate}`. Final approval creates the `LeaveRecord` in the database, and the request becomes `FULFILLED`. Filing for another worker needs `staff.payroll.manage`. `GET /staff/{id}/leave-balance?asOf=&year=` returns the Art. 10 leave position (see §3b).
 > * **Payroll.** `POST /payroll-runs` generates the lines:
 >   * basic salary and each allowance, pro-rated by days employed;
 >   * unpaid leave deducted at basic ÷ 30 per day;
@@ -130,7 +130,7 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 | GET | `/staff/{id}/contracts` | `staff.payroll.read` | |
 | POST | `/staff/{id}/contracts` | `staff.profile.manage` | A new active contract supersedes the previous one |
 | GET | `/staff/{id}/end-of-service?asOf=` | `staff.payroll.read` | Calculated entitlement |
-| GET | `/staff/{id}/leave-balance` | `staff.payroll.read` | |
+| GET | `/staff/{id}/leave-balance?asOf=&year=` | `staff.payroll.read` | Art. 10 accrual, vested days, balance, unused-leave payout (§3b) |
 | GET | `/leaves` | `staff.payroll.read` | Leave requests themselves go through `/requests` (type `LEAVE`) |
 | GET | `/attendance?date=&staffId=` | `staff.payroll.read` | |
 | POST | `/attendance/check-in` | `staff.attendance.manage` | Self check-in from mobile `{ geo? }` |
@@ -195,20 +195,29 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 |---|---|---|---|
 | GET | `/staff/{id}/end-of-service?asOf=` | `staff.payroll.read` (workers: their own) | Service start/end, unpaid days excluded, completed 4-year periods, `monthlyWage`, `vested` (owed if the contract ended that day), `provision` (accrual), `nextVestingDate`, monthly snapshots |
 | GET | `/hr/end-of-service?asOf=` | Head / EFA | Every current worker, with `totalVested` and `totalProvision` (the household's ESB liability) |
+| GET | `/staff/{id}/leave-balance?asOf=` | `staff.payroll.read` (workers: their own) | Art. 10: `daysPerYear` (statutory 15, i.e. 30 per 2 years; contracts may grant more), `accruedDays`, `takenDays` (paid ANNUAL / VACATION_TRAVEL), `balanceDays`, `completedTwoYearCycles`, `vestedDays`, `availableNowDays`, `nextEntitlementDate`, `dailyRate` (monthly wage / 30), `unusedLeavePayout` |
+| GET | `/staff/{id}/final-settlement?asOf=` | `staff.payroll.read` | If the contract ended that day: ESB vested + unused leave at (monthly wage / 30) × days = `totalDue`. Outstanding advances are shown separately (`totalAfterAdvances`); recovering them from the settlement needs the worker's agreement and is not deducted automatically |
 | GET | `/me/advances` | the worker | `totalGranted`, `totalRepaid`, `currentOutstanding`, `openAdvances`. Per advance: instalment, installments left, `recoveries` (paid runs) and `scheduled` (approved runs) |
 | GET | `/staff/{id}/advances` | `staff.payroll.read` | The same, for the office |
-| — | worker `esb:accrue [YYYY-MM]` | service | Monthly `esb_accruals` snapshot per worker (idempotent): vested, provision, and the change since the previous month (`delta`, for the books). Users cannot write it (DB) |
+| — | worker `esb:accrue [YYYY-MM]` | service | Monthly `esb_accruals` snapshot per worker (idempotent): vested, provision, and the change since the previous month (`delta`, for the books; about monthly wage / 48, and the deltas always sum to the rounded provision). Users cannot write it (DB) |
 
 **End-of-service (Art. 16):**
 * **Strategy.** Set per contract with `endOfServiceRule`:
   * `SA_DOMESTIC` (**default; confirmed by the household on 2026-11-04 as its primary ESB strategy**): one month's wage for every completed period of 4 consecutive years.
   * `SA_DOMESTIC_SINGLE`: one month's wage, once, after 4 consecutive years.
   * `SA_LABOR_LAW`: for contracts that grant the general Labor Law formula. That is half a month per year for the first 5 years and a month per year after, pro rata. The Art. 85 resignation reductions are not applied.
+* **Liability provisioning.** Monthly wage / 48 for every completed month of service, so the provision equals one month's wage exactly when a 4-year period vests. `SA_LABOR_LAW` stays a contract-level override, provisioned at its own rate.
 * **Wage basis.** The last contractual monthly wage: basic salary plus fixed allowances.
 * **Service.**
   * Counted along the latest unbroken chain of contracts; a gap of more than one day breaks it.
   * Unpaid leave is not service, so it moves the vesting date.
   * A 4-year period completes at the end of the day before the anniversary.
+
+**Leave (Art. 10):**
+* **Entitlement.** 30 paid days for every 2 completed years of service, accruing at 15 days a year, unless the contract grants more. `annualLeaveDays` is days per year: default 15, with a minimum of 15 enforced in the API and by a DB check (`employment_contracts_art10_min_leave`).
+* **Cycles.** A cycle completes at the end of the day before the 2-year anniversary; unpaid leave pushes it back.
+* **Taken.** Paid ANNUAL and VACATION_TRAVEL days count as taken. Leave taken before it vests is the employer's choice: it shows as negative `availableNowDays` and lowers the exit payout.
+* **Unused leave at exit.** Paid at (monthly wage / 30) × unused (accrued − taken) days, in halalas, half-up.
 
 **Payroll rules:**
 * **Unpaid leave.** Its own `UNPAID_LEAVE` line of (monthly wage / 30) × unpaid days, where the monthly wage is basic plus allowances. It is computed in halalas and rounded half-up, whatever the month's length. Half days are supported.
@@ -221,7 +230,7 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 * Recording a salary payment (single or from a payroll run) schedules three reminders to the worker: when paid, after 3 days and after 7 days. Each goes on WhatsApp (template `herp_salary_acknowledge`), push and in-app, in the worker's language, with a deep link to `POST /salary-payments/{id}/acknowledge`.
 * Acknowledging, disputing or reversing the payment removes the outstanding reminders.
 * A worker without an app account gets none.
-* **Not yet modelled:** the paid month of leave after two years (Art. 10), working-hour and rest-day limits, and posting ESB provisions to the ledger.
+* **Not yet modelled:** working-hour and rest-day limits, the return air ticket, and posting ESB provisions and the final settlement to the ledger.
 
 ## 4. Household accounting
 

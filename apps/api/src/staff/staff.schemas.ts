@@ -97,7 +97,8 @@ export const CreateContract = z.object({
   basicSalary: z.number().positive().max(1_000_000),
   currency: z.string().regex(/^[A-Z]{3}$/).default('SAR'),
   allowances: z.array(z.object({ code: z.string().max(30), amount: z.number().min(0) })).default([]),
-  annualLeaveDays: z.number().int().min(0).max(60).default(30),
+  /** Art. 10: paid leave accrued per year. Statutory 15 (= 30 days per 2 completed years); a contract may grant more, never less. */
+  annualLeaveDays: z.number().int().min(15, 'Domestic Workers Regulation Art. 10: at least 15 days a year (30 per 2 years)').max(60).default(15),
   ticketEntitlement: z.boolean().default(true),
   workingHoursPerDay: z.number().int().min(1).max(24).optional(),
   /** End-of-service strategy (see hr/esb.ts). Default: Domestic Workers Regulation Art. 16, one month per 4 years. */

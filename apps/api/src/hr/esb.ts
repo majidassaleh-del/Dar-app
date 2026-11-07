@@ -36,42 +36,88 @@ export const monthlyWage = (c: Pick<EsbContract, 'basicSalary' | 'allowances'>) 
 const toSar = (h: number) => (Math.round(h) / 100).toFixed(2);
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-export function computeEsb(input: { rule?: string; contracts: EsbContract[]; asOf: Date; unpaidLeaveDays?: number }) {
-  const rule: EsbRule = input.rule === 'SA_DOMESTIC_SINGLE' || input.rule === 'SA_LABOR_LAW' ? input.rule : 'SA_DOMESTIC';
-  const cs = [...input.contracts].filter((c) => c.startDate <= input.asOf).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+/** The latest unbroken chain of contracts, up to `asOf` (or the contract end), minus unpaid leave days. */
+export function serviceSpan(contracts: EsbContract[], asOf: Date, unpaidLeaveDays = 0) {
+  const cs = [...contracts].filter((c) => c.startDate <= asOf).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   if (!cs.length) return null;
-  // Latest unbroken chain.
   let start = cs[0]!.startDate, end = cs[0]!.endDate;
   for (const c of cs.slice(1)) {
     if (end && c.startDate.getTime() - end.getTime() > DAY) start = c.startDate;
     end = !end || !c.endDate ? (c.endDate ?? null) : (c.endDate > end ? c.endDate : end);
   }
-  const last = cs[cs.length - 1]!;
-  const until = end && end < input.asOf ? end : input.asOf;
+  const until = end && end < asOf ? end : asOf;
   const calendarDays = Math.max(0, Math.round((until.getTime() - start.getTime()) / DAY) + 1);
-  const unpaid = Math.min(calendarDays, Math.max(0, Math.round(input.unpaidLeaveDays ?? 0)));
+  const unpaid = Math.min(calendarDays, Math.max(0, Math.round(unpaidLeaveDays)));
   const serviceDays = calendarDays - unpaid;
+  // Completed calendar months of service, with the end pushed back by the unpaid days.
+  const effEnd = new Date(until.getTime() - unpaid * DAY + DAY); // exclusive
+  let months = (effEnd.getUTCFullYear() - start.getUTCFullYear()) * 12 + (effEnd.getUTCMonth() - start.getUTCMonth());
+  if (effEnd.getUTCDate() < start.getUTCDate()) months--;
+  return { start, until, calendarDays, unpaid, serviceDays, serviceMonths: Math.max(0, months), last: cs[cs.length - 1]! };
+}
+
+export function computeEsb(input: { rule?: string; contracts: EsbContract[]; asOf: Date; unpaidLeaveDays?: number }) {
+  const rule: EsbRule = input.rule === 'SA_DOMESTIC_SINGLE' || input.rule === 'SA_LABOR_LAW' ? input.rule : 'SA_DOMESTIC';
+  const span = serviceSpan(input.contracts, input.asOf, input.unpaidLeaveDays);
+  if (!span) return null;
+  const { start, until, calendarDays, unpaid, serviceDays, serviceMonths, last } = span;
   const wage = monthlyWage(last);
 
-  let vested = 0, provision = 0, nextVestingDate: string | null = null, completedPeriods = 0;
+  let vested = 0, provision = 0, monthlyProvision = 0, nextVestingDate: string | null = null, completedPeriods = 0;
   if (rule === 'SA_LABOR_LAW') {
     const years = serviceDays / YEAR;
     vested = wage * (Math.min(years, 5) * 0.5 + Math.max(0, years - 5));
     provision = vested;
+    monthlyProvision = wage * (years < 5 ? 0.5 : 1) / 12;
   } else {
     completedPeriods = Math.floor(serviceDays / FOUR_YEARS);
     const counted = rule === 'SA_DOMESTIC_SINGLE' ? Math.min(completedPeriods, 1) : completedPeriods;
     vested = wage * counted;
-    provision = rule === 'SA_DOMESTIC_SINGLE' ? wage * Math.min(serviceDays / FOUR_YEARS, 1) : (wage * serviceDays) / FOUR_YEARS;
+    // Liability provisioning: monthly wage / 48 for every completed month of service, so the
+    // provision reaches one month's wage exactly when the 4-year entitlement vests.
+    monthlyProvision = rule === 'SA_DOMESTIC_SINGLE' && serviceMonths >= 48 ? 0 : wage / 48;
+    provision = rule === 'SA_DOMESTIC_SINGLE' ? wage * Math.min(serviceMonths / 48, 1) : (wage * serviceMonths) / 48;
     if (rule === 'SA_DOMESTIC' || completedPeriods === 0) {
       nextVestingDate = iso(new Date(start.getTime() + ((completedPeriods + 1) * FOUR_YEARS + unpaid - 1) * DAY));
     }
   }
   return {
-    rule, serviceStart: iso(start), serviceEnd: iso(until), calendarDays, unpaidLeaveDays: unpaid, serviceDays,
+    rule, serviceStart: iso(start), serviceEnd: iso(until), calendarDays, unpaidLeaveDays: unpaid, serviceDays, serviceMonths,
     serviceYears: Math.round((serviceDays / YEAR) * 100) / 100, completedFourYearPeriods: completedPeriods,
-    monthlyWage: toSar(wage), vested: toSar(vested), provision: toSar(provision), nextVestingDate,
-    basis: rule === 'SA_LABOR_LAW' ? 'Labor Law Art. 84 (by contract)' : 'Domestic Workers Regulation Art. 16',
+    monthlyWage: toSar(wage), vested: toSar(vested), provision: toSar(provision), monthlyProvision: toSar(monthlyProvision), nextVestingDate,
+    basis: rule === 'SA_LABOR_LAW' ? 'Labor Law Art. 84 (contract override)' : 'Domestic Workers Regulation Art. 16',
+  };
+}
+
+/**
+ * Art. 10 leave: 30 paid days for every 2 completed years of service, accruing at
+ * 15 days a year, unless the contract grants more (`annualLeaveDays` = days per year,
+ * never below the statutory 15). Taken = paid ANNUAL and VACATION_TRAVEL days within
+ * the service chain. Unused days are paid at exit at (monthly wage / 30) per day.
+ */
+export const STATUTORY_LEAVE_DAYS_PER_YEAR = 15;
+export function computeLeave(input: { contracts: Array<EsbContract & { annualLeaveDays: number }>; asOf: Date; unpaidLeaveDays?: number; takenDays: number }) {
+  const span = serviceSpan(input.contracts, input.asOf, input.unpaidLeaveDays);
+  if (!span) return null;
+  const perYear = Math.max(STATUTORY_LEAVE_DAYS_PER_YEAR, (span.last as unknown as { annualLeaveDays?: number }).annualLeaveDays ?? STATUTORY_LEAVE_DAYS_PER_YEAR);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const accrued = r2((perYear * span.serviceDays) / YEAR);
+  // Completed 2-year cycles by calendar anniversary (a cycle completes at the end of the day before
+  // the anniversary); unpaid leave pushes the anniversaries back.
+  const anniversary = (k: number) => { const d = new Date(span.start); d.setUTCFullYear(d.getUTCFullYear() + 2 * k); return new Date(d.getTime() + (span.unpaid - 1) * DAY); };
+  let cycles = 0;
+  while (anniversary(cycles + 1) <= span.until) cycles++;
+  const vested = cycles * perYear * 2;
+  const balance = r2(accrued - input.takenDays);
+  const wage = monthlyWage(span.last);
+  const payout = balance > 0 ? Math.floor((wage * Math.round(balance * 100) + 1500) / 3000) : 0; // wage / 30 × days, halalas
+  return {
+    basis: perYear === STATUTORY_LEAVE_DAYS_PER_YEAR ? 'Domestic Workers Regulation Art. 10 (30 days per 2 years)' : 'Contract (above the Art. 10 minimum)',
+    daysPerYear: perYear, daysPerTwoYears: perYear * 2, serviceStart: iso(span.start), serviceDays: span.serviceDays,
+    accruedDays: accrued, takenDays: r2(input.takenDays), balanceDays: balance,
+    completedTwoYearCycles: cycles, vestedDays: vested, availableNowDays: r2(vested - input.takenDays),
+    nextEntitlementDate: iso(anniversary(cycles + 1)),
+    monthlyWage: toSar(wage), dailyRate: toSar(wage / 30), unusedLeavePayout: toSar(payout),
   };
 }
 
@@ -97,3 +143,16 @@ export async function esbFor(tx: Tx, staffId: string, asOf: Date) {
       allowances: (c.allowances as Array<{ code: string; amount: number }>) ?? [] })) });
 }
 
+
+/** Art. 10 leave position for one worker (reads under the caller's RLS). */
+export async function leaveFor(tx: Tx, staffId: string, asOf: Date) {
+  const contracts = await tx.employmentContract.findMany({ where: { staffId }, orderBy: { startDate: 'asc' } });
+  if (!contracts.length) return null;
+  const leaves = await tx.leaveRecord.findMany({ where: { staffId, startDate: { lte: asOf, gte: contracts[0]!.startDate } } });
+  const days = (l: { startDate: Date; endDate: Date }) => Math.round((Math.min(l.endDate.getTime(), asOf.getTime()) - l.startDate.getTime()) / DAY) + 1;
+  const unpaidLeaveDays = leaves.filter((l) => !l.paid).reduce((n, l) => n + days(l), 0);
+  const takenDays = leaves.filter((l) => l.paid && (l.type === 'ANNUAL' || l.type === 'VACATION_TRAVEL')).reduce((n, l) => n + Math.min(Number(l.days), days(l)), 0);
+  return computeLeave({ asOf, unpaidLeaveDays, takenDays,
+    contracts: contracts.map((c) => ({ startDate: c.startDate, endDate: c.endDate, basicSalary: Number(c.basicSalary), annualLeaveDays: c.annualLeaveDays,
+      allowances: (c.allowances as Array<{ code: string; amount: number }>) ?? [] })) });
+}
