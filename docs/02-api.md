@@ -98,7 +98,7 @@ If wages and amounts must also be unreadable to administrators, application-leve
 | POST | `/auth/otp/verify` | public | Returns access and refresh tokens |
 | POST | `/auth/refresh` | public | |
 | POST | `/auth/logout` | self | Revokes the refresh token and device |
-| GET | `/me` | self | Profile and the list of memberships `[{householdId, role, displayName}]` |
+| GET | `/me` | self | Profile and the caller's active memberships `[{householdId, slug, name, membershipId, systemRole, role}]`. `slug` is the tenant subdomain (`efa` → `efa.darhub.net`) |
 | PATCH | `/me` | self | `preferredLocale`, `timezone`, name, avatar |
 | POST | `/me/devices` | self | Registers a push token |
 | DELETE | `/me/devices/{id}` | self | |
@@ -799,9 +799,12 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 * **Staff roster** with data-protection cues.
 
 **Live binding:**
-* **API client.** `src/lib/api.ts` is server-only, so the token never reaches the browser. It calls `HERP_API_URL` (default `http://localhost:4000`) with the bearer token from the httpOnly `herp_session` cookie.
+* **API client.** `src/lib/api.ts` is server-only, so the token never reaches the browser. It calls `HERP_API_URL` with the bearer token from the httpOnly session cookie (`HERP_SESSION_COOKIE`, default `herp_session`). All settings are in `src/lib/config.ts` and `apps/web/.env.example`.
 * **Dev token.** `HERP_DEV_TOKEN` is honoured only when `NODE_ENV !== 'production'`.
-* **Active household.** It comes from the httpOnly `herp_household` cookie and is sent as `X-Household-Id`. The API's membership check is still the authority. If the cookie names a household the user does not belong to, the first membership is used.
+* **Active household.** It is sent as `X-Household-Id`, and the API's membership check is always the authority.
+  * **On a tenant subdomain** (`efa.darhub.net`, with `HERP_TENANT_BASE_DOMAIN=darhub.net`), the household is the one with that slug. A user who is not a member there gets a 404. There is never a fall-back to another household.
+  * **On the app host** (`app.darhub.net`, or with no base domain set), it comes from the switcher's httpOnly cookie (`HERP_HOUSEHOLD_COOKIE`). If the cookie names a household the user does not belong to, the first membership is used.
+  * **Switcher.** With subdomains configured, the switcher links to each household's subdomain. Otherwise it posts to `/api/tenant`, which answers with a relative, same-site redirect only.
 * **Settlement proxy.** `GET /api/settlement?staffId&asOf&locale` calls `end-of-service`, `leave-balance` and `final-settlement` under the same session. The browser never computes amounts in live mode.
 * **Sample mode.** Without a session the page renders a clearly labelled sample. Sample settlement figures use the API's formulas (`src/lib/settlement-sample.ts`).
 

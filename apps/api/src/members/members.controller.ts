@@ -64,13 +64,13 @@ export class MembersController {
       const [user] = await tx.$queryRaw<Array<{ id: string; preferredLocale: string }>>`
         SELECT id::text, "preferredLocale"::text AS "preferredLocale" FROM users WHERE id = ${ctx.userId}::uuid`;
       if (!user) throw new NotFoundException('user not found');
-      const households = await tx.$queryRaw<Array<{ household_id: string; household_name: I18nText; membership_id: string;
+      const households = await tx.$queryRaw<Array<{ household_id: string; household_slug: string; household_name: I18nText; membership_id: string;
                                                      system_role: string; role_name: I18nText }>>`
-        SELECT household_id::text, household_name, membership_id::text, system_role, role_name FROM app.my_households()`;
+        SELECT household_id::text, household_slug, household_name, membership_id::text, system_role, role_name FROM app.my_households()`;
       return {
         ...user, locale: ctx.locale,
         households: households.map((h) => ({
-          householdId: h.household_id, name: resolveI18n(h.household_name, { locale: ctx.locale }).text,
+          householdId: h.household_id, slug: h.household_slug, name: resolveI18n(h.household_name, { locale: ctx.locale }).text,
           membershipId: h.membership_id, systemRole: h.system_role,
           role: resolveI18n(h.role_name, { locale: ctx.locale }).text,
         })),

@@ -998,10 +998,12 @@ REVOKE INSERT, UPDATE, DELETE ON tenant_keys FROM app_user;
 -- Household picker for GET /v1/me: the caller's ACTIVE, unexpired memberships
 -- across households. Memberships are tenant-isolated, so this is the one
 -- cross-tenant read, and it returns only the caller's own rows.
-CREATE OR REPLACE FUNCTION app.my_households()
-RETURNS TABLE (household_id uuid, household_name jsonb, membership_id uuid, system_role text, role_name jsonb)
+-- The slug is the tenant subdomain (efa.darhub.net); returned only for the caller's own households.
+DROP FUNCTION IF EXISTS app.my_households();
+CREATE FUNCTION app.my_households()
+RETURNS TABLE (household_id uuid, household_slug text, household_name jsonb, membership_id uuid, system_role text, role_name jsonb)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT h.id, h."nameI18n", m.id, r."systemRole"::text, r."nameI18n"
+  SELECT h.id, h.slug, h."nameI18n", m.id, r."systemRole"::text, r."nameI18n"
   FROM memberships m JOIN households h ON h.id = m."householdId" JOIN roles r ON r.id = m."roleId"
   WHERE m."userId" = app.current_user_id() AND m.status = 'ACTIVE'
     AND (m."expiresAt" IS NULL OR m."expiresAt" > now()) AND h."deletedAt" IS NULL

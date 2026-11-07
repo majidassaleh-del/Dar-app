@@ -16,7 +16,7 @@ export function HouseholdBadge({ h, size = 'md' }: { h: Household; size?: 'sm' |
   );
 }
 
-/** Household switcher (EFA Private Office · AFA Household …). Works without JS: a <details> menu of form buttons. */
+/** Household switcher (EFA Private Office · AFA Household …). Works without JS: a <details> menu of form buttons, or of subdomain links. */
 export async function TenantSwitcher({ households, current, back }: { households: Household[]; current: Household; back: string }) {
   const t = await getTranslations('lux.tenant');
   return (
@@ -34,17 +34,22 @@ export async function TenantSwitcher({ households, current, back }: { households
         className="absolute end-0 z-30 mt-2 w-72 overflow-hidden rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-2xl">
         <input type="hidden" name="back" value={back} />
         <p className="px-3 pb-1 pt-2 text-xs text-muted-foreground">{t('switch')}</p>
-        {households.map((h) => (
-          <button key={h.id} type="submit" name="householdId" value={h.id} aria-current={h.id === current.id ? 'true' : undefined}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition hover:bg-muted">
+        {households.map((h) => {
+          const body = (<>
             <HouseholdBadge h={h} size="sm" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{h.name}</span>
               <span className="block truncate text-xs text-muted-foreground">{h.role}</span>
             </span>
             {h.id === current.id && <Check className="size-4 text-gold" aria-label={t('current')} />}
-          </button>
-        ))}
+          </>);
+          const cls = 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition hover:bg-muted';
+          const cur = h.id === current.id ? 'true' as const : undefined;
+          // Tenant subdomains configured: each household is its own origin (efa.darhub.net); otherwise the cookie switch.
+          return h.origin
+            ? <a key={h.id} href={`${h.origin}${back}`} aria-current={cur} className={cls}>{body}</a>
+            : <button key={h.id} type="submit" name="householdId" value={h.id} aria-current={cur} className={cls}>{body}</button>;
+        })}
       </form>
     </details>
   );

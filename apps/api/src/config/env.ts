@@ -1,8 +1,17 @@
 import { z } from 'zod';
+import { corsEntryError, parseCorsOrigins } from './cors';
 
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(4000),
+  /** Public origin of the web app, e.g. https://app.darhub.net (links in notifications and e-mails). */
+  PUBLIC_APP_URL: z.string().url().optional(),
+  /** Public origin of this API, e.g. https://api.darhub.net (absolute URLs such as signed download links). */
+  PUBLIC_API_URL: z.string().url().optional(),
+  /** Browser origins allowed by CORS, comma-separated; exact or https://*.domain (see config/cors.ts). Unset = none. */
+  CORS_ORIGINS: z.string().optional().transform(parseCorsOrigins),
+  /** Reverse-proxy hops to trust for X-Forwarded-For / -Proto (0 = none; 1 behind one load balancer). */
+  TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
   /** Login role WITHOUT table privileges or BYPASSRLS; it only may SET ROLE to DB_REQUEST_ROLE. */
   DATABASE_URL: z.string().url(),
   /** Role every request runs as (app_user locally; "authenticated" on Supabase). */
@@ -41,6 +50,14 @@ const Env = z.object({
   FCM_ACCESS_TOKEN: z.string().optional(),
   /** Worker only: login role that may SET ROLE app_service. */
   WORKER_DATABASE_URL: z.string().url().optional(),
+}).superRefine((e, ctx) => {
+  for (const o of e.CORS_ORIGINS) {
+    const err = corsEntryError(o, e.NODE_ENV === 'production');
+    if (err) ctx.addIssue({ code: 'custom', path: ['CORS_ORIGINS'], message: err });
+  }
+  for (const k of ['PUBLIC_APP_URL', 'PUBLIC_API_URL'] as const) {
+    if (e.NODE_ENV === 'production' && e[k] && !e[k]!.startsWith('https://')) ctx.addIssue({ code: 'custom', path: [k], message: 'must use https in production' });
+  }
 }).refine((e) => e.AUTH_JWKS_URL || e.AUTH_JWT_SECRET, { message: 'set AUTH_JWKS_URL or AUTH_JWT_SECRET' })
   .refine((e) => e.NODE_ENV !== 'production' || e.AUTH_JWKS_URL, { message: 'production requires AUTH_JWKS_URL (asymmetric keys)' })
   .refine((e) => e.HERP_KMS !== 'local' || e.HERP_LOCAL_KEK, { message: 'HERP_KMS=local needs HERP_LOCAL_KEK (32 bytes, base64)' })
