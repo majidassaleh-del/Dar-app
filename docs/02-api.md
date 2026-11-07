@@ -2,6 +2,74 @@
 
 The API is REST + JSON, specified as OpenAPI 3.1, with request and response types generated from the shared Zod schemas in `packages/contracts`. GraphQL was considered and rejected for v1. Per-row RLS and permission scopes are simpler to reason about with fixed resource endpoints. Mobile offline sync is served by a dedicated `/sync` endpoint instead.
 
+## 0. Multi-tenancy and data protection
+
+> **Status: enforced and tested.** The database layer is tested in `tests/rls_test.sql` section 17 (plus 1–16). The HTTP layer is tested in `apps/api/test/tenancy.e2e.test.ts`. Both run on every commit (`scripts/verify.sh`) and in CI.
+
+### 0.1 Tenant model
+
+* **Household = tenant.**
+  * Every household has a UUID and a unique slug (for example `efa`, `afa`).
+  * Every business entity has a `"householdId" NOT NULL` with a foreign key to `households`. That covers staff, contracts, payroll, salary payments, advances, documents, files, vehicles, fuel, petty cash, accounts, transactions, ledger, budgets, requests, work orders, reminders and notifications.
+  * That is **71 tables**, checked automatically. `audit_logs` is the one exception: it may also hold user-level events that have no household, and nobody can read those rows through the API.
+* **People.**
+  * A *user* is a login identity (phone and email) and holds no household data itself.
+  * A *membership* binds a user to one household with one role. A user who works for several households has one membership per household; for example, the EFA office serving both the EFA and AFA families.
+* **One household per request.**
+  * The household comes from `X-Household-Id`. The database accepts it only if the caller has an active, unexpired membership there (`app.current_household_id()`). Otherwise it resolves to nothing, and the request sees no rows.
+  * A multi-household member therefore works in one household at a time. No endpoint, filter or query can combine or compare data of two households, whatever the role, Head and EFA office included.
+* **Errors.** A non-member gets `404`, not `403`, so the response doesn't reveal whether the household exists.
+
+### 0.2 Enforcement layers
+
+| Layer | What it guarantees |
+|---|---|
+| Runtime roles | The API connects as `herp_api` (no BYPASSRLS, no table privileges) and works only through `SET LOCAL ROLE app_user` in a per-request transaction (`PrismaService.withRls`). The worker uses `app_service` (BYPASSRLS) and must filter by `householdId` itself. |
+| Row-level security | Every table has `FORCE ROW LEVEL SECURITY`, so it applies to the table owner as well. Each household table has the `tenant_isolation` policy (`USING` and `WITH CHECK` on the current household); a write aimed at another household is refused. On top of that come restrictive per-role policies (ALL / OWN / ASSIGNED / WARDS). |
+| Reference isolation | Every foreign key between tenant tables, plus uuid arrays and uuid columns without an FK (162 triggers), must point to a row of the **same** household (`app.enforce_same_household`). Polymorphic references (`attachments.entityId`, `reminders.entityId`, `sync_operations.entityId`) are validated the same way. |
+| SECURITY DEFINER functions | These bypass RLS, so they're the main leak risk.<br>• A request may execute only 32 reviewed functions. Each is scoped to the caller's household, user or membership, or through `app.tenant_ok()`, which during a request answers only for the caller's own household.<br>• Internal mutators (`post_journal`, `ensure_chart_of_accounts`, `fulfil_request`, `ledger_account`, `route_request_rows`, `reverse_entry_internal`) cannot be called by a request at all; they run only inside owner-run triggers or the worker.<br>• A new definer function fails the DB suite until it is reviewed and added to the list. |
+| No views | Views run with their owner's rights; the suite fails if one appears. |
+| Encryption keys per household | Field and file encryption use a per-household data key (KMS envelope, `tenant_keys`), so ciphertext from one household cannot be decrypted with another's key. |
+
+**Tests that guard this:**
+* **DB suite, section 17:**
+  * A static check of all 71 tables (FORCE RLS, isolation policy, NOT NULL, FK).
+  * A sweep of 8 role/household contexts across every tenant table, expecting 0 foreign rows. It includes a member of both households and a forged household header.
+  * Cross-household writes are refused.
+  * Definer helpers return nothing for another household's IDs.
+  * Internal mutators are not callable.
+* **HTTP gate:** every GET route the API registers is found at runtime (72 today) and called as another household's Head. The by-ID routes are called with every H1 ID. No response may contain an identifier of the first household, whatever its status code.
+
+### 0.3 Developer and DBA access: what is protected and how
+
+**Encrypted at rest:**
+* **Columns** (AES-256-GCM, per-household key wrapped by Cloud KMS; only the API, holding KMS decrypt permission, can read them):
+  * Iqama, passport and visa numbers.
+  * Border numbers.
+  * Bank IBANs, and workers' payout IBANs (with a blind index and last 4 for search and display).
+  * The lease counterparty ID.
+  * Health conditions and allergies.
+  * Medical restrictions.
+* **Files:** sensitive staff files (passport and iqama scans, medical reports, sick-leave certificates) are encrypted with the same household key before storage.
+* **Authentication secrets:** authenticator (TOTP) secrets are encrypted with an application key. One-time codes and unlock nonces are stored only as HMACs.
+* A database administrator who can read the tables sees only ciphertext for all of these. Decrypting needs separate KMS permission.
+
+**Protected by RLS but stored in plain text:**
+* **What:** names, wages and payroll lines, salary payments, advances, ledger and transactions, petty cash, budgets, vehicles and receipt extractions.
+* **Why:** the database enforces the money rules on these values with SQL arithmetic. That covers the Art. 9 deduction cap, balanced journals, float limits, budget totals and payroll totals. Encrypting the columns would move those guarantees out of the database.
+* **Consequence:** RLS stops every application path and every API user, but **not** a PostgreSQL superuser, the schema owner, or the worker role (BYPASSRLS). Someone with that access can read these values.
+
+So "developers cannot see household data" holds for the encrypted fields. For wages and financial records it depends on production access controls, which are deployment configuration, **not** something this repository can enforce:
+* No standing human access to the production database: break-glass only, through IAM with approval, time limits and audit.
+* `pgaudit` / Cloud SQL audit logs on.
+* Database, KMS and storage permissions held by different principals, so database access alone never decrypts.
+* Customer-managed encryption keys for disks and backups.
+* The worker's credentials kept in Secret Manager.
+
+If wages and amounts must also be unreadable to administrators, application-level encryption of those columns is possible. The cost is moving the payroll and ledger rules out of the database; that would be a separate design decision.
+
+---
+
 ## 1. Conventions
 
 | Topic | Rule |

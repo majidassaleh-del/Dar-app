@@ -70,6 +70,23 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     AND (m."expiresAt" IS NULL OR m."expiresAt" > now())
 $$;
 
+-- True while a statement runs for an API request: the session did SET ROLE to a role that is
+-- subject to RLS (app_user; "authenticated" on Supabase). The 'role' setting is unchanged inside
+-- SECURITY DEFINER functions, so definer helpers can tell a request from a worker (app_service,
+-- BYPASSRLS), a trigger running as the owner, or a migration.
+CREATE OR REPLACE FUNCTION app.in_request_role() RETURNS boolean
+LANGUAGE sql STABLE SET search_path = pg_catalog AS $$
+  SELECT COALESCE((SELECT NOT (rolsuper OR rolbypassrls) FROM pg_roles WHERE rolname = current_setting('role', true)), false)
+$$;
+
+-- Tenant gate for SECURITY DEFINER helpers (they bypass RLS): during a request they answer only
+-- for rows of the caller's current household; elsewhere (workers, owner-run triggers) they are
+-- unrestricted.
+CREATE OR REPLACE FUNCTION app.tenant_ok(p_household uuid) RETURNS boolean
+LANGUAGE sql STABLE SET search_path = pg_catalog AS $$
+  SELECT NOT app.in_request_role() OR p_household = app.current_household_id()
+$$;
+
 CREATE OR REPLACE FUNCTION app.current_membership_id() RETURNS uuid
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT m.id FROM memberships m
@@ -123,7 +140,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION app.is_admin_role(p_role uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT COALESCE((SELECT "systemRole" IN ('HOUSEHOLD_HEAD', 'EFA_OFFICE_ADMIN') FROM roles WHERE id = p_role), false)
+  SELECT COALESCE((SELECT "systemRole" IN ('HOUSEHOLD_HEAD', 'EFA_OFFICE_ADMIN') FROM roles WHERE id = p_role AND app.tenant_ok("householdId")), false)
 $$;
 
 -- Row check: does `scope` cover a row owned/assigned to any of `owners`?
@@ -143,20 +160,20 @@ $$;
 -- Resolve owners through parent tables (definer: bypasses RLS on the parent).
 CREATE OR REPLACE FUNCTION app.staff_member(p_staff uuid) RETURNS uuid[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT ARRAY["membershipId"] FROM staff_profiles WHERE id = p_staff
+  SELECT ARRAY["membershipId"] FROM staff_profiles WHERE id = p_staff AND app.tenant_ok("householdId")
 $$;
 
 CREATE OR REPLACE FUNCTION app.vehicle_drivers(p_vehicle uuid) RETURNS uuid[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT COALESCE(array_agg("driverId"), '{}') FROM vehicle_assignments
-  WHERE "vehicleId" = p_vehicle AND "startsAt" <= now() AND ("endsAt" IS NULL OR "endsAt" > now())
+  WHERE "vehicleId" = p_vehicle AND "startsAt" <= now() AND ("endsAt" IS NULL OR "endsAt" > now()) AND app.tenant_ok("householdId")
 $$;
 
 CREATE OR REPLACE FUNCTION app.request_parties(p_request uuid) RETURNS uuid[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT ARRAY[r."requesterId"] || COALESCE((SELECT array_agg(a."approverId") FROM approvals a
                                              WHERE a."requestId" = r.id), '{}')
-  FROM requests r WHERE r.id = p_request
+  FROM requests r WHERE r.id = p_request AND app.tenant_ok(r."householdId")
 $$;
 
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO app_user, app_service;
@@ -724,7 +741,7 @@ GRANT UPDATE ("nameI18n", "floatLimit", "lowBalanceAlert", "receiptRequiredOver"
 
 CREATE OR REPLACE FUNCTION app.petty_cash_custodian(p_account uuid) RETURNS uuid[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT ARRAY["custodianId"] FROM petty_cash_accounts WHERE id = p_account
+  SELECT ARRAY["custodianId"] FROM petty_cash_accounts WHERE id = p_account AND app.tenant_ok("householdId")
 $$;
 
 CREATE POLICY pcl_read ON petty_cash_logs AS RESTRICTIVE FOR SELECT TO app_user
@@ -794,7 +811,7 @@ CREATE TRIGGER petty_cash_1_apply BEFORE INSERT ON petty_cash_logs
 -- ======================================================= MODULE 7: WORK ORDERS ==
 CREATE OR REPLACE FUNCTION app.work_order_parties(p_wo uuid) RETURNS uuid[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT ARRAY["requesterId", "assigneeId"] FROM work_orders WHERE id = p_wo
+  SELECT ARRAY["requesterId", "assigneeId"] FROM work_orders WHERE id = p_wo AND app.tenant_ok("householdId")
 $$;
 
 CREATE POLICY wo_read ON work_orders AS RESTRICTIVE FOR SELECT TO app_user
@@ -935,7 +952,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
          || COALESCE((SELECT array_agg(COALESCE(p."membershipId", s."membershipId"))
                       FROM trip_passengers p LEFT JOIN staff_profiles s ON s.id = p."staffId"
                       WHERE p."tripId" = t.id), '{}')
-  FROM trips t WHERE t.id = p_trip
+  FROM trips t WHERE t.id = p_trip AND app.tenant_ok(t."householdId")
 $$;
 
 CREATE POLICY trip_read ON trips AS RESTRICTIVE FOR SELECT TO app_user
@@ -1322,7 +1339,7 @@ CREATE TRIGGER payroll_runs_0_guard BEFORE UPDATE ON payroll_runs FOR EACH ROW E
 DROP POLICY payroll_upd ON attendance;
 CREATE OR REPLACE FUNCTION app.household_today(p_household uuid) RETURNS date
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT (now() AT TIME ZONE timezone)::date FROM households WHERE id = p_household
+  SELECT (now() AT TIME ZONE timezone)::date FROM households WHERE id = p_household AND app.tenant_ok(id)
 $$;
 CREATE POLICY attendance_upd ON attendance AS RESTRICTIVE FOR UPDATE TO app_user
   USING ((SELECT app.perm_scope('staff.payroll.manage')) = 'ALL'
@@ -1638,7 +1655,7 @@ GRANT UPDATE ("nameI18n", "defaultLocale", "enabledLocales", "baseCurrency", "co
 -- ---- posting hooks ----------------------------------------------------------------
 CREATE OR REPLACE FUNCTION app.custodian_staff(p_float uuid) RETURNS uuid
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT s.id FROM petty_cash_accounts a JOIN staff_profiles s ON s."membershipId" = a."custodianId" WHERE a.id = p_float
+  SELECT s.id FROM petty_cash_accounts a JOIN staff_profiles s ON s."membershipId" = a."custodianId" WHERE a.id = p_float AND app.tenant_ok(a."householdId")
 $$;
 
 CREATE OR REPLACE FUNCTION app.post_petty_cash() RETURNS trigger
@@ -1801,9 +1818,9 @@ GRANT UPDATE ("nameI18n", institution, "ibanLast4", "ibanCiphertext", "ibanBlind
 
 -- ---- cards ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION app.card_holder(p_card uuid) RETURNS uuid
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$ SELECT "holderId" FROM cards WHERE id = p_card $$;
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$ SELECT "holderId" FROM cards WHERE id = p_card AND app.tenant_ok("householdId") $$;
 CREATE OR REPLACE FUNCTION app.account_custodian(p_account uuid) RETURNS uuid
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$ SELECT "custodianId" FROM financial_accounts WHERE id = p_account $$;
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$ SELECT "custodianId" FROM financial_accounts WHERE id = p_account AND app.tenant_ok("householdId") $$;
 
 CREATE OR REPLACE FUNCTION app.card_rules() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -2027,7 +2044,7 @@ GRANT EXECUTE ON FUNCTION app.reverse_transaction(uuid, text) TO app_user;
 CREATE OR REPLACE FUNCTION app.funding_credit(p_entry uuid) RETURNS numeric
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT COALESCE(sum(l.credit - l.debit), 0) FROM journal_lines l JOIN ledger_accounts a ON a.id = l."ledgerAccountId"
-  WHERE l."entryId" = p_entry AND a."systemKey" = 'funding_clearing'
+  WHERE l."entryId" = p_entry AND a."systemKey" = 'funding_clearing' AND app.tenant_ok(a."householdId")
 $$;
 
 CREATE OR REPLACE FUNCTION app.validate_funding_match() RETURNS trigger
@@ -2349,11 +2366,11 @@ CREATE OR REPLACE FUNCTION app.has_valid_medical(p_staff uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT EXISTS (SELECT 1 FROM medical_checkups c JOIN staff_profiles s ON s.id = c."staffId"
                  WHERE c."staffId" = p_staff AND c.result IN ('FIT', 'FIT_WITH_RESTRICTIONS')
-                   AND c."validUntil" >= app.household_today(s."householdId"))
+                   AND c."validUntil" >= app.household_today(s."householdId") AND app.tenant_ok(s."householdId"))
 $$;
 CREATE OR REPLACE FUNCTION app.has_outstanding_items(p_staff uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT EXISTS (SELECT 1 FROM asset_handovers WHERE "staffId" = p_staff AND status IN ('PENDING_ACK', 'ISSUED'))
+  SELECT EXISTS (SELECT 1 FROM asset_handovers WHERE "staffId" = p_staff AND status IN ('PENDING_ACK', 'ISSUED') AND app.tenant_ok("householdId"))
 $$;
 -- SECURITY INVOKER on purpose: on INSERT the rule applies to interactive users
 -- (caller_is_restricted), while migrations / seed fixtures may load ACTIVE staff.
@@ -2514,7 +2531,8 @@ END $$;
 -- household); every write goes through the definer functions below.
 CREATE OR REPLACE FUNCTION app.user_onboarded(p_user uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT COALESCE((SELECT "onboardedAt" IS NOT NULL FROM user_auth_factors WHERE "userId" = p_user), false)
+  SELECT COALESCE((SELECT "onboardedAt" IS NOT NULL FROM user_auth_factors WHERE "userId" = p_user
+                     AND (NOT app.in_request_role() OR p_user = app.current_user_id())), false)
 $$;
 GRANT EXECUTE ON FUNCTION app.user_onboarded(uuid) TO app_user;
 
@@ -3095,3 +3113,23 @@ BEGIN
   RETURN v_hh;
 END $$;
 GRANT EXECUTE ON FUNCTION app.provision_household TO app_user, app_service;
+
+-- ======================================================= TENANT HARDENING ==
+-- Internal mutators are SECURITY DEFINER (they bypass RLS) and take household / entity ids
+-- as arguments. They are called only from definer triggers and functions (which run as the
+-- owner), never directly by a request: the request role may not EXECUTE them, so no API
+-- path or injected SQL can post a journal, create accounts, fulfil a request or reverse an
+-- entry in another household. Workers keep EXECUTE.
+DO $$
+DECLARE f regprocedure;
+BEGIN
+  FOR f IN SELECT p.oid::regprocedure FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'app' AND p.proname IN ('post_journal', 'ensure_chart_of_accounts', 'fulfil_request', 'ledger_account',
+                                                     'route_request_rows', 'reverse_entry_internal')
+  LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, app_user', f);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO app_service', f);
+  END LOOP;
+END $$;
+-- The global permission catalogue: read-only for requests, and RLS applies to its owner too.
+ALTER TABLE permissions FORCE ROW LEVEL SECURITY;

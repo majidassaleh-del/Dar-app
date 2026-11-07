@@ -524,9 +524,9 @@ BEGIN
   BEGIN
     INSERT INTO journal_entries (id, "householdId", "entryDate", "postedById") VALUES (e, (SELECT v FROM ids WHERE k='h1'), CURRENT_DATE, (SELECT v FROM ids WHERE k='head1'));
     INSERT INTO journal_lines (id, "householdId", "entryId", "ledgerAccountId", debit)
-      VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), e, app.ledger_account((SELECT v FROM ids WHERE k='h1'), 'household_expenses'), 100);
+      VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), e, (SELECT id FROM ledger_accounts WHERE "systemKey" = 'household_expenses'), 100);
     INSERT INTO journal_lines (id, "householdId", "entryId", "ledgerAccountId", credit)
-      VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), e, app.ledger_account((SELECT v FROM ids WHERE k='h1'), 'owner_equity'), 90);
+      VALUES (gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), e, (SELECT id FROM ledger_accounts WHERE "systemKey" = 'owner_equity'), 90);
     SET CONSTRAINTS journal_entries_balanced, journal_lines_balanced IMMEDIATE;
     RAISE EXCEPTION 'FAIL  unbalanced entry accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'PASS  an unbalanced manual entry (100 / 90) is refused at commit';
@@ -540,8 +540,8 @@ SELECT pg_temp.expect('hook sources cannot be forged by users',
      VALUES (gen_random_uuid(), %s, CURRENT_DATE, 'PAYROLL', gen_random_uuid(), %s)$q$, pg_temp.q('h1'), pg_temp.q('head1'))), -1);
 SELECT pg_temp.expect('a header account takes no postings',
   pg_temp.try_rows(format($q$WITH e AS (INSERT INTO journal_entries (id,"householdId","entryDate","postedById") VALUES (gen_random_uuid(), %s, CURRENT_DATE, %s) RETURNING id)
-     INSERT INTO journal_lines (id,"householdId","entryId","ledgerAccountId",debit) SELECT gen_random_uuid(), %s, e.id, app.ledger_account(%s, 'assets'), 1 FROM e$q$,
-     pg_temp.q('h1'), pg_temp.q('head1'), pg_temp.q('h1'), pg_temp.q('h1'))), -2);
+     INSERT INTO journal_lines (id,"householdId","entryId","ledgerAccountId",debit) SELECT gen_random_uuid(), %s, e.id, (SELECT id FROM ledger_accounts WHERE "systemKey" = 'assets'), 1 FROM e$q$,
+     pg_temp.q('h1'), pg_temp.q('head1'), pg_temp.q('h1'))), -2);
 RESET ROLE;
 INSERT INTO ids SELECT 'h2acct', app.ledger_account((SELECT v FROM ids WHERE k='h2'), 'owner_equity');
 SET LOCAL ROLE app_user;
@@ -783,5 +783,113 @@ SELECT pg_temp.expect('…recorded as a verified factor', (SELECT count(*) FROM 
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');  -- head
 SELECT pg_temp.expect('another user (even the Head) cannot see or consume it', (SELECT count(*) FROM auth_challenges)
   + (SELECT CASE WHEN app.consume_auth_challenge('d6000000-0000-0000-0000-000000000001', 'h') = 'NOT_FOUND' THEN 0 ELSE 10 END), 0);
+
+-- ---- 17. multi-tenant isolation gate ----
+RESET ROLE;
+-- (a) Static: every table with "householdId" is FORCE-RLS, carries the tenant_isolation policy
+--     (USING and WITH CHECK on the caller's current household), and its householdId is NOT NULL
+--     with a foreign key to households (audit_logs alone may hold user-level rows without one).
+DO $$
+DECLARE bad text;
+BEGIN
+  SELECT string_agg(c.relname, ', ') INTO bad
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'householdId' AND NOT a.attisdropped
+  WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT (
+        c.relrowsecurity AND c.relforcerowsecurity
+    AND EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid AND p.polname = 'tenant_isolation' AND p.polpermissive AND p.polcmd = '*'
+                  AND pg_get_expr(p.polqual, p.polrelid) LIKE '%current_household_id()%'
+                  AND pg_get_expr(p.polwithcheck, p.polrelid) LIKE '%current_household_id()%')
+    AND (a.attnotnull OR c.relname = 'audit_logs')
+    AND EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conrelid = c.oid AND k.contype = 'f' AND k.confrelid = 'households'::regclass AND k.conkey = ARRAY[a.attnum]));
+  IF bad IS NOT NULL THEN RAISE EXCEPTION 'FAIL  tenant tables without full isolation: %', bad; END IF;
+  RAISE NOTICE 'PASS  tenant scoping: all % household tables are FORCE-RLS, tenant_isolation (USING + WITH CHECK), householdId NOT NULL + FK',
+    (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'householdId'
+     WHERE n.nspname = 'public' AND c.relkind = 'r');
+  -- The few tables without "householdId" are identity / catalogue tables; each is RLS-protected.
+  SELECT string_agg(c.relname, ', ') INTO bad FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relforcerowsecurity;
+  IF bad IS NOT NULL THEN RAISE EXCEPTION 'FAIL  tables without FORCE ROW LEVEL SECURITY: %', bad; END IF;
+  IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname = 'public') OR EXISTS (SELECT 1 FROM pg_matviews WHERE schemaname = 'public') THEN
+    RAISE EXCEPTION 'FAIL  views bypass RLS of their owner; review before adding one';
+  END IF;
+  RAISE NOTICE 'PASS  no table without FORCE RLS, no views';
+END $$;
+
+-- (b) SECURITY DEFINER functions bypass RLS. The request role may execute only these reviewed
+--     ones; each scopes by the caller (current household / user / membership) or by app.tenant_ok().
+--     A new definer function fails here until it is reviewed and added.
+DO $$
+DECLARE extra text;
+BEGIN
+  SELECT string_agg(p.proname, ', ') INTO extra FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'app' AND p.prosecdef AND p.prorettype <> 'trigger'::regtype AND has_function_privilege('app_user', p.oid, 'EXECUTE')
+    AND p.proname NOT IN ('accept_totp_step', 'account_custodian', 'card_holder', 'close_books', 'consume_auth_challenge', 'current_household_id',
+      'current_membership_id', 'custodian_staff', 'funding_credit', 'has_outstanding_items', 'has_valid_medical', 'household_today', 'is_admin_role',
+      'is_household_admin', 'my_households', 'my_payslip_runs', 'my_wards', 'perm_scope', 'petty_cash_custodian', 'provision_household',
+      'record_receipt_extraction', 'record_totp_failure', 'request_parties', 'reverse_journal_entry', 'reverse_transaction', 'set_totp_secret',
+      'staff_member', 'totp_locked', 'trip_parties', 'user_onboarded', 'vehicle_drivers', 'work_order_parties');
+  IF extra IS NOT NULL THEN RAISE EXCEPTION 'FAIL  unreviewed SECURITY DEFINER functions executable by app_user: %', extra; END IF;
+  RAISE NOTICE 'PASS  definer functions reachable by requests: only the 32 reviewed, tenant-scoped ones';
+END $$;
+
+-- Data in both households, so the sweeps below would see a leak.
+SELECT pg_temp.expect('fixtures: both households hold data', (SELECT count(DISTINCT "householdId") FROM memberships), 2);
+CREATE FUNCTION pg_temp.foreign_rows() RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE t text; n bigint; total bigint := 0;
+BEGIN
+  FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace
+           JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'householdId' WHERE ns.nspname = 'public' AND c.relkind = 'r' LOOP
+    EXECUTE format('SELECT count(*) FROM %I WHERE "householdId" IS DISTINCT FROM app.current_household_id()', t) INTO n;
+    total := total + n;
+  END LOOP;
+  RETURN total;
+END $$;
+-- A member of BOTH households (an EFA office serving several families).
+INSERT INTO memberships (id,"householdId","userId","roleId",status,"updatedAt")
+SELECT gen_random_uuid(), (SELECT v FROM ids WHERE k='h2'), '00000000-0000-0000-0000-000000000010', r.id, 'ACTIVE', now()
+FROM roles r WHERE r."householdId" = (SELECT v FROM ids WHERE k='h2') AND r."systemRole" = 'EFA_OFFICE_ADMIN';
+SET LOCAL ROLE app_user;
+
+-- (c) Sweep: for every role, no row of another household is visible in ANY tenant table.
+DO $$
+DECLARE r record; n bigint;
+BEGIN
+  FOR r IN SELECT * FROM (VALUES ('00000000-0000-0000-0000-00000000000a','h1','head'), ('00000000-0000-0000-0000-000000000010','h1','EFA (H1 context)'),
+                                 ('00000000-0000-0000-0000-000000000010','h2','EFA (H2 context)'), ('00000000-0000-0000-0000-00000000000f','h1','spouse'),
+                                 ('00000000-0000-0000-0000-00000000000c','h1','maid'), ('00000000-0000-0000-0000-00000000000e','h1','driver'),
+                                 ('00000000-0000-0000-0000-00000000000d','h1','child'), ('00000000-0000-0000-0000-00000000000b','h2','other head')) v(u, hh, label) LOOP
+    PERFORM pg_temp.as_user(r.u, r.hh);
+    n := pg_temp.foreign_rows();
+    IF n <> 0 THEN RAISE EXCEPTION 'FAIL  % sees % rows of another household', r.label, n; END IF;
+  END LOOP;
+  RAISE NOTICE 'PASS  cross-tenant sweep: 8 role/household contexts × every tenant table → 0 foreign rows';
+END $$;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-000000000010','h2');
+SELECT pg_temp.expect('a multi-household member sees exactly one household per request (H2 context)',
+  (SELECT count(DISTINCT "householdId") FROM memberships) + (SELECT count(*) FROM memberships WHERE "householdId" = (SELECT v FROM ids WHERE k='h1')), 1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h2');   -- maid claims H2: not a member
+SELECT pg_temp.expect('a forged household context resolves to nothing', (SELECT count(*) FROM memberships) + pg_temp.foreign_rows()
+  + (SELECT count(*) FROM staff_profiles) + (SELECT CASE WHEN app.current_household_id() IS NULL THEN 0 ELSE 1 END), 0);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
+SELECT pg_temp.expect('…nor can a write be aimed at another household: RLS WITH CHECK (vehicles) and the same-household trigger (tasks)',
+  pg_temp.try_rows(format($q$INSERT INTO vehicles (id,"householdId",make,model,year,"plateNumber","updatedAt") VALUES (gen_random_uuid(), %s, 'X', 'Y', 2024, 'LEAK 1', now())$q$, pg_temp.q('h1')))
+  + pg_temp.try_rows(format($q$INSERT INTO household_tasks (id,"householdId","titleI18n","createdById") VALUES (gen_random_uuid(), %s, '{"en":"x"}', %s)$q$,
+     pg_temp.q('h1'), pg_temp.q('head2'))), -4);
+
+-- (d) Definer helpers answer only for the caller's household; internal mutators are not callable.
+SELECT pg_temp.expect('helpers return nothing for another household''s ids',
+  (SELECT CASE WHEN app.staff_member((SELECT v FROM ids WHERE k='maidStaff')) IS NULL THEN 0 ELSE 1 END)
+  + (SELECT cardinality(app.vehicle_drivers('20000000-0000-0000-0000-000000000001')))
+  + (SELECT CASE WHEN app.household_today((SELECT v FROM ids WHERE k='h1')) IS NULL THEN 0 ELSE 1 END)
+  + (SELECT CASE WHEN app.is_admin_role((SELECT v FROM ids WHERE k='headRole')) THEN 1 ELSE 0 END)
+  + (SELECT CASE WHEN app.user_onboarded('00000000-0000-0000-0000-00000000000a') THEN 1 ELSE 0 END), 0);
+SELECT pg_temp.expect('internal mutators (post_journal, ensure_chart_of_accounts, fulfil_request) cannot be called by a request',
+  pg_temp.try_rows(format($q$SELECT app.post_journal(%s, 'MANUAL', NULL, CURRENT_DATE, '{}', '[]')$q$, pg_temp.q('h1')))
+  + pg_temp.try_rows(format($q$SELECT app.ensure_chart_of_accounts(%s)$q$, pg_temp.q('h1')))
+  + pg_temp.try_rows($q$SELECT app.fulfil_request(gen_random_uuid())$q$), -3);
+RESET ROLE;
+SELECT pg_temp.expect('…while the owner / workers keep them (household_today for H1)', (SELECT CASE WHEN app.household_today((SELECT v FROM ids WHERE k='h1')) IS NOT NULL THEN 1 ELSE 0 END), 1);
+SET LOCAL ROLE app_user;
 
 ROLLBACK;

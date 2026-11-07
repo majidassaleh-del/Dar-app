@@ -178,6 +178,8 @@ export class LedgerController {
   @Get('staff/:staffId')
   staffLedger(@Ctx() ctx: RequestContext, @Param('staffId', ParseUUIDPipe) staffId: string) {
     return this.db.withRls(ctx, async (tx) => {
+      // 404 for a worker the caller cannot see (another household, or not permitted), not a page of zeros.
+      if (!(await tx.staffProfile.findFirst({ where: { id: staffId }, select: { id: true } }))) throw new NotFoundException('staff member not found');
       const rows = await tx.$queryRaw<Array<{ key: string; type: string; dr: string; cr: string }>>`
         SELECT a."systemKey" AS key, a.type::text AS type, COALESCE(sum(l.debit), 0)::text AS dr, COALESCE(sum(l.credit), 0)::text AS cr
         FROM journal_lines l JOIN ledger_accounts a ON a.id = l."ledgerAccountId"
