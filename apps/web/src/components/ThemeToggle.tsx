@@ -14,11 +14,11 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   return (
-    <div role="radiogroup" aria-label={t('toggle')} className="inline-flex rounded-md border border-sidebar-border p-0.5">
+    <div role="radiogroup" aria-label={t('toggle')} className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5">
       {OPTIONS.map(({ value, Icon }) => (
         <button key={value} type="button" role="radio" aria-checked={mounted && theme === value} title={t(value)} onClick={() => setTheme(value)}
-          className={cn('inline-flex size-7 items-center justify-center rounded-sm text-sidebar-muted transition-colors hover:text-sidebar-foreground',
-            mounted && theme === value && 'bg-sidebar-accent text-sidebar-foreground')}>
+          className={cn('inline-flex size-7 items-center justify-center rounded-md text-header-muted transition-colors hover:text-header-foreground',
+            mounted && theme === value && 'bg-[#d97706]/90 text-[#022c22]')}>
           <Icon className="size-3.5" aria-hidden="true" /><span className="sr-only">{t(value)}</span>
         </button>
       ))}

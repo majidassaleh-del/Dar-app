@@ -16,7 +16,7 @@ export function TableBody({ className, ...props }: React.ComponentProps<'tbody'>
   return <tbody data-slot="table-body" className={cn('[&_tr:last-child]:border-0', className)} {...props} />;
 }
 export function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
-  return <tr data-slot="table-row" className={cn('border-b border-slate-200 transition-colors hover:bg-muted/50 dark:border-slate-800', className)} {...props} />;
+  return <tr data-slot="table-row" className={cn('border-b border-border transition-colors hover:bg-muted/60', className)} {...props} />;
 }
 export function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
   return <th data-slot="table-head" className={cn('h-10 whitespace-nowrap px-3 text-start align-middle text-xs font-medium text-muted-foreground', className)} {...props} />;

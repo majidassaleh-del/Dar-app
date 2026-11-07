@@ -158,5 +158,116 @@
       "dark": "ጨለማ",
       "system": "ሲስተም"
     }
+  },
+  "lux": {
+    "tenant": {
+      "label": "ቤተሰብ",
+      "switch": "ቤተሰብ ቀይር",
+      "current": "የአሁኑ ቤተሰብ"
+    },
+    "mode": {
+      "live": "ቀጥታ መረጃ",
+      "sample": "የናሙና መረጃ · API አልተገናኘም"
+    },
+    "hero": {
+      "title": "የሥራ አስፈጻሚ ዕለታዊ ማጠቃለያ",
+      "staff": "ሠራተኞች",
+      "active": "በሥራ ላይ",
+      "probation": "በሙከራ ላይ",
+      "onLeave": "በፈቃድ ላይ",
+      "workers": "{count, plural, one {# ሠራተኛ} other {# ሠራተኞች}}",
+      "medicalValid": "የሚሰሩ የሕክምና ምርመራዎች",
+      "decisions": "የዛሬ ውሳኔዎች"
+    },
+    "fleet": {
+      "title": "የተሽከርካሪዎች ሁኔታ",
+      "odometer": "{km, number} ኪ.ሜ",
+      "docs": "ሰነዶች",
+      "allValid": "ሁሉም የሚሰሩ",
+      "expiresIn": "{doc} በ{days, plural, one {# ቀን} other {# ቀናት}}",
+      "expired": "{doc} ጊዜው አልፏል",
+      "service": "አገልግሎት",
+      "serviceOk": "በጊዜው",
+      "serviceDue": "{item} ደርሷል",
+      "assigned": "ሾፌር ተመድቧል",
+      "doc": {
+        "REGISTRATION": "ኢስቲማራ",
+        "INSURANCE": "ኢንሹራንስ",
+        "INSPECTION": "ፋሐስ"
+      },
+      "odometerLabel": "ኦዶሜትር"
+    },
+    "compliance": {
+      "title": "የተገዢነት ዋና ነጥቦች",
+      "none": "ምንም የቀረ የለም"
+    },
+    "settlement": {
+      "title": "የፋይናንስና የክፍያ ማዕከል",
+      "subtitle": "ከቤተሰቡ ውሎች፣ ፈቃዶችና ቅድመ ክፍያዎች ቀጥታ ስሌት።",
+      "worker": "ሠራተኛ",
+      "asOf": "ቀን",
+      "esb": "የአገልግሎት ማብቂያ · አንቀጽ 16",
+      "esbRule": "ለእያንዳንዱ 4 ሙሉ ዓመት የአንድ ወር ደመወዝ",
+      "toNextEsb": "እስከሚቀጥለው የ4 ዓመት መብት {days, plural, one {# ቀን} other {# ቀናት}}",
+      "leave": "የፈቃድ ክፍያ · አንቀጽ 10",
+      "leaveRule": "ለእያንዳንዱ 2 ሙሉ ዓመት 30 ቀን",
+      "toNextLeave": "ቀጣዮቹ 30 ቀናት በ{date}",
+      "vested": "አሁን የሚገባ",
+      "provision": "የግዴታ ተጠባባቂ",
+      "monthlyProvision": "ወርሃዊ ተጠባባቂ (ደመወዝ ÷ 48)",
+      "wage": "ወርሃዊ ደመወዝ",
+      "daily": "የቀን ተመን (ደመወዝ ÷ 30)",
+      "accrued": "የተጠራቀመ",
+      "taken": "የተወሰደ",
+      "balance": "ያልተጠቀመ",
+      "payout": "ያልተጠቀመ ፈቃድ ክፍያ",
+      "total": "ሲለቅ ጠቅላላ የሚከፈል",
+      "advances": "ያልተከፈለ ቅድመ ክፍያ",
+      "net": "ከቅድመ ክፍያ በኋላ",
+      "breakdown": "የደመወዝ ዝርዝር",
+      "years": "{years} ዓመት አገልግሎት",
+      "days": "{days} ቀን",
+      "noWorkers": "ውል ያለው ሠራተኛ ገና የለም",
+      "loading": "እየተሰላ ነው…",
+      "error": "ማስላት አልተቻለም"
+    },
+    "protection": {
+      "title": "የመረጃ ጥበቃ",
+      "encrypted": "የተመሰጠረ",
+      "hint": "በዚህ ቤተሰብ ቁልፍ AES-256-GCM። የመጨረሻዎቹ 4 ቁምፊዎች ብቻ ይታያሉ።",
+      "identity": "የመታወቂያ ቁጥር",
+      "iban": "የደመወዝ IBAN",
+      "health": "የጤና መዝገብ",
+      "healthHint": "የተመሰጠረ · ለሚያስፈልገው ብቻ",
+      "isolated": "ለቤተሰቡ ብቻ",
+      "isolatedHint": "የረድፍ ደረጃ ደህንነት፦ ሌላ ቤተሰብ ሊያነበው አይችልም።",
+      "none": "አልተመዘገበም"
+    },
+    "roster": {
+      "title": "ሠራተኞች",
+      "name": "ስም",
+      "role": "ሚና",
+      "status": "ሁኔታ"
+    },
+    "staffType": {
+      "HOUSEMAID": "የቤት ሠራተኛ",
+      "COOK": "ምግብ አብሳይ",
+      "NANNY": "ሞግዚት",
+      "DRIVER": "ሾፌር",
+      "GARDENER": "አትክልተኛ",
+      "SECURITY": "ጥበቃ",
+      "NURSE": "ነርስ",
+      "TUTOR": "አስጠኚ",
+      "OTHER": "ሌላ"
+    },
+    "status": {
+      "RECRUITING": "በምልመላ ላይ",
+      "ON_PROBATION": "በሙከራ ላይ",
+      "ACTIVE": "በሥራ ላይ",
+      "ON_LEAVE": "በፈቃድ ላይ",
+      "ABSCONDED": "የጠፋ (ሁሩብ)",
+      "TERMINATED": "የተቋረጠ",
+      "FINAL_EXIT": "የመጨረሻ መውጫ"
+    }
   }
 }

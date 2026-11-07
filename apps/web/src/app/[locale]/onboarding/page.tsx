@@ -1,7 +1,8 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Check, Fingerprint, KeyRound, Mail, Smartphone } from 'lucide-react';
 import type { Locale } from '@herp/i18n';
-import { AppShell } from '@/components/AppShell';
+import { ExecShell } from '@/components/ExecShell';
+import { loadDashboard } from '@/lib/dashboard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,18 +16,19 @@ export default async function Onboarding({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations('exec.onboarding');
+  const d = await loadDashboard(locale);
   const current = STEPS.find((s) => !state[s.key])?.key;
   return (
-    <AppShell title={t('title')} subtitle={t('subtitle')}>
+    <ExecShell title={t('title')} subtitle={t('subtitle')} households={d.households} household={d.current} mode={d.mode} back={`/${locale}/onboarding`}>
       <Card className="max-w-2xl py-2">
         <CardContent className="px-0">
-          <ol className="divide-y divide-slate-200 dark:divide-slate-800">
+          <ol className="divide-y divide-border">
             {STEPS.map(({ key, Icon }, i) => {
               const done = state[key], active = key === current;
               return (
                 <li key={key} className="flex items-center gap-4 px-5 py-4">
                   <span className={cn('grid size-9 shrink-0 place-items-center rounded-full border text-sm font-medium tabular-nums',
-                    done ? 'border-transparent bg-ok-soft text-ok' : active ? 'border-transparent bg-primary text-primary-foreground' : 'border-slate-200 text-muted-foreground dark:border-slate-800')}>
+                    done ? 'border-transparent bg-ok-soft text-ok' : active ? 'border-transparent bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>
                     {done ? <Check className="size-4" aria-hidden="true" /> : i + 1}
                   </span>
                   <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -38,6 +40,6 @@ export default async function Onboarding({ params }: { params: Promise<{ locale:
           </ol>
         </CardContent>
       </Card>
-    </AppShell>
+    </ExecShell>
   );
 }

@@ -32,6 +32,16 @@ pnpm --filter @herp/api test                # API e2e against a fresh Postgres D
 scripts/dev-db.sh herp_dev --fixtures       # then: cd apps/api && cp .env.example .env && pnpm build && pnpm start
 ```
 
+**Live executive dashboard (demo).** With the API running on `:4000` against `herp_dev`:
+
+```bash
+psql herp_dev -f scripts/demo-households.sql            # EFA Private Office + AFA Household
+AUTH_JWT_SECRET=… node scripts/demo-seed.mjs            # seeds via the API, prints HERP_DEV_TOKEN=…
+HERP_API_URL=http://localhost:4000 HERP_DEV_TOKEN=… pnpm --filter @herp/web dev
+```
+
+`HERP_DEV_TOKEN` is ignored when `NODE_ENV=production`, where the token comes from the httpOnly `herp_session` cookie. Without either, the dashboard shows labelled sample data.
+
 `rls.sql` must be applied by a role with BYPASSRLS (it checks and aborts otherwise).
 
 ## Building API modules (`apps/api`)

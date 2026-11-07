@@ -1,151 +1,185 @@
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Car, ShieldCheck, Users, Wrench, Gauge, UserRound, HeartPulse } from 'lucide-react';
 import { getDirection, localeMeta, type Locale } from '@herp/i18n';
-import { AppShell } from '@/components/AppShell';
+import { ExecShell } from '@/components/ExecShell';
+import { EncryptedField } from '@/components/EncryptedField';
+import { SaudiPlate } from '@/components/SaudiPlate';
+import { SettlementHub } from '@/components/SettlementHub';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart } from '@/components/tremor/bar-chart';
-import { BarList } from '@/components/tremor/bar-list';
 import { ProgressBar } from '@/components/tremor/progress-bar';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { loadDashboard, type VehicleCard } from '@/lib/dashboard';
 import { cn } from '@/lib/utils';
 
-type Severity = 'critical' | 'warning' | 'info';
-type PulseKey = 'medicalOverdue' | 'documentsExpired' | 'vehicleDocsDue' | 'approvalsWaiting' | 'fuelFlagged' | 'pettyCashToReview';
+export const dynamic = 'force-dynamic'; // live data per request (session + household)
 
-/**
- * EFA Daily Pulse on shadcn/ui + Tremor primitives. `pulse` has the shape of
- * GET /v1/dashboard/pulse (sample values; attention keys without the `pulse.`
- * prefix); wiring the authenticated API client replaces it.
- */
-const pulse = {
-  generatedAt: '2026-11-04T06:00:00Z',
-  attention: [
-    { severity: 'critical' as Severity, key: 'medicalOverdue' as PulseKey, count: 2, deepLink: '/compliance/staff' },
-    { severity: 'critical' as Severity, key: 'documentsExpired' as PulseKey, count: 1, deepLink: '/staff/documents/expiring' },
-    { severity: 'warning' as Severity, key: 'vehicleDocsDue' as PulseKey, count: 1, deepLink: '/fleet/overview' },
-    { severity: 'warning' as Severity, key: 'approvalsWaiting' as PulseKey, count: 3, deepLink: '/requests' },
-    { severity: 'warning' as Severity, key: 'fuelFlagged' as PulseKey, count: 1, deepLink: '/fleet/overview' },
-    { severity: 'info' as Severity, key: 'pettyCashToReview' as PulseKey, count: 4, deepLink: '/petty-cash' },
-  ],
-  payroll: { currentMonth: { period: '2026-11', daysUntilDue: 26, total: '18450.00' } },
-  documents: { byTier: { EXPIRED: 1, '15': 1, '30': 1, '60': 2 } as Record<string, number> },
-  medical: { workers: 7, needsAction: 2 }, workOrders: { open: 5 }, pettyCash: { pendingReview: 4, amount: '612.40' },
-  fleet: { due: 2 }, esb: { totalProvision: '41380.00' },
-  budgets: [
-    { name: 'groceries', budget: 6000, spent: 4870 }, { name: 'fuel', budget: 2500, spent: 2710 },
-    { name: 'utilities', budget: 3200, spent: 2140 }, { name: 'household', budget: 2000, spent: 960 },
-  ],
-};
-const BUDGET_NAMES: Record<string, Record<string, string>> = {
-  ar: { groceries: 'المقاضي', fuel: 'الوقود', utilities: 'الخدمات', household: 'المنزل' },
-  en: { groceries: 'Groceries', fuel: 'Fuel', utilities: 'Utilities', household: 'Household' },
-};
+const todayRiyadh = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date());
 
-export default async function DailyPulse({ params }: { params: Promise<{ locale: Locale }> }) {
+export default async function ExecutivePulse({ params }: { params: Promise<{ locale: Locale }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations();
   const f = await getFormatter();
+  const d = await loadDashboard(locale);
   const dir = getDirection(locale);
-  const now = new Date(pulse.generatedAt);
-  const hijri = new Intl.DateTimeFormat(`${localeMeta[locale].intlTag}-u-ca-islamic-umalqura`, { dateStyle: 'long', timeZone: 'Asia/Riyadh' }).format(now);
-  const month = f.dateTime(new Date(`${pulse.payroll.currentMonth.period}-01T12:00:00Z`), { month: 'long', year: 'numeric' });
-  const sar = (v: number | string) => f.number(Number(v), 'sar');
   const Forward = dir === 'rtl' ? ArrowLeft : ArrowRight;
-  const kpis: Array<{ label: string; value: string; note?: string; tone?: Severity }> = [
-    { label: t('exec.kpi.payroll'), value: sar(pulse.payroll.currentMonth.total), note: t('exec.kpi.payrollDue', { month, days: pulse.payroll.currentMonth.daysUntilDue }) },
-    { label: t('exec.kpi.pettyCash'), value: sar(pulse.pettyCash.amount), note: t('exec.kpi.pettyCashReview', { count: pulse.pettyCash.pendingReview }) },
-    { label: t('exec.kpi.workOrders'), value: f.number(pulse.workOrders.open), note: t('exec.kpi.workOrdersOpen', { count: pulse.workOrders.open }) },
-    { label: t('exec.kpi.esb'), value: sar(pulse.esb.totalProvision) },
-  ];
-  const names = BUDGET_NAMES[locale] ?? BUDGET_NAMES.en!;
-  const budgets = pulse.budgets.map((b) => ({ ...b, name: names[b.name] ?? b.name }));
-  const tiers = Object.entries(pulse.documents.byTier).map(([tier, n]) => ({
-    name: tier === 'EXPIRED' ? t('exec.docs.expired') : t('exec.docs.within', { days: Number(tier) }), value: n,
-    tone: (tier === 'EXPIRED' ? 'critical' : tier === '15' ? 'warning' : 'navy') as 'critical' | 'warning' | 'navy' }));
-  const valid = pulse.medical.workers - pulse.medical.needsAction;
+  const now = new Date();
+  const hijri = new Intl.DateTimeFormat(`${localeMeta[locale].intlTag}-u-ca-islamic-umalqura`, { dateStyle: 'long', timeZone: 'Asia/Riyadh' }).format(now);
+  const sar = (v: string | number) => f.number(Number(v), { style: 'currency', currency: 'SAR', maximumFractionDigits: 0 });
+
+  const count = (s: string) => d.staff.filter((x) => x.status === s).length;
+  const workforce = [{ k: 'active', n: count('ACTIVE') }, { k: 'probation', n: count('ON_PROBATION') }, { k: 'onLeave', n: count('ON_LEAVE') }] as const;
+  const medicalValid = Math.max(0, d.medical.workers - d.medical.needsAction);
+  const tone = (days: number) => (days < 0 ? 'critical' : days <= 30 ? 'warning' : 'ok') as 'critical' | 'warning' | 'ok';
+  const vehicleState = (v: VehicleCard) => {
+    const worstDoc = [...v.docs].sort((a, b) => a.daysLeft - b.daysLeft)[0];
+    const due = v.maintenance.find((m) => m.status === 'OVERDUE') ?? v.maintenance.find((m) => m.status === 'DUE_SOON');
+    return { worstDoc, due };
+  };
 
   return (
-    <AppShell current="pulse" title={t('pulse.title')}
-      subtitle={<>{f.dateTime(now, { dateStyle: 'full', timeZone: 'Asia/Riyadh' })} · {hijri} · {t('exec.updated', { time: f.dateTime(now, { timeStyle: 'short', timeZone: 'Asia/Riyadh' }) })}</>}>
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label={t('pulse.title')}>
-        {kpis.map((k) => (
-          <Card key={k.label} className="gap-2">
-            <CardHeader><CardDescription>{k.label}</CardDescription></CardHeader>
-            <CardContent className="grid gap-1">
-              <span className="text-2xl font-semibold tracking-tight tabular-nums">{k.value}</span>
-              {k.note && <span className="text-sm text-muted-foreground">{k.note}</span>}
-            </CardContent>
-          </Card>
-        ))}
+    <ExecShell current="pulse" title={t('lux.hero.title')} households={d.households} household={d.current} mode={d.mode} back={`/${locale}`}
+      subtitle={<>{f.dateTime(now, { dateStyle: 'full', timeZone: 'Asia/Riyadh' })} · {hijri}</>}>
+
+      {/* Hero: workforce · decisions · ESB liability */}
+      <section className="grid gap-4 lg:grid-cols-3" aria-label={t('lux.hero.title')}>
+        <article className="glass gold-edge p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"><Users className="size-4 text-gold" aria-hidden="true" />{t('lux.hero.staff')}</h2>
+          <p className="mt-2 font-display text-4xl font-bold tabular">{f.number(d.staff.length)}</p>
+          <p className="text-sm text-muted-foreground">{t('lux.hero.workers', { count: d.staff.length })}</p>
+          <ul className="mt-4 flex flex-wrap gap-2">
+            {workforce.map((w) => (
+              <li key={w.k} className="rounded-full border border-border bg-card-solid/70 px-3 py-1 text-xs"><span className="font-semibold tabular">{f.number(w.n)}</span> {t(`lux.hero.${w.k}`)}</li>
+            ))}
+          </ul>
+          <div className="mt-4 grid gap-1">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><HeartPulse className="size-3.5" aria-hidden="true" />{t('lux.hero.medicalValid')}</span>
+            <ProgressBar value={medicalValid} max={Math.max(1, d.medical.workers)} variant={d.medical.needsAction ? 'gold' : 'ok'}
+              label={`${f.number(medicalValid)} / ${f.number(d.medical.workers)}`} />
+          </div>
+        </article>
+
+        <article className="glass gold-edge p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"><ShieldCheck className="size-4 text-gold" aria-hidden="true" />{t('lux.hero.decisions')}</h2>
+          <p className="mt-2 font-display text-4xl font-bold tabular">{f.number(d.attention.reduce((s, a) => s + a.count, 0))}</p>
+          <ul className="mt-3 grid gap-2">
+            {d.attention.slice(0, 3).map((a) => (
+              <li key={a.key} className="flex items-center gap-2 text-sm"><Badge variant={a.severity}>{t(`exec.severity.${a.severity}`)}</Badge><span className="min-w-0 truncate">{t(`pulse.${a.key}` as 'pulse.medicalOverdue', { count: a.count })}</span></li>
+            ))}
+            {!d.attention.length && <li className="text-sm text-muted-foreground">{t('lux.compliance.none')}</li>}
+          </ul>
+        </article>
+
+        <article className="glass relative overflow-hidden p-5">
+          <div aria-hidden="true" className="absolute -end-10 -top-10 size-40 rounded-full bg-[#d97706]/15 blur-2xl" />
+          <h2 className="text-sm font-semibold text-muted-foreground">{t('exec.kpi.esb')}</h2>
+          <p className="mt-2 font-display text-4xl font-bold tabular text-primary dark:text-[#fbbf24]">{sar(d.esb.totalProvision)}</p>
+          <p className="text-sm text-muted-foreground">{t('lux.settlement.provision')}</p>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-xs text-muted-foreground">{t('lux.settlement.vested')}</dt><dd className="font-semibold tabular">{sar(d.esb.totalVested)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t('lux.hero.staff')}</dt><dd className="font-semibold tabular">{t('lux.hero.workers', { count: d.esb.workers })}</dd></div>
+          </dl>
+        </article>
       </section>
 
-      <Card className="gap-0 pb-0">
-        <CardHeader className="border-b border-slate-200 pb-4 dark:border-slate-800">
-          <CardTitle>{t('exec.attention')}</CardTitle>
-          <CardDescription className="tabular-nums">{f.number(pulse.attention.length)}</CardDescription>
-        </CardHeader>
-        {pulse.attention.length === 0 ? <CardContent className="py-5 text-sm text-muted-foreground">{t('exec.allClear')}</CardContent> : (
+      {/* Fleet */}
+      <section aria-labelledby="fleet-title" className="grid gap-3">
+        <h2 id="fleet-title" className="flex items-center gap-2 text-lg font-bold"><Car className="size-5 text-gold" aria-hidden="true" />{t('lux.fleet.title')}</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {d.vehicles.map((v) => {
+            const { worstDoc, due } = vehicleState(v);
+            return (
+              <article key={v.id} className="glass p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-display text-lg font-bold">{v.make} {v.model}</h3>
+                    <p className="text-xs text-muted-foreground">{v.year} · {v.drivers ? t('lux.fleet.assigned') : '—'}</p>
+                  </div>
+                  <SaudiPlate latin={v.plateNumber} arabic={v.plateNumberAr} />
+                </div>
+                <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                  <div className="grid gap-0.5"><dt className="flex items-center gap-1 text-xs text-muted-foreground"><Gauge className="size-3.5" aria-hidden="true" />{t('lux.fleet.odometerLabel')}</dt>
+                    <dd className="font-semibold tabular">{t('lux.fleet.odometer', { km: v.odometerKm })}</dd></div>
+                  <div className="grid gap-0.5"><dt className="text-xs text-muted-foreground">{t('lux.fleet.docs')}</dt>
+                    <dd>{worstDoc ? <Badge variant={tone(worstDoc.daysLeft)}>{worstDoc.daysLeft < 0 ? t('lux.fleet.expired', { doc: t(`lux.fleet.doc.${worstDoc.doc}`) })
+                      : worstDoc.daysLeft <= 60 ? t('lux.fleet.expiresIn', { doc: t(`lux.fleet.doc.${worstDoc.doc}`), days: worstDoc.daysLeft }) : t('lux.fleet.allValid')}</Badge> : '—'}</dd></div>
+                  <div className="grid gap-0.5"><dt className="flex items-center gap-1 text-xs text-muted-foreground"><Wrench className="size-3.5" aria-hidden="true" />{t('lux.fleet.service')}</dt>
+                    <dd>{due ? <Badge variant={due.status === 'OVERDUE' ? 'critical' : 'warning'}>{t('lux.fleet.serviceDue', { item: t(`notify.item.${due.type}` as 'notify.item.OIL_CHANGE') })}</Badge>
+                      : <Badge variant="ok">{t('lux.fleet.serviceOk')}</Badge>}</dd></div>
+                </dl>
+                <ul className="mt-4 flex flex-wrap gap-1.5">
+                  {v.docs.map((doc) => (
+                    <li key={doc.doc} className={cn('rounded-md border px-2 py-0.5 text-[11px]', doc.daysLeft < 0 ? 'border-critical/40 text-critical' : doc.daysLeft <= 30 ? 'border-[#d97706]/40 text-gold-ink' : 'border-border text-muted-foreground')}>
+                      {t(`lux.fleet.doc.${doc.doc}`)} · <span className="tabular">{f.number(doc.daysLeft)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Compliance highlights */}
+      <section className="glass overflow-hidden" aria-labelledby="compliance-title">
+        <h2 id="compliance-title" className="border-b border-border px-5 py-4 text-base font-bold">{t('lux.compliance.title')}</h2>
+        {d.attention.length === 0 ? <p className="px-5 py-4 text-sm text-muted-foreground">{t('lux.compliance.none')}</p> : (
+          <ul className="divide-y divide-border">
+            {d.attention.map((a) => (
+              <li key={a.key} className="flex items-center gap-3 px-5 py-3 text-sm">
+                <Badge variant={a.severity}>{t(`exec.severity.${a.severity}`)}</Badge>
+                <span className="min-w-0 flex-1">{t(`pulse.${a.key}` as 'pulse.medicalOverdue', { count: a.count })}</span>
+                <a href={a.deepLink} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">{t('exec.table.action')}<Forward className="size-3.5" aria-hidden="true" /></a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Financial & settlement hub */}
+      <SettlementHub defaultAsOf={todayRiyadh()} workers={d.staff.map((s) => ({ id: s.id, name: s.name, role: t(`lux.staffType.${s.staffType}` as 'lux.staffType.OTHER') }))} />
+
+      {/* Staff roster with data-protection cues */}
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="glass overflow-hidden">
+          <h2 className="flex items-center gap-2 border-b border-border px-5 py-4 text-base font-bold"><UserRound className="size-4 text-gold" aria-hidden="true" />{t('lux.roster.title')}</h2>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="ps-5">{t('exec.table.severity')}</TableHead>
-                <TableHead>{t('exec.table.item')}</TableHead>
-                <TableHead className="text-end">{t('exec.table.count')}</TableHead>
-                <TableHead className="pe-5 text-end"><span className="sr-only">{t('exec.table.action')}</span></TableHead>
+                <TableHead className="ps-5">{t('lux.roster.name')}</TableHead>
+                <TableHead>{t('lux.roster.status')}</TableHead>
+                <TableHead>{t('lux.protection.identity')}</TableHead>
+                <TableHead>{t('lux.protection.iban')}</TableHead>
+                <TableHead className="pe-5">{t('lux.protection.health')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pulse.attention.map((a) => (
-                <TableRow key={a.key}>
-                  <TableCell className="ps-5"><Badge variant={a.severity}>{t(`exec.severity.${a.severity}`)}</Badge></TableCell>
-                  <TableCell className="min-w-56">{t(`pulse.${a.key}`, { count: a.count })}</TableCell>
-                  <TableCell className="text-end tabular-nums">{f.number(a.count)}</TableCell>
-                  <TableCell className="pe-5 text-end">
-                    <a href={a.deepLink} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                      {t('exec.table.action')}<Forward className="size-3.5" aria-hidden="true" />
-                    </a>
-                  </TableCell>
+              {d.staff.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="ps-5"><span className="font-medium">{s.name}</span><span className="block text-xs text-muted-foreground">{t(`lux.staffType.${s.staffType}` as 'lux.staffType.OTHER')}</span></TableCell>
+                  <TableCell><Badge variant={s.status === 'ACTIVE' ? 'ok' : s.status === 'ON_LEAVE' ? 'info' : 'warning'}>{t(`lux.status.${s.status}` as 'lux.status.ACTIVE')}</Badge></TableCell>
+                  <TableCell><EncryptedField last4={s.identity?.last4} label={t('lux.protection.identity')} hint={t('lux.protection.hint')} empty={t('lux.protection.none')} /></TableCell>
+                  <TableCell><EncryptedField last4={s.ibanLast4} label={t('lux.protection.iban')} hint={t('lux.protection.hint')} empty={t('lux.protection.none')} /></TableCell>
+                  <TableCell className="pe-5"><EncryptedField always label={t('lux.protection.health')} hint={t('lux.protection.healthHint')} empty={t('lux.protection.encrypted')} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        )}
-      </Card>
-
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>{t('exec.budgets.title')}</CardTitle></CardHeader>
-          <CardContent>
-            <BarChart data={budgets} index="name" dir={dir} numberLocale={locale} className="h-80"
-              categories={[{ key: 'budget', label: t('exec.budgets.budget') }, { key: 'spent', label: t('exec.budgets.spent') }]} />
-          </CardContent>
-        </Card>
-        <div className="grid gap-4">
-          <Card>
-            <CardHeader><CardTitle>{t('exec.docs.title')}</CardTitle></CardHeader>
-            <CardContent><BarList data={tiers} sortOrder="none" valueFormatter={(v) => f.number(v)} /></CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('exec.medical.title')}</CardTitle>
-              <CardDescription>{t('exec.medical.valid', { valid, total: pulse.medical.workers })}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ProgressBar value={valid} max={pulse.medical.workers} variant={pulse.medical.needsAction ? 'warning' : 'ok'}
-                label={f.number(valid / pulse.medical.workers, { style: 'percent' })} />
-            </CardContent>
-          </Card>
-          <Card className={cn('gap-2')}>
-            <CardHeader><CardDescription>{t('exec.kpi.fleet')}</CardDescription></CardHeader>
-            <CardContent className="flex items-baseline justify-between gap-2">
-              <span className="text-2xl font-semibold tabular-nums">{f.number(pulse.fleet.due)}</span>
-              <Badge variant={pulse.fleet.due ? 'warning' : 'ok'}>{t('exec.kpi.fleetDue', { count: pulse.fleet.due })}</Badge>
-            </CardContent>
-          </Card>
         </div>
+        <aside className="glass gold-edge grid content-start gap-4 p-5" aria-labelledby="protection-title">
+          <h2 id="protection-title" className="flex items-center gap-2 text-base font-bold"><ShieldCheck className="size-5 text-gold" aria-hidden="true" />{t('lux.protection.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('lux.protection.hint')}</p>
+          <ul className="grid gap-2 text-sm">
+            {(['identity', 'iban', 'health'] as const).map((k) => (
+              <li key={k} className="flex items-center justify-between gap-2"><span>{t(`lux.protection.${k}`)}</span><EncryptedField always label={t(`lux.protection.${k}`)} hint={t('lux.protection.hint')} empty={t('lux.protection.encrypted')} /></li>
+            ))}
+          </ul>
+          <div className="rounded-xl border border-border bg-card-solid/60 p-3 text-xs">
+            <p className="font-semibold">{t('lux.protection.isolated')} · {d.current.name}</p>
+            <p className="mt-1 text-muted-foreground">{t('lux.protection.isolatedHint')}</p>
+          </div>
+        </aside>
       </section>
-    </AppShell>
+    </ExecShell>
   );
 }

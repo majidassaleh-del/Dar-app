@@ -768,35 +768,51 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 | `POST /webhooks/ocr/{provider}` | Async OCR completion → `processReceiptImage` merge (ZATCA QR authoritative) |
 | `POST /webhooks/billing` | Subscription events |
 
-## 16. Web: executive UI (shadcn/ui + Tremor, Slate / Navy)
+## 16. Web: EFA Private Office executive UI
 
 **Stack (`apps/web`):**
 * **Tailwind CSS v4.** CSS-first config in `src/app/globals.css`, `@tailwindcss/postcss`.
-* **shadcn/ui.** Tokens and components (`components.json`, `src/components/ui/`: Card, Badge, Button, Table), new-york style, slate base. They are copied in, owned and themed, as shadcn intends; `npx shadcn add …` works for more.
-* **Tremor Raw.** Dashboard primitives in `src/components/tremor/`: BarList, ProgressBar and BarChart on Recharts 2.15. The `@tremor/react` 3.x package was not used because it supports only React 18 and Tailwind v3; this app runs React 19 and Tailwind v4. Tremor's current distribution is these copy-in components, built for Tailwind v4.
+* **shadcn/ui.** Card, Badge, Button and Table in `src/components/ui/` are copied in and re-themed with the tokens below; no slate/navy classes remain.
+* **Tremor Raw.** BarList and ProgressBar in `src/components/tremor/`. The progress fill is an emerald→gold gradient that fills from inline-start; there is also a `gold` variant.
 
-**Palette and modes:**
-* **Light.** Navy primary, slate surfaces, crisp `border-slate-200`, soft `shadow-sm`, no glows or neon.
-* **Slate Dark.** `slate-950` background and `border-slate-800`.
-* **Switching.** `next-themes` (`.dark` class) follows the OS until the user chooses Light, Dark or System in the sidebar.
-* **Severity tokens.** `critical`, `warning`, `info`, `ok`, used by Badge variants.
+**Identity:**
+* **Palette.** Deep Royal Emerald `#064e3b` / `#022c22`, Warm Platinum `#e2e8f0` / `#94a3b8`, Rich Gold `#d97706`. These are exposed as tokens (`primary`, `gold`, `gold-ink`, `gold-soft`, `platinum`, `emerald-royal`, `emerald-deep`, `header*`) plus the severity tokens `critical`, `warning`, `info` and `ok`.
+* **Modes.** Light is "Platinum"; dark is "Emerald Night". `next-themes` sets the `.dark` class, and the colour change is a 0.3 s transition (turned off under `prefers-reduced-motion`).
+* **Surfaces.** `.glass` cards are translucent with a 14 px backdrop blur, a hairline inset and soft elevation. Text always sits on a layer that is at least 80 % opaque, so contrast stays at WCAG AA. `.gold-edge` draws a gold bar at the reading start of a widget.
+* **Typography.** All fonts are self-hosted through `@fontsource`. Headings and figures use Cairo (`font-display`). Arabic body text uses IBM Plex Sans Arabic and Latin body text uses Inter. Amharic, Bengali and Hindi fall back to the locale's system stack.
+* **RTL.** Only logical utilities are used, so the whole layout mirrors. Saudi number plates (`SaudiPlate`) always lay out LTR, like the physical plate.
 
-**Typography:**
-* IBM Plex Sans Arabic (Arabic) and Inter (Latin), self-hosted with `@fontsource`, so builds don't depend on Google Fonts.
-* Tailwind `font-sans` / `font-arabic`; `:lang(ar)` switches to Plex Arabic.
-* Amharic, Bengali and Hindi fall back to the locale's system font stack.
+**Layout (`/[locale]`):**
+* **Header (`ExecShell`).**
+  * The brand monogram.
+  * The **tenant switcher**: a `<details>` menu that posts to `/api/tenant` and works without JS. Each household has a distinct badge (EFA emerald, AFA gold).
+  * A live / sample pill.
+  * The language and theme controls.
+  * The module navigation.
+* **Executive Daily Pulse.** Workforce by status with medical-checkup coverage, today's decisions from `GET /v1/dashboard/pulse`, and the ESB liability from `GET /v1/hr/end-of-service`.
+* **Fleet status.** One card per vehicle with its plate, odometer, the nearest document expiry (Istimara, insurance, Fahas) and maintenance state.
+* **Compliance highlights.**
+* **Financial & Settlement Hub (`SettlementHub`).** You pick a worker and an as-of date. It shows:
+  * **Art. 16** vested ESB and progress toward the next four-year vesting.
+  * **Art. 10** unused-leave payout and progress through the current two-year cycle.
+  * A live wage breakdown: wage, daily rate (÷30), monthly provision (÷48), total due, advances and the net amount.
+* **Staff roster** with data-protection cues.
 
-**RTL:**
-* Logical utilities only (`ps-`/`pe-`/`ms-`/`start-`/`end-`, `text-start`/`text-end`).
-* BarList and ProgressBar fill from inline-start.
-* In Arabic the chart's category axis runs right to left, with its value axis on the right.
-* Forward arrows flip in Arabic.
+**Live binding:**
+* **API client.** `src/lib/api.ts` is server-only, so the token never reaches the browser. It calls `HERP_API_URL` (default `http://localhost:4000`) with the bearer token from the httpOnly `herp_session` cookie.
+* **Dev token.** `HERP_DEV_TOKEN` is honoured only when `NODE_ENV !== 'production'`.
+* **Active household.** It comes from the httpOnly `herp_household` cookie and is sent as `X-Household-Id`. The API's membership check is still the authority. If the cookie names a household the user does not belong to, the first membership is used.
+* **Settlement proxy.** `GET /api/settlement?staffId&asOf&locale` calls `end-of-service`, `leave-balance` and `final-settlement` under the same session. The browser never computes amounts in live mode.
+* **Sample mode.** Without a session the page renders a clearly labelled sample. Sample settlement figures use the API's formulas (`src/lib/settlement-sample.ts`).
 
-**Pages and checks:**
-* `/[locale]`: Daily Pulse with KPI cards, the attention Table with severity Badges, budgets BarChart, expiring documents BarList, medical compliance ProgressBar and fleet card.
-* `/[locale]/onboarding`: the four-step onboarding.
-* Both still render **sample data** shaped like `GET /v1/dashboard/pulse` and `GET /v1/auth/onboarding`; the authenticated API client is not wired in yet.
-* Screenshots (Arabic and English, light and dark, phone, onboarding) are in `docs/screenshots/`. None of the pages scrolls horizontally at 390 px.
+**Data protection cues (`EncryptedField`):**
+* Identity numbers and IBANs are shown as a gold lock chip with `•••• last4`. The API returns only last-4; the full values are AES-256-GCM ciphertext under the household key.
+* The health record is shown as "Encrypted". The dashboard never calls `GET /v1/staff/:id/health`, because reading that endpoint decrypts the record.
+* A missing value is shown as plain "Not on file", without a lock.
+
+**Demo data:** see the README. In short, `scripts/demo-households.sql` names the two fixture households EFA Private Office and AFA Household. `scripts/demo-seed.mjs` then seeds staff, contracts, documents, checkups, the Yukon and Camry, and an advance, all through the live API, and prints a dev token.
+
+**Screenshots** are in `docs/screenshots/`: `exec-{ar,en}-{light,dark}.png`, `exec-ar-phone.png`, `exec-en-switcher.png`, `exec-en-afa.png` and `onboarding-ar.png`. They were taken against the live API. No page scrolls horizontally at 390 px.
 
 ## 15. Example
 

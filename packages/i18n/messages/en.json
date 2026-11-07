@@ -158,5 +158,116 @@
       "dark": "Dark",
       "system": "System"
     }
+  },
+  "lux": {
+    "tenant": {
+      "label": "Household",
+      "switch": "Switch household",
+      "current": "Current household"
+    },
+    "mode": {
+      "live": "Live data",
+      "sample": "Sample data · API not connected"
+    },
+    "hero": {
+      "title": "Executive Daily Pulse",
+      "staff": "Workforce",
+      "active": "Active",
+      "probation": "On probation",
+      "onLeave": "On leave",
+      "workers": "{count, plural, one {# worker} other {# workers}}",
+      "medicalValid": "Medical checks valid",
+      "decisions": "Decisions today"
+    },
+    "fleet": {
+      "title": "Fleet status",
+      "odometer": "{km, number} km",
+      "docs": "Documents",
+      "allValid": "All valid",
+      "expiresIn": "{doc} in {days, plural, one {# day} other {# days}}",
+      "expired": "{doc} expired",
+      "service": "Service",
+      "serviceOk": "On schedule",
+      "serviceDue": "{item} due",
+      "assigned": "Driver assigned",
+      "doc": {
+        "REGISTRATION": "Istimara",
+        "INSURANCE": "Insurance",
+        "INSPECTION": "Fahas"
+      },
+      "odometerLabel": "Odometer"
+    },
+    "compliance": {
+      "title": "Compliance highlights",
+      "none": "Nothing outstanding"
+    },
+    "settlement": {
+      "title": "Financial & Settlement Hub",
+      "subtitle": "Live calculation from the household’s contracts, leave and advances.",
+      "worker": "Worker",
+      "asOf": "As of",
+      "esb": "End of service · Art. 16",
+      "esbRule": "One month’s wage per 4 completed years",
+      "toNextEsb": "{days, plural, one {# day} other {# days}} to the next 4-year entitlement",
+      "leave": "Leave settlement · Art. 10",
+      "leaveRule": "30 days per 2 completed years",
+      "toNextLeave": "Next 30 days on {date}",
+      "vested": "Vested now",
+      "provision": "Liability provision",
+      "monthlyProvision": "Monthly provision (wage ÷ 48)",
+      "wage": "Monthly wage",
+      "daily": "Daily rate (wage ÷ 30)",
+      "accrued": "Accrued",
+      "taken": "Taken",
+      "balance": "Unused",
+      "payout": "Unused leave payout",
+      "total": "Total due at exit",
+      "advances": "Advances outstanding",
+      "net": "After advances",
+      "breakdown": "Wage breakdown",
+      "years": "{years} years of service",
+      "days": "{days} days",
+      "noWorkers": "No workers with a contract yet",
+      "loading": "Calculating…",
+      "error": "Could not calculate"
+    },
+    "protection": {
+      "title": "Data protection",
+      "encrypted": "Encrypted",
+      "hint": "AES-256-GCM with this household’s key. Only the last 4 characters are ever shown.",
+      "identity": "Identity number",
+      "iban": "Payout IBAN",
+      "health": "Health record",
+      "healthHint": "Encrypted · need-to-know access only",
+      "isolated": "Household-isolated",
+      "isolatedHint": "Row-level security: no other household can read this.",
+      "none": "Not on file"
+    },
+    "roster": {
+      "title": "Staff",
+      "name": "Name",
+      "role": "Role",
+      "status": "Status"
+    },
+    "staffType": {
+      "HOUSEMAID": "Housemaid",
+      "COOK": "Cook",
+      "NANNY": "Nanny",
+      "DRIVER": "Driver",
+      "GARDENER": "Gardener",
+      "SECURITY": "Security",
+      "NURSE": "Nurse",
+      "TUTOR": "Tutor",
+      "OTHER": "Other"
+    },
+    "status": {
+      "RECRUITING": "Recruiting",
+      "ON_PROBATION": "On probation",
+      "ACTIVE": "Active",
+      "ON_LEAVE": "On leave",
+      "ABSCONDED": "Absent (huroob)",
+      "TERMINATED": "Terminated",
+      "FINAL_EXIT": "Final exit"
+    }
   }
 }

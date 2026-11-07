@@ -158,5 +158,116 @@
       "dark": "गहरा",
       "system": "सिस्टम"
     }
+  },
+  "lux": {
+    "tenant": {
+      "label": "घर",
+      "switch": "घर बदलें",
+      "current": "वर्तमान घर"
+    },
+    "mode": {
+      "live": "लाइव डेटा",
+      "sample": "नमूना डेटा · API कनेक्ट नहीं"
+    },
+    "hero": {
+      "title": "कार्यकारी दैनिक सारांश",
+      "staff": "कर्मचारी",
+      "active": "सक्रिय",
+      "probation": "परिवीक्षा पर",
+      "onLeave": "छुट्टी पर",
+      "workers": "{count, plural, one {# कर्मचारी} other {# कर्मचारी}}",
+      "medicalValid": "वैध मेडिकल जाँच",
+      "decisions": "आज के निर्णय"
+    },
+    "fleet": {
+      "title": "वाहन स्थिति",
+      "odometer": "{km, number} किमी",
+      "docs": "दस्तावेज़",
+      "allValid": "सभी वैध",
+      "expiresIn": "{doc} {days, plural, one {# दिन} other {# दिनों}} में",
+      "expired": "{doc} समाप्त",
+      "service": "सर्विस",
+      "serviceOk": "समय पर",
+      "serviceDue": "{item} देय",
+      "assigned": "ड्राइवर नियुक्त",
+      "doc": {
+        "REGISTRATION": "इस्तिमारा",
+        "INSURANCE": "बीमा",
+        "INSPECTION": "फहस"
+      },
+      "odometerLabel": "ओडोमीटर"
+    },
+    "compliance": {
+      "title": "अनुपालन मुख्य बिंदु",
+      "none": "कुछ भी लंबित नहीं"
+    },
+    "settlement": {
+      "title": "वित्त एवं निपटान केंद्र",
+      "subtitle": "घर के अनुबंध, छुट्टी और अग्रिम से लाइव गणना।",
+      "worker": "कर्मचारी",
+      "asOf": "तिथि",
+      "esb": "सेवा-समाप्ति लाभ · अनु. 16",
+      "esbRule": "हर 4 पूर्ण वर्षों पर एक माह का वेतन",
+      "toNextEsb": "अगले 4-वर्षीय अधिकार में {days, plural, one {# दिन} other {# दिन}}",
+      "leave": "छुट्टी निपटान · अनु. 10",
+      "leaveRule": "हर 2 पूर्ण वर्षों पर 30 दिन",
+      "toNextLeave": "अगले 30 दिन {date} को",
+      "vested": "अभी देय",
+      "provision": "देनदारी प्रावधान",
+      "monthlyProvision": "मासिक प्रावधान (वेतन ÷ 48)",
+      "wage": "मासिक वेतन",
+      "daily": "दैनिक दर (वेतन ÷ 30)",
+      "accrued": "अर्जित",
+      "taken": "लिया",
+      "balance": "अप्रयुक्त",
+      "payout": "अप्रयुक्त छुट्टी भुगतान",
+      "total": "सेवा-समाप्ति पर कुल देय",
+      "advances": "बकाया अग्रिम",
+      "net": "अग्रिम के बाद",
+      "breakdown": "वेतन विवरण",
+      "years": "{years} वर्ष की सेवा",
+      "days": "{days} दिन",
+      "noWorkers": "अभी तक अनुबंध वाला कोई कर्मचारी नहीं",
+      "loading": "गणना हो रही है…",
+      "error": "गणना नहीं हो सकी"
+    },
+    "protection": {
+      "title": "डेटा सुरक्षा",
+      "encrypted": "एन्क्रिप्टेड",
+      "hint": "इस घर की कुंजी से AES-256-GCM। केवल अंतिम 4 अक्षर दिखाए जाते हैं।",
+      "identity": "पहचान संख्या",
+      "iban": "वेतन IBAN",
+      "health": "स्वास्थ्य रिकॉर्ड",
+      "healthHint": "एन्क्रिप्टेड · केवल आवश्यकता पर",
+      "isolated": "घर-पृथक",
+      "isolatedHint": "पंक्ति-स्तरीय सुरक्षा: कोई अन्य घर इसे नहीं पढ़ सकता।",
+      "none": "दर्ज नहीं"
+    },
+    "roster": {
+      "title": "कर्मचारी",
+      "name": "नाम",
+      "role": "भूमिका",
+      "status": "स्थिति"
+    },
+    "staffType": {
+      "HOUSEMAID": "घरेलू सहायिका",
+      "COOK": "रसोइया",
+      "NANNY": "आया",
+      "DRIVER": "ड्राइवर",
+      "GARDENER": "माली",
+      "SECURITY": "सुरक्षा",
+      "NURSE": "नर्स",
+      "TUTOR": "शिक्षक",
+      "OTHER": "अन्य"
+    },
+    "status": {
+      "RECRUITING": "भर्ती में",
+      "ON_PROBATION": "परिवीक्षा पर",
+      "ACTIVE": "सक्रिय",
+      "ON_LEAVE": "छुट्टी पर",
+      "ABSCONDED": "अनुपस्थित (हुरूब)",
+      "TERMINATED": "सेवा समाप्त",
+      "FINAL_EXIT": "अंतिम निकास"
+    }
   }
 }

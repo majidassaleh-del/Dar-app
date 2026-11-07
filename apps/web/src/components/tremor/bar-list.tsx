@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
  * Bars grow from the reading start (inline-start), so it is correct in RTL.
  */
 export interface BarListItem { name: string; value: number; href?: string; tone?: 'navy' | 'critical' | 'warning' | 'muted' }
-const tones = { navy: 'bg-chart-1/15 dark:bg-chart-1/25', critical: 'bg-critical-soft', warning: 'bg-warning-soft', muted: 'bg-slate-100 dark:bg-slate-800' };
+const tones = { navy: 'bg-primary/10 dark:bg-emerald-400/15', critical: 'bg-critical-soft', warning: 'bg-warning-soft', muted: 'bg-muted' };
 
 export function BarList({ data, valueFormatter = (v) => String(v), className, sortOrder = 'descending' }:
   { data: BarListItem[]; valueFormatter?: (v: number) => string; className?: string; sortOrder?: 'ascending' | 'descending' | 'none' }) {

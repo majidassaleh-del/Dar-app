@@ -1,95 +1,109 @@
-/* EFA Private Office — Tailwind CSS v4 + shadcn/ui tokens (Slate / Navy enterprise palette).
-   Light and Slate Dark modes via the `.dark` class (next-themes). Crisp slate-200 / slate-800
-   borders and soft elevation; no glows. Layout uses logical utilities (ms-/me-/ps-/pe-/start-/end-)
-   so every component works in Arabic RTL and LTR. */
+/* EFA Private Office — bespoke executive theme on Tailwind CSS v4.
+   Deep Royal Emerald (#064e3b / #022c22), Warm Platinum (#e2e8f0 / #94a3b8), Rich Gold (#d97706).
+   Light ("Platinum") and Dark ("Emerald Night") via the `.dark` class (next-themes).
+   Glass surfaces: translucent cards with backdrop blur, hairline borders and soft elevation —
+   text always sits on a ≥ 80 % opaque layer, so contrast stays at WCAG AA.
+   Logical utilities only (ms-/me-/ps-/pe-/start-/end-), so everything mirrors in Arabic RTL. */
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.984 0.003 247.858);          /* slate-50 */
-  --foreground: oklch(0.208 0.042 265.755);          /* slate-900 */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.208 0.042 265.755);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.208 0.042 265.755);
-  --primary: oklch(0.285 0.072 257.5);               /* navy #0f2a4d */
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);           /* slate-100 */
-  --secondary-foreground: oklch(0.279 0.041 260.031);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);    /* slate-500 */
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.279 0.041 260.031);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);              /* slate-200 */
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.446 0.09 257);
-  --chart-1: oklch(0.285 0.072 257.5);               /* navy */
-  --chart-2: oklch(0.554 0.046 257.417);             /* slate-500 */
-  --chart-3: oklch(0.704 0.04 256.788);              /* slate-400 */
-  --chart-4: oklch(0.488 0.122 251);                 /* steel blue */
-  --chart-5: oklch(0.869 0.022 252.894);             /* slate-300 */
-  --sidebar: oklch(0.235 0.058 258);                 /* navy sidebar */
-  --sidebar-foreground: oklch(0.929 0.013 255.508);
-  --sidebar-muted: oklch(0.704 0.04 256.788);
-  --sidebar-accent: oklch(0.3 0.062 258);
-  --sidebar-border: oklch(0.32 0.055 258);
-  --critical: oklch(0.505 0.19 27);  --critical-soft: oklch(0.971 0.013 17.38);
-  --warning: oklch(0.555 0.13 58);   --warning-soft: oklch(0.987 0.022 95.277);
-  --info: oklch(0.446 0.09 257);     --info-soft: oklch(0.97 0.014 254.604);
-  --ok: oklch(0.508 0.118 165.612);  --ok-soft: oklch(0.979 0.021 166.113);
+  --radius: 0.875rem;
+  /* Platinum day */
+  --background: #eef2f1;
+  --foreground: #052e22;               /* emerald-ink */
+  --card: rgb(255 255 255 / 0.82);
+  --card-solid: #ffffff;
+  --card-foreground: #052e22;
+  --popover: #ffffff;
+  --popover-foreground: #052e22;
+  --primary: #064e3b;                  /* royal emerald */
+  --primary-foreground: #f8fafc;
+  --secondary: #e2e8f0;                /* platinum */
+  --secondary-foreground: #064e3b;
+  --muted: #e9eeec;
+  --muted-foreground: #4b5d58;         /* 7:1 on white */
+  --accent: #e2e8f0;
+  --accent-foreground: #064e3b;
+  --destructive: #b42318;
+  --border: rgb(6 78 59 / 0.12);
+  --hairline: rgb(255 255 255 / 0.7);  /* glass edge */
+  --input: rgb(6 78 59 / 0.18);
+  --ring: #0f766e;
+  --gold: #d97706;                     /* accents, bars, icons */
+  --gold-ink: #92400e;                 /* gold text on light (≥ 7:1) */
+  --gold-soft: #fef3c7;
+  --platinum: #94a3b8;
+  --glass-shadow: 0 1px 2px rgb(2 44 34 / 0.06), 0 12px 32px -12px rgb(2 44 34 / 0.18);
+  --page: radial-gradient(1200px 600px at 100% -10%, rgb(6 78 59 / 0.10), transparent 60%),
+          radial-gradient(900px 500px at -10% 0%, rgb(217 119 6 / 0.07), transparent 55%),
+          linear-gradient(180deg, #f3f6f5 0%, #e7ecea 100%);
+  --header: rgb(2 44 34 / 0.94);
+  --header-foreground: #e2e8f0;
+  --header-muted: #94a3b8;
+  --chart-1: #064e3b; --chart-2: #d97706; --chart-3: #94a3b8; --chart-4: #0f766e; --chart-5: #cbd5e1;
+  --critical: #b42318; --critical-soft: #fdecea;
+  --warning: #92400e;  --warning-soft: #fef3c7;
+  --info: #0f5c4d;     --info-soft: #dcefe9;
+  --ok: #047857;       --ok-soft: #d1fae5;
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);          /* slate-950 */
-  --foreground: oklch(0.968 0.007 247.896);
-  --card: oklch(0.172 0.04 265);                     /* between slate-950 and 900 */
-  --card-foreground: oklch(0.968 0.007 247.896);
-  --popover: oklch(0.172 0.04 265);
-  --popover-foreground: oklch(0.968 0.007 247.896);
-  --primary: oklch(0.929 0.013 255.508);             /* slate-200 on dark */
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.968 0.007 247.896);
-  --muted: oklch(0.208 0.042 265.755);
-  --muted-foreground: oklch(0.704 0.04 256.788);     /* slate-400 */
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.968 0.007 247.896);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.279 0.041 260.031);              /* slate-800 */
-  --input: oklch(0.279 0.041 260.031);
-  --ring: oklch(0.551 0.06 257);
-  --chart-1: oklch(0.809 0.07 252);
-  --chart-2: oklch(0.704 0.04 256.788);
-  --chart-3: oklch(0.554 0.046 257.417);
-  --chart-4: oklch(0.623 0.14 251);
-  --chart-5: oklch(0.446 0.043 257.281);
-  --sidebar: oklch(0.155 0.04 262);
-  --sidebar-foreground: oklch(0.929 0.013 255.508);
-  --sidebar-muted: oklch(0.704 0.04 256.788);
-  --sidebar-accent: oklch(0.235 0.045 260);
-  --sidebar-border: oklch(0.279 0.041 260.031);
-  --critical: oklch(0.75 0.15 22);   --critical-soft: oklch(0.27 0.07 22);
-  --warning: oklch(0.82 0.13 80);    --warning-soft: oklch(0.29 0.06 70);
-  --info: oklch(0.8 0.08 252);       --info-soft: oklch(0.27 0.06 258);
-  --ok: oklch(0.79 0.12 165);        --ok-soft: oklch(0.26 0.05 165);
+  /* Emerald night */
+  --background: #021a15;
+  --foreground: #e2e8f0;
+  --card: rgb(6 78 59 / 0.28);
+  --card-solid: #06352b;
+  --card-foreground: #e2e8f0;
+  --popover: #06352b;
+  --popover-foreground: #e2e8f0;
+  --primary: #e2e8f0;
+  --primary-foreground: #022c22;
+  --secondary: rgb(226 232 240 / 0.08);
+  --secondary-foreground: #e2e8f0;
+  --muted: rgb(226 232 240 / 0.06);
+  --muted-foreground: #a7b4c4;
+  --accent: rgb(226 232 240 / 0.08);
+  --accent-foreground: #e2e8f0;
+  --destructive: #f87171;
+  --border: rgb(226 232 240 / 0.12);
+  --hairline: rgb(226 232 240 / 0.10);
+  --input: rgb(226 232 240 / 0.16);
+  --ring: #34d399;
+  --gold: #f59e0b;
+  --gold-ink: #fbbf24;
+  --gold-soft: rgb(217 119 6 / 0.18);
+  --platinum: #94a3b8;
+  --glass-shadow: 0 1px 0 rgb(226 232 240 / 0.05) inset, 0 18px 40px -16px rgb(0 0 0 / 0.55);
+  --page: radial-gradient(1100px 600px at 100% -10%, rgb(16 185 129 / 0.16), transparent 60%),
+          radial-gradient(800px 500px at -10% 10%, rgb(217 119 6 / 0.10), transparent 55%),
+          linear-gradient(180deg, #022c22 0%, #01140f 100%);
+  --header: rgb(1 20 15 / 0.82);
+  --header-foreground: #e2e8f0;
+  --header-muted: #94a3b8;
+  --chart-1: #34d399; --chart-2: #f59e0b; --chart-3: #94a3b8; --chart-4: #2dd4bf; --chart-5: #475569;
+  --critical: #fca5a5; --critical-soft: rgb(180 35 24 / 0.22);
+  --warning: #fbbf24;  --warning-soft: rgb(217 119 6 / 0.2);
+  --info: #6ee7b7;     --info-soft: rgb(16 185 129 / 0.16);
+  --ok: #6ee7b7;       --ok-soft: rgb(16 185 129 / 0.16);
 }
 
 @theme inline {
-  /* Corporate typography: Inter for Latin, IBM Plex Sans Arabic for Arabic; the locale stack
-     (Ethiopic / Bengali / Devanagari system fonts) is the fallback for the other scripts. */
+  /* Typography: Cairo for headings (Arabic + Latin), IBM Plex Sans Arabic for Arabic body text,
+     Inter for Latin body text; other scripts fall back to the locale's system stack. */
   --font-sans: 'Inter Variable', 'IBM Plex Sans Arabic', var(--font-locale), ui-sans-serif, system-ui, sans-serif;
   --font-arabic: 'IBM Plex Sans Arabic', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --font-display: 'Cairo', 'IBM Plex Sans Arabic', var(--font-locale), ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
+  --color-card-solid: var(--card-solid);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
@@ -103,18 +117,23 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
+  --color-hairline: var(--hairline);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
+  --color-gold-soft: var(--gold-soft);
+  --color-platinum: var(--platinum);
+  --color-emerald-royal: #064e3b;
+  --color-emerald-deep: #022c22;
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
+  --color-header-muted: var(--header-muted);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-muted: var(--sidebar-muted);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-border: var(--sidebar-border);
   --color-critical: var(--critical);
   --color-critical-soft: var(--critical-soft);
   --color-warning: var(--warning);
@@ -127,7 +146,30 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; }
-  body { @apply bg-background text-foreground font-sans antialiased; font-feature-settings: 'cv11', 'ss01'; }
-  :lang(ar) body, :lang(ar) { font-family: var(--font-arabic); }
-  :lang(ar) body { line-height: 1.65; }
+  html { background: var(--background); }
+  body { @apply text-foreground font-sans antialiased; background: var(--page); background-attachment: fixed; min-height: 100dvh;
+         transition: background-color .3s ease, color .3s ease; }
+  :lang(ar) body { font-family: var(--font-arabic); line-height: 1.7; }
+  h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
+  :lang(ar) h1, :lang(ar) h2, :lang(ar) h3 { letter-spacing: 0; }
 }
+
+@layer components {
+  /* Glass executive surface */
+  .glass {
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--hairline);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-radius: var(--radius-xl);
+  }
+  /* Gold hairline accent at the reading start of a widget */
+  .gold-edge { position: relative; }
+  .gold-edge::before {
+    content: ''; position: absolute; inset-block: 1.25rem; inset-inline-start: 0; inline-size: 3px; border-radius: 3px;
+    background: linear-gradient(180deg, var(--gold), transparent);
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+}
+@media (prefers-reduced-motion: reduce) { body { transition: none; } }

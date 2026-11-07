@@ -158,5 +158,116 @@
       "dark": "Madilim",
       "system": "System"
     }
+  },
+  "lux": {
+    "tenant": {
+      "label": "Sambahayan",
+      "switch": "Palitan ang sambahayan",
+      "current": "Kasalukuyang sambahayan"
+    },
+    "mode": {
+      "live": "Live na data",
+      "sample": "Sample na data · hindi konektado ang API"
+    },
+    "hero": {
+      "title": "Pang-araw-araw na Buod ng Ehekutibo",
+      "staff": "Mga manggagawa",
+      "active": "Aktibo",
+      "probation": "Probationary",
+      "onLeave": "Naka-leave",
+      "workers": "{count, plural, one {# manggagawa} other {# manggagawa}}",
+      "medicalValid": "Valid na medical",
+      "decisions": "Mga desisyon ngayon"
+    },
+    "fleet": {
+      "title": "Katayuan ng mga sasakyan",
+      "odometer": "{km, number} km",
+      "docs": "Mga dokumento",
+      "allValid": "Lahat valid",
+      "expiresIn": "{doc} sa loob ng {days, plural, one {# araw} other {# araw}}",
+      "expired": "Expired ang {doc}",
+      "service": "Serbisyo",
+      "serviceOk": "Nasa iskedyul",
+      "serviceDue": "Dapat na ang {item}",
+      "assigned": "May nakatalagang drayber",
+      "doc": {
+        "REGISTRATION": "Istimara",
+        "INSURANCE": "Insurance",
+        "INSPECTION": "Fahas"
+      },
+      "odometerLabel": "Odometer"
+    },
+    "compliance": {
+      "title": "Mga highlight ng pagsunod",
+      "none": "Walang nakabinbin"
+    },
+    "settlement": {
+      "title": "Sentro ng Pananalapi at Settlement",
+      "subtitle": "Live na kalkulasyon mula sa mga kontrata, leave at advance ng sambahayan.",
+      "worker": "Manggagawa",
+      "asOf": "Petsa",
+      "esb": "End of service · Art. 16",
+      "esbRule": "Isang buwang sahod bawat 4 na buong taon",
+      "toNextEsb": "{days, plural, one {# araw} other {# araw}} bago ang susunod na 4-taong karapatan",
+      "leave": "Leave settlement · Art. 10",
+      "leaveRule": "30 araw bawat 2 buong taon",
+      "toNextLeave": "Susunod na 30 araw sa {date}",
+      "vested": "Karapatan ngayon",
+      "provision": "Probisyon sa pananagutan",
+      "monthlyProvision": "Buwanang probisyon (sahod ÷ 48)",
+      "wage": "Buwanang sahod",
+      "daily": "Arawang rate (sahod ÷ 30)",
+      "accrued": "Naipon",
+      "taken": "Nagamit",
+      "balance": "Hindi nagamit",
+      "payout": "Bayad sa hindi nagamit na leave",
+      "total": "Kabuuang dapat bayaran sa pag-alis",
+      "advances": "Natitirang advance",
+      "net": "Pagkatapos ng advance",
+      "breakdown": "Detalye ng sahod",
+      "years": "{years} taon ng serbisyo",
+      "days": "{days} araw",
+      "noWorkers": "Wala pang manggagawang may kontrata",
+      "loading": "Kinakalkula…",
+      "error": "Hindi makalkula"
+    },
+    "protection": {
+      "title": "Proteksyon ng data",
+      "encrypted": "Naka-encrypt",
+      "hint": "AES-256-GCM gamit ang susi ng sambahayang ito. Huling 4 na karakter lang ang ipinapakita.",
+      "identity": "Numero ng ID",
+      "iban": "IBAN ng sahod",
+      "health": "Rekord pangkalusugan",
+      "healthHint": "Naka-encrypt · para lang sa kailangang malaman",
+      "isolated": "Hiwalay sa ibang sambahayan",
+      "isolatedHint": "Row-level security: walang ibang sambahayan ang makakabasa nito.",
+      "none": "Wala sa file"
+    },
+    "roster": {
+      "title": "Mga manggagawa",
+      "name": "Pangalan",
+      "role": "Tungkulin",
+      "status": "Katayuan"
+    },
+    "staffType": {
+      "HOUSEMAID": "Kasambahay",
+      "COOK": "Kusinero",
+      "NANNY": "Yaya",
+      "DRIVER": "Drayber",
+      "GARDENER": "Hardinero",
+      "SECURITY": "Guwardiya",
+      "NURSE": "Nars",
+      "TUTOR": "Tutor",
+      "OTHER": "Iba pa"
+    },
+    "status": {
+      "RECRUITING": "Nire-recruit",
+      "ON_PROBATION": "Probationary",
+      "ACTIVE": "Aktibo",
+      "ON_LEAVE": "Naka-leave",
+      "ABSCONDED": "Lumayas (huroob)",
+      "TERMINATED": "Tinapos",
+      "FINAL_EXIT": "Final exit"
+    }
   }
 }

@@ -158,5 +158,116 @@
       "dark": "গাঢ়",
       "system": "সিস্টেম"
     }
+  },
+  "lux": {
+    "tenant": {
+      "label": "পরিবার",
+      "switch": "পরিবার পরিবর্তন",
+      "current": "বর্তমান পরিবার"
+    },
+    "mode": {
+      "live": "লাইভ ডেটা",
+      "sample": "নমুনা ডেটা · API সংযুক্ত নয়"
+    },
+    "hero": {
+      "title": "নির্বাহী দৈনিক সারসংক্ষেপ",
+      "staff": "কর্মীবাহিনী",
+      "active": "সক্রিয়",
+      "probation": "শিক্ষানবিশ",
+      "onLeave": "ছুটিতে",
+      "workers": "{count, plural, one {# কর্মী} other {# কর্মী}}",
+      "medicalValid": "বৈধ মেডিকেল চেকআপ",
+      "decisions": "আজকের সিদ্ধান্ত"
+    },
+    "fleet": {
+      "title": "গাড়ির অবস্থা",
+      "odometer": "{km, number} কিমি",
+      "docs": "নথি",
+      "allValid": "সব বৈধ",
+      "expiresIn": "{doc} {days, plural, one {# দিনে} other {# দিনে}}",
+      "expired": "{doc} মেয়াদোত্তীর্ণ",
+      "service": "সার্ভিস",
+      "serviceOk": "সময়মতো",
+      "serviceDue": "{item} বাকি",
+      "assigned": "চালক নিযুক্ত",
+      "doc": {
+        "REGISTRATION": "ইস্তিমারা",
+        "INSURANCE": "বীমা",
+        "INSPECTION": "ফাহাস"
+      },
+      "odometerLabel": "ওডোমিটার"
+    },
+    "compliance": {
+      "title": "সম্মতির মূল বিষয়",
+      "none": "কিছু বাকি নেই"
+    },
+    "settlement": {
+      "title": "আর্থিক ও নিষ্পত্তি কেন্দ্র",
+      "subtitle": "পরিবারের চুক্তি, ছুটি ও অগ্রিম থেকে লাইভ হিসাব।",
+      "worker": "কর্মী",
+      "asOf": "তারিখ",
+      "esb": "চাকরি-শেষ সুবিধা · অনু. 16",
+      "esbRule": "প্রতি ৪ পূর্ণ বছরে এক মাসের বেতন",
+      "toNextEsb": "পরবর্তী ৪-বছরের প্রাপ্যে {days, plural, one {# দিন} other {# দিন}}",
+      "leave": "ছুটি নিষ্পত্তি · অনু. 10",
+      "leaveRule": "প্রতি ২ পূর্ণ বছরে ৩০ দিন",
+      "toNextLeave": "পরবর্তী ৩০ দিন {date}-এ",
+      "vested": "এখন প্রাপ্য",
+      "provision": "দায় সংস্থান",
+      "monthlyProvision": "মাসিক সংস্থান (বেতন ÷ ৪৮)",
+      "wage": "মাসিক বেতন",
+      "daily": "দৈনিক হার (বেতন ÷ ৩০)",
+      "accrued": "অর্জিত",
+      "taken": "নেওয়া",
+      "balance": "অব্যবহৃত",
+      "payout": "অব্যবহৃত ছুটির অর্থ",
+      "total": "চাকরি শেষে মোট প্রাপ্য",
+      "advances": "বকেয়া অগ্রিম",
+      "net": "অগ্রিমের পর",
+      "breakdown": "বেতনের বিবরণ",
+      "years": "{years} বছরের চাকরি",
+      "days": "{days} দিন",
+      "noWorkers": "এখনও চুক্তিসহ কোনো কর্মী নেই",
+      "loading": "হিসাব হচ্ছে…",
+      "error": "হিসাব করা যায়নি"
+    },
+    "protection": {
+      "title": "ডেটা সুরক্ষা",
+      "encrypted": "এনক্রিপ্টেড",
+      "hint": "এই পরিবারের কী দিয়ে AES-256-GCM। শুধু শেষ ৪টি অক্ষর দেখানো হয়।",
+      "identity": "পরিচয় নম্বর",
+      "iban": "বেতনের IBAN",
+      "health": "স্বাস্থ্য রেকর্ড",
+      "healthHint": "এনক্রিপ্টেড · শুধু প্রয়োজনে",
+      "isolated": "পরিবার-বিচ্ছিন্ন",
+      "isolatedHint": "সারি-স্তরের নিরাপত্তা: অন্য কোনো পরিবার এটি পড়তে পারে না।",
+      "none": "নথিভুক্ত নয়"
+    },
+    "roster": {
+      "title": "কর্মী",
+      "name": "নাম",
+      "role": "ভূমিকা",
+      "status": "অবস্থা"
+    },
+    "staffType": {
+      "HOUSEMAID": "গৃহকর্মী",
+      "COOK": "রাঁধুনি",
+      "NANNY": "আয়া",
+      "DRIVER": "চালক",
+      "GARDENER": "মালী",
+      "SECURITY": "নিরাপত্তারক্ষী",
+      "NURSE": "নার্স",
+      "TUTOR": "শিক্ষক",
+      "OTHER": "অন্যান্য"
+    },
+    "status": {
+      "RECRUITING": "নিয়োগাধীন",
+      "ON_PROBATION": "শিক্ষানবিশ",
+      "ACTIVE": "সক্রিয়",
+      "ON_LEAVE": "ছুটিতে",
+      "ABSCONDED": "অনুপস্থিত (হুরুব)",
+      "TERMINATED": "চাকরিচ্যুত",
+      "FINAL_EXIT": "চূড়ান্ত প্রস্থান"
+    }
   }
 }
