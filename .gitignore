@@ -6,3 +6,4 @@ dist
 .env*
 !.env.example
 .storage
+.verify-logs

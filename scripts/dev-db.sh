@@ -2,12 +2,13 @@
 # Build a local database for the API: migrations + seed + RLS, the API login
 # role, and (optionally) demo fixtures.
 #   scripts/dev-db.sh [dbname] [--fixtures]
-# Needs a local Postgres reachable as the `postgres` OS user.
+# Needs a Postgres superuser: the local `postgres` OS user, or PGHOST/PGUSER/PGPASSWORD (CI).
 set -euo pipefail
 DB=${1:-herp_dev}
 cd "$(dirname "$0")/.."
-psql_() { su postgres -c "psql -q -v ON_ERROR_STOP=1 -d $DB"; }
-su postgres -c "psql -q -c 'DROP DATABASE IF EXISTS $DB' -c 'CREATE DATABASE $DB'" 2>&1 | grep -v NOTICE || true
+source scripts/pg.sh
+psql_() { pg_admin -q -v ON_ERROR_STOP=1 -d "$DB"; }
+pg_admin -q -d postgres -c "DROP DATABASE IF EXISTS $DB" -c "CREATE DATABASE $DB" 2>&1 | grep -v NOTICE || true
 for f in prisma/migrations/*/migration.sql prisma/seed.sql prisma/rls.sql; do psql_ < "$f" 2>&1 | grep -vE 'NOTICE|^$' || true; done
 
 # The API logs in as herp_api: LOGIN, no BYPASSRLS, no table privileges of its

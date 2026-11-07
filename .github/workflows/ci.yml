@@ -1,0 +1,96 @@
+# Quality gate for household-erp: the same checks as a local commit (scripts/verify.sh)
+# against a real PostgreSQL 16 with the RLS policies, triggers and fixtures applied:
+#   prisma validate / generate · schema drift · RLS & isolation suite (tests/rls_test.sql)
+#   package tests · API type-check · API e2e (vitest) · web build (Next.js)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: verify (Node 22 · pnpm · PostgreSQL 16)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres # throw-away CI container, not a secret
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432 # the API test suite connects to localhost:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Superuser access for scripts/pg.sh (TCP mode). The API and worker log in as the
+      # unprivileged herp_api / herp_worker roles that scripts/dev-db.sh creates.
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      NEXT_TELEMETRY_DISABLED: "1"
+      TURBO_TELEMETRY_DISABLED: "1"
+      VERIFY_LOG_DIR: ${{ github.workspace }}/.verify-logs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: PostgreSQL client
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          psql --version
+
+      - name: Prepare database extensions
+        # The migrations create these too (IF NOT EXISTS). Enabling them in template1 makes every
+        # database the scripts create start with them, and fails fast if one is unavailable.
+        run: |
+          for db in template1 postgres; do
+            psql -v ON_ERROR_STOP=1 -d "$db" \
+              -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto' \
+              -c 'CREATE EXTENSION IF NOT EXISTS citext' \
+              -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm'
+          done
+          psql -tAc 'SELECT version()'
+
+      - name: Verify (scripts/verify.sh)
+        run: bash scripts/verify.sh
+
+      - name: Upload verify logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verify-logs
+          path: .verify-logs/
+          retention-days: 7
+          if-no-files-found: ignore

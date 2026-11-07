@@ -46,3 +46,14 @@ Every module follows the reference `src/members/members.controller.ts`:
 6. **Encrypted fields.** Pass plaintext through `seal(crypto.cipher, 'table.field', householdId, value)` before writing and `unseal(…)` to read, inside `withRls`. Keys are loaded through the request's own RLS transaction. Never return `*Ciphertext` or `*BlindIndex` columns; map rows to DTOs.
 7. **Audit.** Use `audit(tx, ctx, {...})` (no RETURNING), so a caller can log their own action without reading the audit log.
 8. **Workers** (OCR, receipt confirmation, key provisioning, reminders) log in as `herp_worker`, act as `app_service` (BYPASSRLS) through `ServiceDb.run`, and must always filter by `householdId` explicitly. `node dist/worker.js keys:provision | reminders:sync | recurring:run | notifications:dispatch | esb:accrue [YYYY-MM]`.
+
+## Quality gate (local and CI)
+
+`bash scripts/verify.sh` runs every check before a commit: Prisma validate/generate, schema drift, the RLS and isolation suite, package tests, API type-check, API e2e and the web build. It needs a PostgreSQL 16 superuser:
+- **Locally:** the `postgres` OS user (peer auth).
+- **CI or another host:** set `PGHOST`, `PGPORT`, `PGUSER` and `PGPASSWORD` (see `scripts/pg.sh`).
+
+`.github/workflows/ci.yml` runs the same script on every push and pull request to `main`:
+- **Runtime:** Node 22, pnpm from `packageManager`, `pnpm install --frozen-lockfile`.
+- **Database:** a `postgres:16` service container, with `pgcrypto`, `citext` and `pg_trgm` enabled.
+- **On failure:** the per-check logs are uploaded as an artifact.

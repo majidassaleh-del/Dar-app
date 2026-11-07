@@ -2,7 +2,7 @@
 # Gate for every commit: exits non-zero if ANY check fails. Prints a one-line summary per check.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-OUT=$(mktemp -d); fail=0
+OUT=${VERIFY_LOG_DIR:-$(mktemp -d)}; mkdir -p "$OUT"; fail=0
 check() { local name=$1; shift; if "$@" >"$OUT/$name.log" 2>&1; then echo "ok    $name"; else echo "FAIL  $name  (see $OUT/$name.log)"; fail=1; fi; }
 
 db_suite() { tests/apply.sh >"$OUT/db.txt" 2>&1; ! grep -qE 'FAIL|ERROR' "$OUT/db.txt" && grep -q '^PASS' "$OUT/db.txt"; }
