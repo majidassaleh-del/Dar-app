@@ -1,175 +1,87 @@
-/* EFA Private Office — bespoke executive theme on Tailwind CSS v4.
-   Deep Royal Emerald (#064e3b / #022c22), Warm Platinum (#e2e8f0 / #94a3b8), Rich Gold (#d97706).
-   Light ("Platinum") and Dark ("Emerald Night") via the `.dark` class (next-themes).
-   Glass surfaces: translucent cards with backdrop blur, hairline borders and soft elevation —
-   text always sits on a ≥ 80 % opaque layer, so contrast stays at WCAG AA.
-   Logical utilities only (ms-/me-/ps-/pe-/start-/end-), so everything mirrors in Arabic RTL. */
+/* Dar: a quiet working theme on Tailwind CSS v4.
+   One family (IBM Plex Sans Arabic, with Inter for Latin), four sizes (13 / 15 / 17 / 22 px),
+   one accent (household green), red and amber only for state. No glass, gradients, shadows
+   or animated chrome: structure comes from spacing and hairline rules.
+   Light and dark via the `.dark` class (next-themes). Logical utilities only, so RTL mirrors. */
 @import 'tailwindcss';
-@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.875rem;
-  /* Platinum day */
-  --background: #eef2f1;
-  --foreground: #052e22;               /* emerald-ink */
-  --card: rgb(255 255 255 / 0.82);
-  --card-solid: #ffffff;
-  --card-foreground: #052e22;
-  --popover: #ffffff;
-  --popover-foreground: #052e22;
-  --primary: #064e3b;                  /* royal emerald */
-  --primary-foreground: #f8fafc;
-  --secondary: #e2e8f0;                /* platinum */
-  --secondary-foreground: #064e3b;
-  --muted: #e9eeec;
-  --muted-foreground: #4b5d58;         /* 7:1 on white */
-  --accent: #e2e8f0;
-  --accent-foreground: #064e3b;
-  --destructive: #b42318;
-  --border: rgb(6 78 59 / 0.12);
-  --hairline: rgb(255 255 255 / 0.7);  /* glass edge */
-  --input: rgb(6 78 59 / 0.18);
-  --ring: #0f766e;
-  --gold: #d97706;                     /* accents, bars, icons */
-  --gold-ink: #92400e;                 /* gold text on light (≥ 7:1) */
-  --gold-soft: #fef3c7;
-  --platinum: #94a3b8;
-  --glass-shadow: 0 1px 2px rgb(2 44 34 / 0.06), 0 12px 32px -12px rgb(2 44 34 / 0.18);
-  --page: radial-gradient(1200px 600px at 100% -10%, rgb(6 78 59 / 0.10), transparent 60%),
-          radial-gradient(900px 500px at -10% 0%, rgb(217 119 6 / 0.07), transparent 55%),
-          linear-gradient(180deg, #f3f6f5 0%, #e7ecea 100%);
-  --header: rgb(2 44 34 / 0.94);
-  --header-foreground: #e2e8f0;
-  --header-muted: #94a3b8;
-  --chart-1: #064e3b; --chart-2: #d97706; --chart-3: #94a3b8; --chart-4: #0f766e; --chart-5: #cbd5e1;
-  --critical: #b42318; --critical-soft: #fdecea;
-  --warning: #92400e;  --warning-soft: #fef3c7;
-  --info: #0f5c4d;     --info-soft: #dcefe9;
-  --ok: #047857;       --ok-soft: #d1fae5;
+  --background: #ffffff;
+  --foreground: #1a1d1b;
+  --muted: #f5f6f5;             /* sidebar, selected row */
+  --muted-foreground: #5b635f;  /* 6.3:1 on white */
+  --border: #e2e5e3;
+  --input: #c9cfcb;
+  --primary: #0b6e4f;           /* buttons, links, focus */
+  --primary-foreground: #ffffff;
+  --selected: #e4eee9;
+  --ring: #0b6e4f;
+  --critical: #b42318;
+  --warning: #8a5300;
+  --ok: #0b6e4f;
 }
 
 .dark {
-  /* Emerald night */
-  --background: #021a15;
-  --foreground: #e2e8f0;
-  --card: rgb(6 78 59 / 0.28);
-  --card-solid: #06352b;
-  --card-foreground: #e2e8f0;
-  --popover: #06352b;
-  --popover-foreground: #e2e8f0;
-  --primary: #e2e8f0;
-  --primary-foreground: #022c22;
-  --secondary: rgb(226 232 240 / 0.08);
-  --secondary-foreground: #e2e8f0;
-  --muted: rgb(226 232 240 / 0.06);
-  --muted-foreground: #a7b4c4;
-  --accent: rgb(226 232 240 / 0.08);
-  --accent-foreground: #e2e8f0;
-  --destructive: #f87171;
-  --border: rgb(226 232 240 / 0.12);
-  --hairline: rgb(226 232 240 / 0.10);
-  --input: rgb(226 232 240 / 0.16);
-  --ring: #34d399;
-  --gold: #f59e0b;
-  --gold-ink: #fbbf24;
-  --gold-soft: rgb(217 119 6 / 0.18);
-  --platinum: #94a3b8;
-  --glass-shadow: 0 1px 0 rgb(226 232 240 / 0.05) inset, 0 18px 40px -16px rgb(0 0 0 / 0.55);
-  --page: radial-gradient(1100px 600px at 100% -10%, rgb(16 185 129 / 0.16), transparent 60%),
-          radial-gradient(800px 500px at -10% 10%, rgb(217 119 6 / 0.10), transparent 55%),
-          linear-gradient(180deg, #022c22 0%, #01140f 100%);
-  --header: rgb(1 20 15 / 0.82);
-  --header-foreground: #e2e8f0;
-  --header-muted: #94a3b8;
-  --chart-1: #34d399; --chart-2: #f59e0b; --chart-3: #94a3b8; --chart-4: #2dd4bf; --chart-5: #475569;
-  --critical: #fca5a5; --critical-soft: rgb(180 35 24 / 0.22);
-  --warning: #fbbf24;  --warning-soft: rgb(217 119 6 / 0.2);
-  --info: #6ee7b7;     --info-soft: rgb(16 185 129 / 0.16);
-  --ok: #6ee7b7;       --ok-soft: rgb(16 185 129 / 0.16);
+  --background: #121514;
+  --foreground: #e6e9e7;
+  --muted: #1a1e1c;
+  --muted-foreground: #a3aca7;
+  --border: #2a302d;
+  --input: #3d4541;
+  --primary: #5cbf98;
+  --primary-foreground: #0e1210;
+  --selected: #1f2d27;
+  --ring: #5cbf98;
+  --critical: #f28b80;
+  --warning: #e3b363;
+  --ok: #5cbf98;
 }
 
 @theme inline {
-  /* Typography: Cairo for headings (Arabic + Latin), IBM Plex Sans Arabic for Arabic body text,
-     Inter for Latin body text; other scripts fall back to the locale's system stack. */
-  --font-sans: 'Inter Variable', 'IBM Plex Sans Arabic', var(--font-locale), ui-sans-serif, system-ui, sans-serif;
-  --font-arabic: 'IBM Plex Sans Arabic', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Cairo', 'IBM Plex Sans Arabic', var(--font-locale), ui-sans-serif, system-ui, sans-serif;
-  --radius-sm: calc(var(--radius) - 6px);
-  --radius-md: calc(var(--radius) - 4px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: 'IBM Plex Sans Arabic', 'Inter Variable', var(--font-locale), ui-sans-serif, system-ui, sans-serif;
+  --text-xs: 13px;   --text-xs--line-height: 1.6;
+  --text-sm: 15px;   --text-sm--line-height: 1.7;
+  --text-base: 15px; --text-base--line-height: 1.7;
+  --text-lg: 17px;   --text-lg--line-height: 1.6;
+  --text-xl: 22px;   --text-xl--line-height: 1.4;
+  --radius-md: 6px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-solid: var(--card-solid);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
   --color-border: var(--border);
-  --color-hairline: var(--hairline);
   --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-selected: var(--selected);
   --color-ring: var(--ring);
-  --color-gold: var(--gold);
-  --color-gold-ink: var(--gold-ink);
-  --color-gold-soft: var(--gold-soft);
-  --color-platinum: var(--platinum);
-  --color-emerald-royal: #064e3b;
-  --color-emerald-deep: #022c22;
-  --color-header: var(--header);
-  --color-header-foreground: var(--header-foreground);
-  --color-header-muted: var(--header-muted);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
   --color-critical: var(--critical);
-  --color-critical-soft: var(--critical-soft);
   --color-warning: var(--warning);
-  --color-warning-soft: var(--warning-soft);
-  --color-info: var(--info);
-  --color-info-soft: var(--info-soft);
   --color-ok: var(--ok);
-  --color-ok-soft: var(--ok-soft);
 }
 
 @layer base {
-  * { @apply border-border outline-ring/50; }
-  html { background: var(--background); }
-  body { @apply text-foreground font-sans antialiased; background: var(--page); background-attachment: fixed; min-height: 100dvh;
-         transition: background-color .3s ease, color .3s ease; }
-  :lang(ar) body { font-family: var(--font-arabic); line-height: 1.7; }
-  h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
-  :lang(ar) h1, :lang(ar) h2, :lang(ar) h3 { letter-spacing: 0; }
+  * { @apply border-border; }
+  html { background: var(--background); color-scheme: light; }
+  .dark { color-scheme: dark; }
+  body { @apply bg-background text-foreground font-sans text-sm antialiased; min-height: 100dvh; }
+  :lang(ar) body { line-height: 1.8; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  a { color: inherit; }
 }
 
 @layer components {
-  /* Glass executive surface */
-  .glass {
-    background: var(--card);
-    border: 1px solid var(--border);
-    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--hairline);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    border-radius: var(--radius-xl);
-  }
-  /* Gold hairline accent at the reading start of a widget */
-  .gold-edge { position: relative; }
-  .gold-edge::before {
-    content: ''; position: absolute; inset-block: 1.25rem; inset-inline-start: 0; inline-size: 3px; border-radius: 3px;
-    background: linear-gradient(180deg, var(--gold), transparent);
-  }
   .tabular { font-variant-numeric: tabular-nums; }
+  .link { color: var(--primary); text-decoration: none; }
+  .link:hover { text-decoration: underline; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; height: 2.25rem; padding-inline: .875rem;
+         border-radius: var(--radius-md); border: 1px solid var(--input); background: var(--background); color: var(--foreground);
+         font-size: 15px; white-space: nowrap; cursor: pointer; }
+  .btn:hover { background: var(--muted); }
+  .btn-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:hover { background: var(--primary); filter: brightness(1.08); }
+  .field { height: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--input); background: var(--background);
+           color: var(--foreground); padding-inline: .625rem; font: inherit; font-size: 15px; }
 }
-@media (prefers-reduced-motion: reduce) { body { transition: none; } }

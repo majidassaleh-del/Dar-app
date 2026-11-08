@@ -38,6 +38,7 @@ scripts/dev-db.sh herp_dev --fixtures       # then: cd apps/api && cp .env.examp
 ```bash
 psql herp_dev -f scripts/demo-households.sql            # EFA Private Office + AFA Household
 AUTH_JWT_SECRET=… node scripts/demo-seed.mjs            # seeds via the API, prints HERP_DEV_TOKEN=…
+# node scripts/demo-seed.mjs --extras-only              # adds bank, petty cash, work orders, requests, salaries to an existing seed
 HERP_API_URL=http://localhost:4000 HERP_DEV_TOKEN=… pnpm --filter @herp/web dev
 ```
 

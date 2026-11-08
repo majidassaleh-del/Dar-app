@@ -768,54 +768,52 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 | `POST /webhooks/ocr/{provider}` | Async OCR completion → `processReceiptImage` merge (ZATCA QR authoritative) |
 | `POST /webhooks/billing` | Subscription events |
 
-## 16. Web: EFA Private Office executive UI
+## 16. Web app (`apps/web`)
 
-**Stack (`apps/web`):**
-* **Tailwind CSS v4.** CSS-first config in `src/app/globals.css`, `@tailwindcss/postcss`.
-* **shadcn/ui.** Card, Badge, Button and Table in `src/components/ui/` are copied in and re-themed with the tokens below; no slate/navy classes remain.
-* **Tremor Raw.** BarList and ProgressBar in `src/components/tremor/`. The progress fill is an emerald→gold gradient that fills from inline-start; there is also a `gold` variant.
+**Structure:**
+* **`/[locale]`: the daily brief.** It reads as a short letter.
+  * One paragraph on the workforce.
+  * A numbered list of what needs a decision, each linking to its section.
+  * One sentence per vehicle.
+  * The end-of-service position, with a one-line settlement calculator for any worker on any date.
+* **`/[locale]/[section]` and `/[locale]/[section]/[id]`: list and record, like a mail client.** The list sits on one side and the selected record beside it. On a phone only one shows, with a way back. The sections:
+  * `staff`: tabs for profile, entitlements (Art. 16 / Art. 10 statement), leave, pay and advances, and documents.
+  * `requests`: details and the approval chain, with Approve and Reject.
+  * `finance`: bank accounts and their transactions.
+  * `petty-cash`: the float, entries to review (Approve and Reject), and the log.
+  * `fleet`: documents, maintenance, drivers and odometer.
+  * `work-orders`: details and ordered instructions, with safety items marked.
+* **`/[locale]/onboarding`**: the account set-up steps.
 
-**Identity:**
-* **Palette.** Deep Royal Emerald `#064e3b` / `#022c22`, Warm Platinum `#e2e8f0` / `#94a3b8`, Rich Gold `#d97706`. These are exposed as tokens (`primary`, `gold`, `gold-ink`, `gold-soft`, `platinum`, `emerald-royal`, `emerald-deep`, `header*`) plus the severity tokens `critical`, `warning`, `info` and `ok`.
-* **Modes.** Light is "Platinum"; dark is "Emerald Night". `next-themes` sets the `.dark` class, and the colour change is a 0.3 s transition (turned off under `prefers-reduced-motion`).
-* **Surfaces.** `.glass` cards are translucent with a 14 px backdrop blur, a hairline inset and soft elevation. Text always sits on a layer that is at least 80 % opaque, so contrast stays at WCAG AA. `.gold-edge` draws a gold bar at the reading start of a widget.
-* **Typography.** All fonts are self-hosted through `@fontsource`. Headings and figures use Cairo (`font-display`). Arabic body text uses IBM Plex Sans Arabic and Latin body text uses Inter. Amharic, Bengali and Hindi fall back to the locale's system stack.
-* **RTL.** Only logical utilities are used, so the whole layout mirrors. Saudi number plates (`SaudiPlate`) always lay out LTR, like the physical plate.
+**Look** (`src/app/globals.css`):
+* **One family.** IBM Plex Sans Arabic, with Inter for Latin script, both self-hosted.
+* **Four sizes.** 13, 15, 17 and 22 px.
+* **One accent.** Household green for buttons, links and focus. Red and amber are used only for state, as text colour, never as badges.
+* **No decoration.** No glass, gradients, shadows or animation. Structure comes from spacing and hairline rules.
+* **Dark mode** uses the same tokens (`.dark`).
+* **RTL.** Logical utilities only, so Arabic mirrors.
 
-**Layout (`/[locale]`):**
-* **Header (`ExecShell`).**
-  * The brand monogram.
-  * The **tenant switcher**: a `<details>` menu that posts to `/api/tenant` and works without JS. Each household has a distinct badge (EFA emerald, AFA gold).
-  * A live / sample pill.
-  * The language and theme controls.
-  * The module navigation.
-* **Executive Daily Pulse.** Workforce by status with medical-checkup coverage, today's decisions from `GET /v1/dashboard/pulse`, and the ESB liability from `GET /v1/hr/end-of-service`.
-* **Fleet status.** One card per vehicle with its plate, odometer, the nearest document expiry (Istimara, insurance, Fahas) and maintenance state.
-* **Compliance highlights.**
-* **Financial & Settlement Hub (`SettlementHub`).** You pick a worker and an as-of date. It shows:
-  * **Art. 16** vested ESB and progress toward the next four-year vesting.
-  * **Art. 10** unused-leave payout and progress through the current two-year cycle.
-  * A live wage breakdown: wage, daily rate (÷30), monthly provision (÷48), total due, advances and the net amount.
-* **Staff roster** with data-protection cues.
+**Actions** (`src/lib/actions.ts`, server actions):
+* Approving or rejecting a request, and reviewing a petty-cash entry, forward the click to the API under the user's own session.
+* The API re-checks membership, approver step, permissions and RLS.
 
 **Live binding:**
 * **API client.** `src/lib/api.ts` is server-only, so the token never reaches the browser. It calls `HERP_API_URL` with the bearer token from the httpOnly session cookie (`HERP_SESSION_COOKIE`, default `herp_session`). All settings are in `src/lib/config.ts` and `apps/web/.env.example`.
 * **Dev token.** `HERP_DEV_TOKEN` is honoured only when `NODE_ENV !== 'production'`.
 * **Active household.** It is sent as `X-Household-Id`, and the API's membership check is always the authority.
   * **On a tenant subdomain** (`efa.darhub.net`, with `HERP_TENANT_BASE_DOMAIN=darhub.net`), the household is the one with that slug. A user who is not a member there gets a 404. There is never a fall-back to another household.
-  * **On the app host** (`app.darhub.net`, or with no base domain set), it comes from the switcher's httpOnly cookie (`HERP_HOUSEHOLD_COOKIE`). If the cookie names a household the user does not belong to, the first membership is used.
-  * **Switcher.** With subdomains configured, the switcher links to each household's subdomain. Otherwise it posts to `/api/tenant`, which answers with a relative, same-site redirect only.
-* **Settlement proxy.** `GET /api/settlement?staffId&asOf&locale` calls `end-of-service`, `leave-balance` and `final-settlement` under the same session. The browser never computes amounts in live mode.
-* **Sample mode.** Without a session the page renders a clearly labelled sample. Sample settlement figures use the API's formulas (`src/lib/settlement-sample.ts`).
+  * **On the app host**, it comes from the switcher's httpOnly cookie (`HERP_HOUSEHOLD_COOKIE`). If the cookie names a household the user does not belong to, the first membership is used.
+* **Settlement proxy.** `GET /api/settlement?staffId&asOf&locale` calls `end-of-service`, `leave-balance` and `final-settlement`. The browser never computes amounts in live mode.
+* **Sample mode.** Without a session the brief shows labelled sample data, and the sections ask the user to sign in.
 
-**Data protection cues (`EncryptedField`):**
-* Identity numbers and IBANs are shown as a gold lock chip with `•••• last4`. The API returns only last-4; the full values are AES-256-GCM ciphertext under the household key.
-* The health record is shown as "Encrypted". The dashboard never calls `GET /v1/staff/:id/health`, because reading that endpoint decrypts the record.
-* A missing value is shown as plain "Not on file", without a lock.
+**Data protection:**
+* Identity numbers and IBANs appear only as `•••• last4`.
+* The health record shows as "Encrypted".
+* No page calls `GET /v1/staff/:id/health`, because reading it decrypts the record.
 
-**Demo data:** see the README. In short, `scripts/demo-households.sql` names the two fixture households EFA Private Office and AFA Household. `scripts/demo-seed.mjs` then seeds staff, contracts, documents, checkups, the Yukon and Camry, and an advance, all through the live API, and prints a dev token.
+**Translations.** All UI text is in the `ui` namespace of the six catalogues. `packages/i18n/test` checks that every locale has the same keys and that every message is valid ICU.
 
-**Screenshots** are in `docs/screenshots/`: `exec-{ar,en}-{light,dark}.png`, `exec-ar-phone.png`, `exec-en-switcher.png`, `exec-en-afa.png` and `onboarding-ar.png`. They were taken against the live API. No page scrolls horizontally at 390 px.
+**Screenshots** are in `docs/screenshots/`: `brief-ar.png`, `brief-en-dark.png`, `brief-ar-phone.png`, `staff-ar.png`, `finance-en.png`, `fleet-ar-dark.png`, `requests-ar-phone.png` and `onboarding-ar.png`.
 
 ## 15. Example
 

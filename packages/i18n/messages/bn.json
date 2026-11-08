@@ -1,21 +1,55 @@
 {
-  "app": { "name": "হাউসহোল্ড ইআরপি", "tagline": "ঘরের সবকিছু, এক জায়গায়" },
-  "nav": { "dashboard": "হোম", "staff": "কর্মী", "finance": "অর্থ", "pettyCash": "নগদ তহবিল", "workOrders": "কাজের আদেশ", "travel": "ভ্রমণ", "policies": "নীতিমালা", "pulse": "দৈনিক সারসংক্ষেপ", "fleet": "গাড়ি" },
+  "app": {
+    "name": "হাউসহোল্ড ইআরপি",
+    "tagline": "ঘরের সবকিছু, এক জায়গায়"
+  },
+  "nav": {
+    "dashboard": "হোম",
+    "staff": "কর্মী",
+    "finance": "অর্থ",
+    "pettyCash": "নগদ তহবিল",
+    "workOrders": "কাজের আদেশ",
+    "travel": "ভ্রমণ",
+    "policies": "নীতিমালা",
+    "pulse": "দৈনিক সারসংক্ষেপ",
+    "fleet": "গাড়ি"
+  },
   "dashboard": {
     "greeting": "হ্যালো {name}",
     "pendingApprovals": "{count, plural, =0 {আপনার অনুমোদনের অপেক্ষায় কোনো অনুরোধ নেই} one {# টি অনুরোধ আপনার অনুমোদনের অপেক্ষায়} other {# টি অনুরোধ আপনার অনুমোদনের অপেক্ষায়}}",
     "expiringDocuments": "{count, plural, =0 {শীঘ্রই মেয়াদ শেষ হবে এমন কোনো নথি নেই} one {# টি নথির মেয়াদ {days} দিনের মধ্যে শেষ হবে} other {# টি নথির মেয়াদ {days} দিনের মধ্যে শেষ হবে}}",
     "today": "আজ {date}"
   },
-  "pettyCash": { "balance": "নগদ ব্যালেন্স: {amount}", "logExpense": "খরচ লিখুন", "pendingReview": "পর্যালোচনার অপেক্ষায়" },
+  "pettyCash": {
+    "balance": "নগদ ব্যালেন্স: {amount}",
+    "logExpense": "খরচ লিখুন",
+    "pendingReview": "পর্যালোচনার অপেক্ষায়"
+  },
   "workOrder": {
-    "status": { "NEW": "নতুন", "ASSIGNED": "বরাদ্দ করা হয়েছে", "IN_PROGRESS": "চলছে", "COMPLETED": "সম্পন্ন", "VERIFIED": "যাচাই করা হয়েছে" },
+    "status": {
+      "NEW": "নতুন",
+      "ASSIGNED": "বরাদ্দ করা হয়েছে",
+      "IN_PROGRESS": "চলছে",
+      "COMPLETED": "সম্পন্ন",
+      "VERIFIED": "যাচাই করা হয়েছে"
+    },
     "translatedBadge": "{language} থেকে যন্ত্রে অনূদিত",
     "showOriginal": "মূল লেখা দেখান"
   },
-  "policy": { "acknowledge": "আমি পড়েছি এবং সম্মত", "acknowledgedOn": "{date} তারিখে স্বীকার করা হয়েছে" },
-  "receipt": { "scanned": "রসিদ স্ক্যান হয়েছে", "zatcaVerified": "বৈধ ZATCA QR", "total": "মোট {amount}" },
-  "common": { "language": "ভাষা", "save": "সংরক্ষণ", "cancel": "বাতিল" },
+  "policy": {
+    "acknowledge": "আমি পড়েছি এবং সম্মত",
+    "acknowledgedOn": "{date} তারিখে স্বীকার করা হয়েছে"
+  },
+  "receipt": {
+    "scanned": "রসিদ স্ক্যান হয়েছে",
+    "zatcaVerified": "বৈধ ZATCA QR",
+    "total": "মোট {amount}"
+  },
+  "common": {
+    "language": "ভাষা",
+    "save": "সংরক্ষণ",
+    "cancel": "বাতিল"
+  },
   "notify": {
     "title": {
       "document": "নথির মেয়াদ শেষ হচ্ছে",
@@ -268,6 +302,380 @@
       "ABSCONDED": "অনুপস্থিত (হুরুব)",
       "TERMINATED": "চাকরিচ্যুত",
       "FINAL_EXIT": "চূড়ান্ত প্রস্থান"
+    }
+  },
+  "ui": {
+    "office": "EFA প্রাইভেট অফিস",
+    "sections": "বিভাগ",
+    "sample": "নমুনা ডেটা",
+    "signedOut": "এই বিভাগ দেখতে সাইন ইন করুন। সেশন ছাড়া শুধু নমুনা সারাংশ দেখা যায়।",
+    "back": "← {section}",
+    "open": "খুলুন",
+    "amount": "পরিমাণ",
+    "date": "তারিখ",
+    "encrypted": "এনক্রিপ্টেড",
+    "notOnFile": "নথিভুক্ত নয়",
+    "unavailable": "এখন পাওয়া যাচ্ছে না।",
+    "daysCount": "{count, plural, one {# দিন} other {# দিন}}",
+    "protectedNote": "পরিচয় নম্বর, IBAN ও স্বাস্থ্য রেকর্ড এই বাড়ির চাবি দিয়ে এনক্রিপ্টেড; শুধু শেষ চারটি অক্ষর দেখানো হয়।",
+    "nav": {
+      "brief": "আজ",
+      "staff": "কর্মী",
+      "requests": "অনুরোধ",
+      "finance": "অর্থ",
+      "pettyCash": "খুচরা নগদ",
+      "fleet": "যানবাহন",
+      "workOrders": "কাজের আদেশ"
+    },
+    "tenant": {
+      "label": "বাড়ি",
+      "current": "বর্তমান"
+    },
+    "empty": {
+      "staff": "এখনো কোনো কর্মী নেই।",
+      "requests": "কোনো অনুরোধ নেই।",
+      "finance": "এখনো কোনো অ্যাকাউন্ট নেই।",
+      "pettyCash": "এখনো কোনো খুচরা নগদ নেই।",
+      "fleet": "এখনো কোনো যানবাহন নেই।",
+      "workOrders": "কোনো কাজের আদেশ নেই।"
+    },
+    "brief": {
+      "title": "আজকের সারাংশ",
+      "workforce": "বাড়িতে {count, plural, one {একজন কর্মী} other {# জন কর্মী}} আছেন: {active} জন কাজে, {probation} জন শিক্ষানবিশ এবং {onLeave} জন ছুটিতে।",
+      "decisions": "{count, plural, =0 {আজ আপনার সিদ্ধান্তের অপেক্ষায় কিছু নেই।} one {একটি বিষয় আপনার সিদ্ধান্তের অপেক্ষায়।} other {#টি বিষয় আপনার সিদ্ধান্তের অপেক্ষায়।}}",
+      "decideTitle": "আপনার সিদ্ধান্তের অপেক্ষায়",
+      "alsoNote": "তথ্যের জন্য:",
+      "docDue": "{doc} {days, plural, one {# দিনে} other {# দিনে}} মেয়াদোত্তীর্ণ",
+      "serviceDue": "{item} বাকি",
+      "serviceDueKm": "{item} {km, number} কিমি পরে বাকি",
+      "and": ", এবং ",
+      "vehicleOk": "ঠিক আছে; পরের তারিখ {doc} {days, plural, one {# দিনে} other {# দিনে}}।",
+      "vehicleOkPlain": "ঠিক আছে।",
+      "esbTitle": "চাকরি শেষের পাওনা",
+      "esb": "{count, plural, one {একজন কর্মীর} other {# জন কর্মীর}} চাকরি শেষের সঞ্চিতি {provision}, যার মধ্যে আজ পাওনা {vested}।",
+      "protected": "পরিচয় নম্বর, IBAN ও স্বাস্থ্য রেকর্ড এই বাড়ির চাবি দিয়ে এনক্রিপ্টেড।",
+      "allStaff": "সব কর্মী"
+    },
+    "settle": {
+      "worker": "যদি চাকরি শেষ হয়",
+      "asOf": "এই তারিখে",
+      "noWorkers": "এখনো চুক্তিসহ কোনো কর্মী নেই।",
+      "loading": "হিসাব হচ্ছে…",
+      "error": "হিসাব করা যায়নি।",
+      "sentence": "তিনি পাবেন {esb} চাকরি শেষের পাওনা (ধারা ১৬) এবং {days} দিনের অব্যবহৃত ছুটির জন্য {leave} (ধারা ১০), অগ্রিম {advances} বাদে: মোট {net} SAR।",
+      "wageLine": "বেতন মাসে {wage}, দিনে {daily}; প্রতি মাসে {provision} আলাদা রাখা হয়।",
+      "item": "বিষয়",
+      "basis": "ভিত্তি",
+      "sar": "SAR",
+      "esb": "চাকরি শেষের পাওনা",
+      "esbBasis": "ধারা ১৬ · {years} বছর চাকরি · {periods}টি পূর্ণ ৪-বছর মেয়াদ",
+      "leave": "অব্যবহৃত ছুটি",
+      "leaveBasis": "ধারা ১০ · {days} দিন × {daily}",
+      "advances": "বকেয়া অগ্রিম",
+      "advancesBasis": "চূড়ান্ত পাওনা থেকে কাটা হয়",
+      "net": "নিট পাওনা",
+      "footnote": "বেতন মাসে {wage}; সঞ্চিতি মাসে {provision} (বেতন ÷ ৪৮)। পরের চাকরি শেষের ধাপ {next}; পরের ৩০ ছুটির দিন {leaveNext}।"
+    },
+    "staff": {
+      "tab": {
+        "profile": "প্রোফাইল",
+        "settlement": "পাওনা",
+        "leave": "ছুটি",
+        "pay": "বেতন ও অগ্রিম",
+        "documents": "কাগজপত্র"
+      },
+      "noMedical": "বৈধ মেডিকেল নেই",
+      "person": "ব্যক্তি",
+      "role": "ভূমিকা",
+      "status": "অবস্থা",
+      "hired": "নিয়োগ",
+      "probationEnds": "শিক্ষানবিশ শেষ",
+      "nationality": "জাতীয়তা",
+      "payout": "পরিশোধের মাধ্যম",
+      "iban": "IBAN",
+      "medical": "মেডিকেল পরীক্ষা",
+      "health": "স্বাস্থ্য রেকর্ড",
+      "contract": "চুক্তি",
+      "basic": "মূল বেতন",
+      "monthly": "মাসিক মোট",
+      "annualLeave": "বার্ষিক ছুটি",
+      "since": "থেকে",
+      "sinceDate": "{date} থেকে",
+      "noContract": "কোনো চুক্তি নথিভুক্ত নেই।",
+      "leaveTitle": "ছুটির ব্যালান্স (ধারা ১০)",
+      "accrued": "অর্জিত",
+      "taken": "নেওয়া",
+      "balance": "অব্যবহৃত",
+      "availableNow": "এখন নেওয়া যায়",
+      "nextEntitlement": "পরের ৩০ দিন",
+      "rate": "অর্জনের হার",
+      "rateValue": "বছরে {count, plural, one {# দিন} other {# দিন}}",
+      "payments": "বেতন পরিশোধ",
+      "period": "মাস",
+      "channel": "মাধ্যম",
+      "paymentStatus": "অবস্থা",
+      "noPayments": "কোনো বেতন পরিশোধ নথিভুক্ত নেই।",
+      "advances": "অগ্রিম",
+      "issued": "প্রদান",
+      "granted": "পরিমাণ",
+      "repaid": "পরিশোধিত",
+      "outstanding": "বকেয়া",
+      "installment": "কিস্তি",
+      "installmentValue": "{amount} · {count, plural, one {# বাকি} other {# বাকি}}",
+      "noAdvances": "কোনো অগ্রিম নেই।",
+      "documents": "কাগজপত্র",
+      "docType": "কাগজ",
+      "number": "নম্বর",
+      "expires": "মেয়াদ শেষ",
+      "daysLeft": "বাকি দিন",
+      "noDocuments": "কোনো কাগজপত্র নথিভুক্ত নেই।"
+    },
+    "requests": {
+      "approve": "অনুমোদন",
+      "reject": "প্রত্যাখ্যান",
+      "details": "বিস্তারিত",
+      "installments": "কিস্তি",
+      "leaveType": "ছুটির ধরন",
+      "from": "থেকে",
+      "to": "পর্যন্ত",
+      "reason": "কারণ",
+      "priority": "অগ্রাধিকার",
+      "resolved": "নিষ্পত্তি",
+      "approvals": "অনুমোদন",
+      "step": "ধাপ",
+      "approver": "অনুমোদনকারী",
+      "decision": "সিদ্ধান্ত",
+      "when": "কখন"
+    },
+    "finance": {
+      "account": "অ্যাকাউন্ট",
+      "balance": "ব্যালান্স",
+      "opening": "প্রারম্ভিক ব্যালান্স",
+      "ledger": "খতিয়ান অ্যাকাউন্ট",
+      "transactions": "লেনদেন",
+      "payee": "প্রাপক",
+      "category": "শ্রেণি",
+      "kind": "ধরন",
+      "noTransactions": "এখনো কোনো লেনদেন নেই।"
+    },
+    "petty": {
+      "custodian": "{name}-এর কাছে",
+      "float": "নগদ",
+      "limit": "সীমা",
+      "receiptOver": "এর বেশি হলে রসিদ লাগবে",
+      "reconciled": "শেষ গণনা",
+      "never": "এখনো নয়",
+      "toReview": "{count, plural, one {পর্যালোচনার জন্য একটি এন্ট্রি} other {পর্যালোচনার জন্য #টি এন্ট্রি}}",
+      "log": "এন্ট্রি",
+      "entry": "এন্ট্রি",
+      "by": "দ্বারা",
+      "status": "অবস্থা",
+      "after": "পরের ব্যালান্স",
+      "noEntries": "এখনো কোনো এন্ট্রি নেই।"
+    },
+    "fleet": {
+      "km": "{km, number} কিমি",
+      "documents": "কাগজপত্র",
+      "document": "কাগজ",
+      "reference": "রেফারেন্স",
+      "maintenance": "রক্ষণাবেক্ষণ",
+      "service": "সেবা",
+      "nextDate": "পরের তারিখ",
+      "nextKm": "পরের",
+      "remaining": "বাকি",
+      "noPlans": "কোনো রক্ষণাবেক্ষণ পরিকল্পনা নেই।",
+      "vehicle": "যানবাহন",
+      "drivers": "চালক",
+      "secondary": "বিকল্প",
+      "fuelType": "জ্বালানি",
+      "ownership": "মালিকানা",
+      "fuel": "জ্বালানি লগ",
+      "fuelSummary": "{count, plural, =0 {কোনো ভরাট নথিভুক্ত নেই} one {# বার ভরাট · {cost}} other {# বার ভরাট · {cost}}}",
+      "odometer": "ওডোমিটার",
+      "reading": "রিডিং",
+      "source": "উৎস",
+      "noReadings": "কোনো রিডিং নেই।"
+    },
+    "wo": {
+      "unassigned": "বরাদ্দ হয়নি",
+      "details": "বিস্তারিত",
+      "assignee": "যাকে দেওয়া",
+      "requester": "অনুরোধকারী",
+      "due": "নির্ধারিত",
+      "completed": "সম্পন্ন",
+      "estimate": "আনুমানিক",
+      "actual": "প্রকৃত খরচ",
+      "description": "বিবরণ",
+      "instructions": "নির্দেশনা",
+      "safety": "নিরাপত্তা",
+      "photo": "ছবি প্রয়োজন",
+      "translationPending": "অনুবাদ পর্যালোচনায়"
+    },
+    "doc": {
+      "IQAMA": "ইকামা",
+      "PASSPORT": "পাসপোর্ট",
+      "VISA": "ভিসা",
+      "BORDER_NUMBER": "বর্ডার নম্বর",
+      "WORK_PERMIT": "ওয়ার্ক পারমিট",
+      "MEDICAL_INSURANCE": "মেডিকেল বিমা",
+      "DRIVING_LICENSE": "ড্রাইভিং লাইসেন্স",
+      "CONTRACT": "চুক্তি",
+      "OTHER": "অন্যান্য"
+    },
+    "channel": {
+      "MUSANED": "মুসানেদ",
+      "BANK_TRANSFER": "ব্যাংক ট্রান্সফার",
+      "CASH": "নগদ",
+      "DIGITAL_WALLET": "ডিজিটাল ওয়ালেট"
+    },
+    "payStatus": {
+      "RECORDED": "নথিভুক্ত, নিশ্চিত হয়নি",
+      "ACKNOWLEDGED": "কর্মী নিশ্চিত করেছেন",
+      "DISPUTED": "আপত্তি আছে",
+      "REVERSED": "বাতিল"
+    },
+    "medical": {
+      "VALID": "বৈধ",
+      "DUE_SOON": "শীঘ্রই বাকি",
+      "OVERDUE": "মেয়াদোত্তীর্ণ",
+      "MISSING": "নথিভুক্ত নয়",
+      "NOT_REQUIRED": "প্রয়োজন নেই"
+    },
+    "allowance": {
+      "FOOD": "খাদ্য ভাতা",
+      "HOUSING": "আবাসন ভাতা",
+      "TRANSPORT": "যাতায়াত ভাতা",
+      "PHONE": "ফোন ভাতা",
+      "OTHER": "অন্যান্য ভাতা"
+    },
+    "requestType": {
+      "PURCHASE": "ক্রয়",
+      "REIMBURSEMENT": "খরচ ফেরত",
+      "SALARY_ADVANCE": "বেতন অগ্রিম",
+      "LEAVE": "ছুটি",
+      "ALLOWANCE_TOPUP": "ভাতা বৃদ্ধি",
+      "CARD_LIMIT_CHANGE": "কার্ডের সীমা পরিবর্তন",
+      "VEHICLE_USAGE": "যানবাহন ব্যবহার",
+      "MAINTENANCE": "রক্ষণাবেক্ষণ",
+      "GENERAL": "সাধারণ"
+    },
+    "requestStatus": {
+      "DRAFT": "খসড়া",
+      "SUBMITTED": "জমা দেওয়া",
+      "IN_REVIEW": "সিদ্ধান্তের অপেক্ষায়",
+      "APPROVED": "অনুমোদিত",
+      "REJECTED": "প্রত্যাখ্যাত",
+      "CANCELLED": "বাতিল",
+      "FULFILLED": "সম্পন্ন"
+    },
+    "decision": {
+      "PENDING": "অপেক্ষমাণ",
+      "APPROVED": "অনুমোদিত",
+      "REJECTED": "প্রত্যাখ্যাত",
+      "DELEGATED": "অর্পিত"
+    },
+    "leaveType": {
+      "ANNUAL": "বার্ষিক",
+      "SICK": "অসুস্থতা",
+      "EMERGENCY": "জরুরি",
+      "UNPAID": "বিনা বেতনে",
+      "HAJJ_UMRAH": "হজ / উমরা",
+      "VACATION_TRAVEL": "ছুটির ভ্রমণ"
+    },
+    "priority": {
+      "LOW": "কম",
+      "NORMAL": "সাধারণ",
+      "HIGH": "উচ্চ",
+      "URGENT": "জরুরি"
+    },
+    "accountType": {
+      "BANK_CURRENT": "চলতি অ্যাকাউন্ট",
+      "BANK_SAVINGS": "সঞ্চয়ী অ্যাকাউন্ট",
+      "CREDIT_CARD": "ক্রেডিট কার্ড",
+      "CASH_BOX": "নগদ বাক্স",
+      "WALLET": "ওয়ালেট"
+    },
+    "txType": {
+      "EXPENSE": "খরচ",
+      "INCOME": "আয়",
+      "TRANSFER": "স্থানান্তর",
+      "ALLOWANCE": "ভাতা",
+      "REFUND": "ফেরত",
+      "ADJUSTMENT": "সমন্বয়"
+    },
+    "txStatus": {
+      "PENDING": "অপেক্ষমাণ",
+      "POSTED": "লিপিবদ্ধ",
+      "RECONCILED": "মিলানো",
+      "REVERSED": "বাতিল"
+    },
+    "pettyType": {
+      "TOP_UP": "টপ-আপ",
+      "EXPENSE": "খরচ",
+      "RETURN": "ফেরত",
+      "ADJUSTMENT": "সমন্বয়"
+    },
+    "pettyStatus": {
+      "PENDING_REVIEW": "পর্যালোচনার জন্য",
+      "APPROVED": "অনুমোদিত",
+      "REJECTED": "প্রত্যাখ্যাত"
+    },
+    "maintenance": {
+      "OIL_CHANGE": "তেল পরিবর্তন",
+      "TIRES": "টায়ার",
+      "BRAKES": "ব্রেক",
+      "BATTERY": "ব্যাটারি",
+      "INSPECTION": "পরিদর্শন",
+      "REPAIR": "মেরামত",
+      "BODYWORK": "বডিওয়ার্ক",
+      "CLEANING": "পরিষ্কার",
+      "OTHER": "অন্যান্য"
+    },
+    "fuel": {
+      "PETROL_91": "পেট্রোল ৯১",
+      "PETROL_95": "পেট্রোল ৯৫",
+      "DIESEL": "ডিজেল",
+      "HYBRID": "হাইব্রিড",
+      "ELECTRIC": "বৈদ্যুতিক"
+    },
+    "ownership": {
+      "OWNED": "নিজস্ব",
+      "LEASED": "লিজ",
+      "RENTED": "ভাড়া",
+      "COMPANY": "কোম্পানির"
+    },
+    "vehicleStatus": {
+      "ACTIVE": "ব্যবহারে",
+      "IN_SERVICE": "ওয়ার্কশপে",
+      "SOLD": "বিক্রি হয়েছে",
+      "INACTIVE": "ব্যবহারে নেই"
+    },
+    "readingSource": {
+      "MANUAL": "লেখা হয়েছে",
+      "FUEL": "ভরাটের সময়",
+      "TRIP": "যাত্রা",
+      "SERVICE": "সার্ভিসের সময়",
+      "INITIAL": "নিবন্ধনের সময়"
+    },
+    "woStatus": {
+      "NEW": "নতুন",
+      "ASSIGNED": "বরাদ্দকৃত",
+      "IN_PROGRESS": "চলমান",
+      "ON_HOLD": "স্থগিত",
+      "COMPLETED": "সম্পন্ন",
+      "VERIFIED": "যাচাইকৃত",
+      "CANCELLED": "বাতিল"
+    },
+    "woCategory": {
+      "CLEANING": "পরিষ্কার",
+      "COOKING": "রান্না",
+      "CHILDCARE": "শিশু যত্ন",
+      "DRIVING": "গাড়ি চালানো",
+      "ERRAND": "কাজকর্ম",
+      "GARDENING": "বাগান",
+      "MAINTENANCE": "রক্ষণাবেক্ষণ",
+      "EVENT_PREP": "অনুষ্ঠানের প্রস্তুতি",
+      "OTHER": "অন্যান্য"
     }
   }
 }

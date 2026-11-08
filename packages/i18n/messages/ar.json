@@ -1,21 +1,55 @@
 {
-  "app": { "name": "منصة إدارة المنزل", "tagline": "كل شؤون البيت في مكان واحد" },
-  "nav": { "dashboard": "الرئيسية", "staff": "العمالة", "finance": "المالية", "pettyCash": "العهدة النقدية", "workOrders": "أوامر العمل", "travel": "السفر", "policies": "السياسات", "pulse": "النبض اليومي", "fleet": "المركبات" },
+  "app": {
+    "name": "منصة إدارة المنزل",
+    "tagline": "كل شؤون البيت في مكان واحد"
+  },
+  "nav": {
+    "dashboard": "الرئيسية",
+    "staff": "العمالة",
+    "finance": "المالية",
+    "pettyCash": "العهدة النقدية",
+    "workOrders": "أوامر العمل",
+    "travel": "السفر",
+    "policies": "السياسات",
+    "pulse": "النبض اليومي",
+    "fleet": "المركبات"
+  },
   "dashboard": {
     "greeting": "مرحباً {name}",
     "pendingApprovals": "{count, plural, =0 {لا توجد طلبات بانتظار موافقتك} one {طلب واحد بانتظار موافقتك} two {طلبان بانتظار موافقتك} few {# طلبات بانتظار موافقتك} many {# طلباً بانتظار موافقتك} other {# طلب بانتظار موافقتك}}",
     "expiringDocuments": "{count, plural, =0 {لا توجد وثائق قاربت على الانتهاء} one {وثيقة واحدة تنتهي خلال {days} يوماً} two {وثيقتان تنتهيان خلال {days} يوماً} few {# وثائق تنتهي خلال {days} يوماً} many {# وثيقة تنتهي خلال {days} يوماً} other {# وثيقة تنتهي خلال {days} يوماً}}",
     "today": "اليوم {date}"
   },
-  "pettyCash": { "balance": "رصيد العهدة: {amount}", "logExpense": "تسجيل مصروف", "pendingReview": "بانتظار المراجعة" },
+  "pettyCash": {
+    "balance": "رصيد العهدة: {amount}",
+    "logExpense": "تسجيل مصروف",
+    "pendingReview": "بانتظار المراجعة"
+  },
   "workOrder": {
-    "status": { "NEW": "جديد", "ASSIGNED": "مُسند", "IN_PROGRESS": "قيد التنفيذ", "COMPLETED": "مكتمل", "VERIFIED": "تم التحقق" },
+    "status": {
+      "NEW": "جديد",
+      "ASSIGNED": "مُسند",
+      "IN_PROGRESS": "قيد التنفيذ",
+      "COMPLETED": "مكتمل",
+      "VERIFIED": "تم التحقق"
+    },
     "translatedBadge": "مترجم آلياً من {language}",
     "showOriginal": "عرض النص الأصلي"
   },
-  "policy": { "acknowledge": "قرأت وأوافق", "acknowledgedOn": "تم الإقرار في {date}" },
-  "receipt": { "scanned": "تمت قراءة الفاتورة", "zatcaVerified": "رمز ZATCA صالح", "total": "الإجمالي {amount}" },
-  "common": { "language": "اللغة", "save": "حفظ", "cancel": "إلغاء" },
+  "policy": {
+    "acknowledge": "قرأت وأوافق",
+    "acknowledgedOn": "تم الإقرار في {date}"
+  },
+  "receipt": {
+    "scanned": "تمت قراءة الفاتورة",
+    "zatcaVerified": "رمز ZATCA صالح",
+    "total": "الإجمالي {amount}"
+  },
+  "common": {
+    "language": "اللغة",
+    "save": "حفظ",
+    "cancel": "إلغاء"
+  },
   "notify": {
     "title": {
       "document": "وثيقة تقترب من الانتهاء",
@@ -268,6 +302,380 @@
       "ABSCONDED": "متغيب (هروب)",
       "TERMINATED": "منتهية خدمته",
       "FINAL_EXIT": "خروج نهائي"
+    }
+  },
+  "ui": {
+    "office": "مكتب EFA الخاص",
+    "sections": "الأقسام",
+    "sample": "بيانات تجريبية",
+    "signedOut": "سجّل الدخول لعرض هذا القسم. بدون جلسة يظهر الموجز التجريبي فقط.",
+    "back": "→ {section}",
+    "open": "فتح",
+    "amount": "المبلغ",
+    "date": "التاريخ",
+    "encrypted": "مشفّر",
+    "notOnFile": "غير مسجّل",
+    "unavailable": "غير متاح الآن.",
+    "daysCount": "{count, plural, zero {# يوم} one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}",
+    "protectedNote": "أرقام الهوية والآيبان والسجلات الصحية مشفّرة بمفتاح هذا المنزل، ولا يظهر منها إلا آخر أربع خانات.",
+    "nav": {
+      "brief": "اليوم",
+      "staff": "العمالة",
+      "requests": "الطلبات",
+      "finance": "المالية",
+      "pettyCash": "العهدة النقدية",
+      "fleet": "المركبات",
+      "workOrders": "أوامر العمل"
+    },
+    "tenant": {
+      "label": "المنزل",
+      "current": "الحالي"
+    },
+    "empty": {
+      "staff": "لا يوجد عمّال بعد.",
+      "requests": "لا توجد طلبات.",
+      "finance": "لا توجد حسابات بعد.",
+      "pettyCash": "لا توجد عُهد نقدية بعد.",
+      "fleet": "لا توجد مركبات بعد.",
+      "workOrders": "لا توجد أوامر عمل."
+    },
+    "brief": {
+      "title": "موجز اليوم",
+      "workforce": "في المنزل {count, plural, zero {لا عمّال} one {عامل واحد} two {عاملان} few {# عمّال} many {# عاملًا} other {# عامل}}: {active} على رأس العمل، و{probation} تحت التجربة، و{onLeave} في إجازة.",
+      "decisions": "{count, plural, =0 {لا شيء ينتظر قرارك اليوم.} one {أمر واحد ينتظر قرارك.} two {أمران ينتظران قرارك.} few {# أمور تنتظر قرارك.} many {# أمرًا ينتظر قرارك.} other {# أمر ينتظر قرارك.}}",
+      "decideTitle": "ينتظر قرارك",
+      "alsoNote": "وللعلم أيضًا:",
+      "docDue": "{doc} ينتهي بعد {days, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
+      "serviceDue": "{item} مستحق",
+      "serviceDueKm": "{item} مستحق بعد {km, number} كم",
+      "and": "، و",
+      "vehicleOk": "سليمة؛ أقرب موعد {doc} بعد {days, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}.",
+      "vehicleOkPlain": "سليمة.",
+      "esbTitle": "نهاية الخدمة",
+      "esb": "مخصص نهاية الخدمة لـ{count, plural, zero {لا أحد} one {عامل واحد} two {عاملين} few {# عمّال} many {# عاملًا} other {# عامل}} {provision}، المستحق منه اليوم {vested}",
+      "protected": "أرقام الهوية والآيبان والسجلات الصحية مشفّرة بمفتاح هذا المنزل.",
+      "allStaff": "العمالة كاملة"
+    },
+    "settle": {
+      "worker": "لو انتهت خدمة",
+      "asOf": "في",
+      "noWorkers": "لا يوجد عمّال بعقود بعد.",
+      "loading": "جارٍ الحساب…",
+      "error": "تعذّر الحساب.",
+      "sentence": "يستحق {esb} مكافأة نهاية خدمة (المادة ١٦) و{leave} بدل {days} يوم إجازة غير مستخدمة (المادة ١٠)، يُخصم منها سلف {advances}، فيكون الصافي {net} ر.س.",
+      "wageLine": "الأجر {wage} شهريًا، أي {daily} لليوم، ويُخصَّص له {provision} كل شهر.",
+      "item": "البند",
+      "basis": "الأساس",
+      "sar": "ر.س",
+      "esb": "مكافأة نهاية الخدمة",
+      "esbBasis": "م ١٦ · {years} سنة خدمة · {periods} دورة مكتملة من ٤ سنوات",
+      "leave": "إجازات غير مستخدمة",
+      "leaveBasis": "م ١٠ · {days} يوم × {daily}",
+      "advances": "السلف القائمة",
+      "advancesBasis": "تُستردّ من التسوية النهائية",
+      "net": "الصافي المستحق",
+      "footnote": "الأجر {wage} شهريًا؛ المخصص {provision} شهريًا (الأجر ÷ ٤٨). الاستحقاق التالي لنهاية الخدمة {next}؛ الثلاثون يومًا التالية من الإجازة {leaveNext}."
+    },
+    "staff": {
+      "tab": {
+        "profile": "البيانات",
+        "settlement": "المستحقات",
+        "leave": "الإجازات",
+        "pay": "الرواتب والسلف",
+        "documents": "الوثائق"
+      },
+      "noMedical": "بلا فحص طبي ساري",
+      "person": "الشخص",
+      "role": "المهنة",
+      "status": "الحالة",
+      "hired": "تاريخ التعيين",
+      "probationEnds": "نهاية التجربة",
+      "nationality": "الجنسية",
+      "payout": "طريقة الصرف",
+      "iban": "الآيبان",
+      "medical": "الفحص الطبي",
+      "health": "السجل الصحي",
+      "contract": "العقد",
+      "basic": "الراتب الأساسي",
+      "monthly": "الإجمالي الشهري",
+      "annualLeave": "الإجازة السنوية",
+      "since": "منذ",
+      "sinceDate": "منذ {date}",
+      "noContract": "لا يوجد عقد مسجّل.",
+      "leaveTitle": "رصيد الإجازات (المادة ١٠)",
+      "accrued": "المستحق",
+      "taken": "المأخوذ",
+      "balance": "غير المستخدم",
+      "availableNow": "يمكن أخذه الآن",
+      "nextEntitlement": "الثلاثون يومًا التالية في",
+      "rate": "معدل الاستحقاق",
+      "rateValue": "{count, plural, zero {# يوم} one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}} في السنة",
+      "payments": "مدفوعات الرواتب",
+      "period": "الشهر",
+      "channel": "طريقة الصرف",
+      "paymentStatus": "الحالة",
+      "noPayments": "لا توجد رواتب مسجّلة.",
+      "advances": "السلف",
+      "issued": "تاريخ الصرف",
+      "granted": "المبلغ",
+      "repaid": "المسترد",
+      "outstanding": "المتبقي",
+      "installment": "القسط",
+      "installmentValue": "{amount} · {count, plural, zero {لم يبقَ شيء} one {بقي قسط} two {بقي قسطان} few {بقي # أقساط} many {بقي # قسطًا} other {بقي # قسط}}",
+      "noAdvances": "لا توجد سلف.",
+      "documents": "الوثائق",
+      "docType": "الوثيقة",
+      "number": "الرقم",
+      "expires": "الانتهاء",
+      "daysLeft": "الأيام المتبقية",
+      "noDocuments": "لا توجد وثائق مسجّلة."
+    },
+    "requests": {
+      "approve": "موافقة",
+      "reject": "رفض",
+      "details": "التفاصيل",
+      "installments": "الأقساط",
+      "leaveType": "نوع الإجازة",
+      "from": "من",
+      "to": "إلى",
+      "reason": "السبب",
+      "priority": "الأولوية",
+      "resolved": "تاريخ البتّ",
+      "approvals": "الموافقات",
+      "step": "المرحلة",
+      "approver": "صاحب القرار",
+      "decision": "القرار",
+      "when": "التاريخ"
+    },
+    "finance": {
+      "account": "الحساب",
+      "balance": "الرصيد",
+      "opening": "الرصيد الافتتاحي",
+      "ledger": "حساب الدفتر",
+      "transactions": "الحركات",
+      "payee": "الجهة",
+      "category": "التصنيف",
+      "kind": "النوع",
+      "noTransactions": "لا توجد حركات بعد."
+    },
+    "petty": {
+      "custodian": "بعهدة {name}",
+      "float": "العهدة",
+      "limit": "الحد",
+      "receiptOver": "يلزم إيصال فوق",
+      "reconciled": "آخر جرد",
+      "never": "لم يُجرد بعد",
+      "toReview": "{count, plural, zero {لا شيء للمراجعة} one {قيد واحد للمراجعة} two {قيدان للمراجعة} few {# قيود للمراجعة} many {# قيدًا للمراجعة} other {# قيد للمراجعة}}",
+      "log": "القيود",
+      "entry": "القيد",
+      "by": "بواسطة",
+      "status": "الحالة",
+      "after": "الرصيد بعده",
+      "noEntries": "لا توجد قيود بعد."
+    },
+    "fleet": {
+      "km": "{km, number} كم",
+      "documents": "الوثائق",
+      "document": "الوثيقة",
+      "reference": "المرجع",
+      "maintenance": "الصيانة",
+      "service": "الخدمة",
+      "nextDate": "الموعد التالي",
+      "nextKm": "عند",
+      "remaining": "المتبقي",
+      "noPlans": "لا توجد خطط صيانة.",
+      "vehicle": "المركبة",
+      "drivers": "السائقون",
+      "secondary": "احتياطي",
+      "fuelType": "الوقود",
+      "ownership": "الملكية",
+      "fuel": "سجل الوقود",
+      "fuelSummary": "{count, plural, =0 {لا تعبئة مسجّلة} one {تعبئة واحدة · {cost}} two {تعبئتان · {cost}} few {# تعبئات · {cost}} many {# تعبئة · {cost}} other {# تعبئة · {cost}}}",
+      "odometer": "العدّاد",
+      "reading": "القراءة",
+      "source": "المصدر",
+      "noReadings": "لا توجد قراءات."
+    },
+    "wo": {
+      "unassigned": "غير مسند",
+      "details": "التفاصيل",
+      "assignee": "مسند إلى",
+      "requester": "طلبه",
+      "due": "الموعد",
+      "completed": "أُنجز في",
+      "estimate": "التكلفة التقديرية",
+      "actual": "التكلفة الفعلية",
+      "description": "الوصف",
+      "instructions": "التعليمات",
+      "safety": "سلامة",
+      "photo": "يلزم تصوير",
+      "translationPending": "الترجمة بانتظار المراجعة"
+    },
+    "doc": {
+      "IQAMA": "الإقامة",
+      "PASSPORT": "جواز السفر",
+      "VISA": "التأشيرة",
+      "BORDER_NUMBER": "رقم الحدود",
+      "WORK_PERMIT": "رخصة العمل",
+      "MEDICAL_INSURANCE": "التأمين الطبي",
+      "DRIVING_LICENSE": "رخصة القيادة",
+      "CONTRACT": "العقد",
+      "OTHER": "أخرى"
+    },
+    "channel": {
+      "MUSANED": "مساند",
+      "BANK_TRANSFER": "تحويل بنكي",
+      "CASH": "نقدًا",
+      "DIGITAL_WALLET": "محفظة رقمية"
+    },
+    "payStatus": {
+      "RECORDED": "مسجّل، لم يؤكده العامل",
+      "ACKNOWLEDGED": "أكّده العامل",
+      "DISPUTED": "معترض عليه",
+      "REVERSED": "ملغى"
+    },
+    "medical": {
+      "VALID": "ساري",
+      "DUE_SOON": "يقترب موعده",
+      "OVERDUE": "منتهٍ",
+      "MISSING": "غير موجود",
+      "NOT_REQUIRED": "غير مطلوب"
+    },
+    "allowance": {
+      "FOOD": "بدل طعام",
+      "HOUSING": "بدل سكن",
+      "TRANSPORT": "بدل نقل",
+      "PHONE": "بدل هاتف",
+      "OTHER": "بدل آخر"
+    },
+    "requestType": {
+      "PURCHASE": "شراء",
+      "REIMBURSEMENT": "استرداد مصروف",
+      "SALARY_ADVANCE": "سلفة على الراتب",
+      "LEAVE": "إجازة",
+      "ALLOWANCE_TOPUP": "زيادة بدل",
+      "CARD_LIMIT_CHANGE": "تعديل حد بطاقة",
+      "VEHICLE_USAGE": "استخدام مركبة",
+      "MAINTENANCE": "صيانة",
+      "GENERAL": "طلب عام"
+    },
+    "requestStatus": {
+      "DRAFT": "مسودة",
+      "SUBMITTED": "مُرسل",
+      "IN_REVIEW": "بانتظار القرار",
+      "APPROVED": "موافَق عليه",
+      "REJECTED": "مرفوض",
+      "CANCELLED": "ملغى",
+      "FULFILLED": "منفّذ"
+    },
+    "decision": {
+      "PENDING": "بانتظار القرار",
+      "APPROVED": "موافقة",
+      "REJECTED": "رفض",
+      "DELEGATED": "مفوَّض"
+    },
+    "leaveType": {
+      "ANNUAL": "سنوية",
+      "SICK": "مرضية",
+      "EMERGENCY": "اضطرارية",
+      "UNPAID": "بدون راتب",
+      "HAJJ_UMRAH": "حج / عمرة",
+      "VACATION_TRAVEL": "سفر إجازة"
+    },
+    "priority": {
+      "LOW": "منخفضة",
+      "NORMAL": "عادية",
+      "HIGH": "عالية",
+      "URGENT": "عاجلة"
+    },
+    "accountType": {
+      "BANK_CURRENT": "حساب جارٍ",
+      "BANK_SAVINGS": "حساب توفير",
+      "CREDIT_CARD": "بطاقة ائتمان",
+      "CASH_BOX": "صندوق نقدي",
+      "WALLET": "محفظة"
+    },
+    "txType": {
+      "EXPENSE": "مصروف",
+      "INCOME": "إيراد",
+      "TRANSFER": "تحويل",
+      "ALLOWANCE": "بدل",
+      "REFUND": "استرداد",
+      "ADJUSTMENT": "تسوية"
+    },
+    "txStatus": {
+      "PENDING": "معلّق",
+      "POSTED": "مرحّل",
+      "RECONCILED": "مطابَق",
+      "REVERSED": "ملغى"
+    },
+    "pettyType": {
+      "TOP_UP": "تعبئة",
+      "EXPENSE": "مصروف",
+      "RETURN": "إرجاع",
+      "ADJUSTMENT": "تسوية"
+    },
+    "pettyStatus": {
+      "PENDING_REVIEW": "للمراجعة",
+      "APPROVED": "معتمد",
+      "REJECTED": "مرفوض"
+    },
+    "maintenance": {
+      "OIL_CHANGE": "تغيير الزيت",
+      "TIRES": "الإطارات",
+      "BRAKES": "الفرامل",
+      "BATTERY": "البطارية",
+      "INSPECTION": "الفحص",
+      "REPAIR": "إصلاح",
+      "BODYWORK": "سمكرة",
+      "CLEANING": "تنظيف",
+      "OTHER": "أخرى"
+    },
+    "fuel": {
+      "PETROL_91": "بنزين ٩١",
+      "PETROL_95": "بنزين ٩٥",
+      "DIESEL": "ديزل",
+      "HYBRID": "هجين",
+      "ELECTRIC": "كهربائي"
+    },
+    "ownership": {
+      "OWNED": "ملك",
+      "LEASED": "تأجير منتهٍ بالتمليك",
+      "RENTED": "مستأجرة",
+      "COMPANY": "للشركة"
+    },
+    "vehicleStatus": {
+      "ACTIVE": "في الخدمة",
+      "IN_SERVICE": "في الورشة",
+      "SOLD": "مباعة",
+      "INACTIVE": "متوقفة"
+    },
+    "readingSource": {
+      "MANUAL": "إدخال يدوي",
+      "FUEL": "عند التعبئة",
+      "TRIP": "رحلة",
+      "SERVICE": "عند الصيانة",
+      "INITIAL": "عند التسجيل"
+    },
+    "woStatus": {
+      "NEW": "جديد",
+      "ASSIGNED": "مسند",
+      "IN_PROGRESS": "قيد التنفيذ",
+      "ON_HOLD": "معلّق",
+      "COMPLETED": "منجز",
+      "VERIFIED": "تم التحقق",
+      "CANCELLED": "ملغى"
+    },
+    "woCategory": {
+      "CLEANING": "تنظيف",
+      "COOKING": "طبخ",
+      "CHILDCARE": "رعاية أطفال",
+      "DRIVING": "قيادة",
+      "ERRAND": "مشوار",
+      "GARDENING": "حديقة",
+      "MAINTENANCE": "صيانة",
+      "EVENT_PREP": "تجهيز مناسبة",
+      "OTHER": "أخرى"
     }
   }
 }

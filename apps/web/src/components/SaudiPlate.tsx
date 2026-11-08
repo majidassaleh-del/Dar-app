@@ -11,14 +11,14 @@ function split(s: string) {
 
 export function SaudiPlate({ latin, arabic, className }: { latin: string; arabic: string | null; className?: string }) {
   const l = split(latin), a = split(arabic ?? '');
-  const cell = 'grid grid-rows-2 place-items-center px-2 font-display text-[13px] font-bold leading-[1.2]';
+  const cell = 'grid grid-rows-2 place-items-center px-2 text-[13px] font-semibold leading-[1.25]';
   return (
     <span dir="ltr" aria-label={latin}
-      className={cn('inline-flex items-stretch overflow-hidden rounded-md border-2 border-[#022c22]/80 bg-white text-[#022c22] shadow-sm dark:border-white/70', className)}>
+      className={cn('inline-flex items-stretch overflow-hidden rounded-md border-2 border-foreground bg-background text-foreground', className)}>
       <span className={cell}><span>{a.digits || l.digits}</span><span className="tracking-[0.18em]">{l.digits}</span></span>
-      <span className="w-px bg-[#022c22]/60" />
+      <span className="w-px bg-foreground/60" />
       <span className={cell}><span>{a.letters}</span><span className="tracking-[0.18em]">{l.letters}</span></span>
-      <span className="flex w-4 flex-col items-center justify-center bg-[#064e3b] text-[7px] font-bold leading-tight text-white">
+      <span className="flex w-4 flex-col items-center justify-center border-s border-foreground/60 text-[7px] font-semibold leading-tight">
         <span>K</span><span>S</span><span>A</span>
       </span>
     </span>

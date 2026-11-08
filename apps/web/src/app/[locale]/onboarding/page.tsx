@@ -1,45 +1,37 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { Check, Fingerprint, KeyRound, Mail, Smartphone } from 'lucide-react';
 import type { Locale } from '@herp/i18n';
-import { ExecShell } from '@/components/ExecShell';
-import { loadDashboard } from '@/lib/dashboard';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Shell } from '@/components/Shell';
+import { loadSession } from '@/lib/dashboard';
 import { cn } from '@/lib/utils';
 
 /** First-time onboarding, mirroring GET /v1/auth/onboarding; sample state. */
 const state = { phone: true, email: true, authenticator: false, device: false };
-const STEPS = [{ key: 'phone', Icon: Smartphone }, { key: 'email', Icon: Mail }, { key: 'authenticator', Icon: KeyRound }, { key: 'device', Icon: Fingerprint }] as const;
+const STEPS = ['phone', 'email', 'authenticator', 'device'] as const;
 
 export default async function Onboarding({ params }: { params: Promise<{ locale: Locale }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const t = await getTranslations('exec.onboarding');
-  const d = await loadDashboard(locale);
-  const current = STEPS.find((s) => !state[s.key])?.key;
+  const [t, s] = await Promise.all([getTranslations('exec.onboarding'), loadSession(locale)]);
+  const current = STEPS.find((k) => !state[k]);
   return (
-    <ExecShell title={t('title')} subtitle={t('subtitle')} households={d.households} household={d.current} mode={d.mode} back={`/${locale}/onboarding`}>
-      <Card className="max-w-2xl py-2">
-        <CardContent className="px-0">
-          <ol className="divide-y divide-border">
-            {STEPS.map(({ key, Icon }, i) => {
-              const done = state[key], active = key === current;
-              return (
-                <li key={key} className="flex items-center gap-4 px-5 py-4">
-                  <span className={cn('grid size-9 shrink-0 place-items-center rounded-full border text-sm font-medium tabular-nums',
-                    done ? 'border-transparent bg-ok-soft text-ok' : active ? 'border-transparent bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>
-                    {done ? <Check className="size-4" aria-hidden="true" /> : i + 1}
-                  </span>
-                  <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span className={cn('flex-1 text-sm', !done && !active && 'text-muted-foreground')}>{t(`step.${key}`)}</span>
-                  {done ? <Badge variant="ok">{t('done')}</Badge> : active ? <Button size="sm">{t('next')}</Button> : null}
-                </li>
-              );
-            })}
-          </ol>
-        </CardContent>
-      </Card>
-    </ExecShell>
+    <Shell current={null} households={s.households} household={s.current} mode={s.mode} back={`/${locale}/onboarding`}>
+      <div className="max-w-xl px-5 py-8 sm:px-8">
+        <h1 className="text-xl font-semibold">{t('title')}</h1>
+        <p className="text-muted-foreground">{t('subtitle')}</p>
+        <ol className="mt-6 grid list-decimal ps-6">
+          {STEPS.map((k) => {
+            const done = state[k], active = k === current;
+            return (
+              <li key={k} className="border-t py-3">
+                <span className="flex items-center justify-between gap-4">
+                  <span className={cn(!done && !active && 'text-muted-foreground', active && 'font-semibold')}>{t(`step.${k}`)}</span>
+                  {done ? <span className="text-xs text-ok">{t('done')}</span> : active ? <button type="button" className="btn btn-primary h-8">{t('next')}</button> : null}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </Shell>
   );
 }

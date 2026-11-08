@@ -1,21 +1,55 @@
 {
-  "app": { "name": "Household ERP", "tagline": "Everything about the home, in one place" },
-  "nav": { "dashboard": "Home", "staff": "Staff", "finance": "Finance", "pettyCash": "Petty cash", "workOrders": "Work orders", "travel": "Travel", "policies": "Policies", "pulse": "Daily Pulse", "fleet": "Fleet" },
+  "app": {
+    "name": "Household ERP",
+    "tagline": "Everything about the home, in one place"
+  },
+  "nav": {
+    "dashboard": "Home",
+    "staff": "Staff",
+    "finance": "Finance",
+    "pettyCash": "Petty cash",
+    "workOrders": "Work orders",
+    "travel": "Travel",
+    "policies": "Policies",
+    "pulse": "Daily Pulse",
+    "fleet": "Fleet"
+  },
   "dashboard": {
     "greeting": "Hello {name}",
     "pendingApprovals": "{count, plural, =0 {No requests waiting for you} one {# request waiting for your approval} other {# requests waiting for your approval}}",
     "expiringDocuments": "{count, plural, =0 {No documents expiring soon} one {# document expires within {days} days} other {# documents expire within {days} days}}",
     "today": "Today is {date}"
   },
-  "pettyCash": { "balance": "Float balance: {amount}", "logExpense": "Log expense", "pendingReview": "Pending review" },
+  "pettyCash": {
+    "balance": "Float balance: {amount}",
+    "logExpense": "Log expense",
+    "pendingReview": "Pending review"
+  },
   "workOrder": {
-    "status": { "NEW": "New", "ASSIGNED": "Assigned", "IN_PROGRESS": "In progress", "COMPLETED": "Completed", "VERIFIED": "Verified" },
+    "status": {
+      "NEW": "New",
+      "ASSIGNED": "Assigned",
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Completed",
+      "VERIFIED": "Verified"
+    },
     "translatedBadge": "Machine-translated from {language}",
     "showOriginal": "Show original"
   },
-  "policy": { "acknowledge": "I have read and agree", "acknowledgedOn": "Acknowledged on {date}" },
-  "receipt": { "scanned": "Receipt scanned", "zatcaVerified": "Valid ZATCA QR", "total": "Total {amount}" },
-  "common": { "language": "Language", "save": "Save", "cancel": "Cancel" },
+  "policy": {
+    "acknowledge": "I have read and agree",
+    "acknowledgedOn": "Acknowledged on {date}"
+  },
+  "receipt": {
+    "scanned": "Receipt scanned",
+    "zatcaVerified": "Valid ZATCA QR",
+    "total": "Total {amount}"
+  },
+  "common": {
+    "language": "Language",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
   "notify": {
     "title": {
       "document": "Document expiring",
@@ -268,6 +302,380 @@
       "ABSCONDED": "Absent (huroob)",
       "TERMINATED": "Terminated",
       "FINAL_EXIT": "Final exit"
+    }
+  },
+  "ui": {
+    "office": "EFA Private Office",
+    "sections": "Sections",
+    "sample": "Sample data",
+    "signedOut": "Sign in to see this section. Without a session only the sample brief is shown.",
+    "back": "← {section}",
+    "open": "Open",
+    "amount": "Amount",
+    "date": "Date",
+    "encrypted": "Encrypted",
+    "notOnFile": "Not on file",
+    "unavailable": "Not available right now.",
+    "daysCount": "{count, plural, one {# day} other {# days}}",
+    "protectedNote": "Identity numbers, IBANs and health records are encrypted with this household's key; only the last four characters are ever shown.",
+    "nav": {
+      "brief": "Today",
+      "staff": "Staff",
+      "requests": "Requests",
+      "finance": "Finance",
+      "pettyCash": "Petty cash",
+      "fleet": "Vehicles",
+      "workOrders": "Work orders"
+    },
+    "tenant": {
+      "label": "Household",
+      "current": "Current"
+    },
+    "empty": {
+      "staff": "No staff yet.",
+      "requests": "No requests.",
+      "finance": "No accounts yet.",
+      "pettyCash": "No petty-cash floats yet.",
+      "fleet": "No vehicles yet.",
+      "workOrders": "No work orders."
+    },
+    "brief": {
+      "title": "Today's brief",
+      "workforce": "The household has {count, plural, one {one worker} other {# workers}}: {active} active, {probation} on probation and {onLeave} on leave.",
+      "decisions": "{count, plural, =0 {Nothing needs your decision today.} one {One matter needs your decision.} other {# matters need your decision.}}",
+      "decideTitle": "Needs your decision",
+      "alsoNote": "Also for information:",
+      "docDue": "{doc} expires in {days, plural, one {# day} other {# days}}",
+      "serviceDue": "{item} is due",
+      "serviceDueKm": "{item} is due in {km, number} km",
+      "and": ", and ",
+      "vehicleOk": "in order; the next date is {doc} in {days, plural, one {# day} other {# days}}.",
+      "vehicleOkPlain": "in order.",
+      "esbTitle": "End of service",
+      "esb": "The end-of-service provision for {count, plural, one {one worker} other {# workers}} is {provision}, of which {vested} is owed today.",
+      "protected": "Identity numbers, IBANs and health records are encrypted with this household's key.",
+      "allStaff": "All staff"
+    },
+    "settle": {
+      "worker": "If the service of",
+      "asOf": "ended on",
+      "noWorkers": "No workers with a contract yet.",
+      "loading": "Calculating…",
+      "error": "Could not calculate.",
+      "sentence": "they would be owed {esb} end of service (Art. 16) and {leave} for {days} days of unused leave (Art. 10), less {advances} in advances: {net} SAR in all.",
+      "wageLine": "Wage {wage} a month, {daily} a day; {provision} is set aside each month.",
+      "item": "Item",
+      "basis": "Basis",
+      "sar": "SAR",
+      "esb": "End of service",
+      "esbBasis": "Art. 16 · {years} years of service · {periods} completed 4-year periods",
+      "leave": "Unused leave",
+      "leaveBasis": "Art. 10 · {days} days × {daily}",
+      "advances": "Advances outstanding",
+      "advancesBasis": "Recovered from the final pay",
+      "net": "Net due",
+      "footnote": "Wage {wage} a month; provision {provision} a month (wage ÷ 48). Next end-of-service step {next}; next 30 leave days {leaveNext}."
+    },
+    "staff": {
+      "tab": {
+        "profile": "Profile",
+        "settlement": "Entitlements",
+        "leave": "Leave",
+        "pay": "Pay and advances",
+        "documents": "Documents"
+      },
+      "noMedical": "no valid medical",
+      "person": "Person",
+      "role": "Role",
+      "status": "Status",
+      "hired": "Hired",
+      "probationEnds": "Probation ends",
+      "nationality": "Nationality",
+      "payout": "Paid by",
+      "iban": "IBAN",
+      "medical": "Medical check",
+      "health": "Health record",
+      "contract": "Contract",
+      "basic": "Basic salary",
+      "monthly": "Monthly total",
+      "annualLeave": "Annual leave",
+      "since": "Since",
+      "sinceDate": "since {date}",
+      "noContract": "No contract on file.",
+      "leaveTitle": "Leave balance (Art. 10)",
+      "accrued": "Accrued",
+      "taken": "Taken",
+      "balance": "Unused",
+      "availableNow": "Can take now",
+      "nextEntitlement": "Next 30 days on",
+      "rate": "Accrual",
+      "rateValue": "{count, plural, one {# day} other {# days}} a year",
+      "payments": "Salary payments",
+      "period": "Month",
+      "channel": "Paid by",
+      "paymentStatus": "Status",
+      "noPayments": "No salary payments recorded.",
+      "advances": "Advances",
+      "issued": "Issued",
+      "granted": "Granted",
+      "repaid": "Repaid",
+      "outstanding": "Outstanding",
+      "installment": "Instalment",
+      "installmentValue": "{amount} · {count, plural, one {# left} other {# left}}",
+      "noAdvances": "No advances.",
+      "documents": "Documents",
+      "docType": "Document",
+      "number": "Number",
+      "expires": "Expires",
+      "daysLeft": "Days left",
+      "noDocuments": "No documents on file."
+    },
+    "requests": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "details": "Details",
+      "installments": "Instalments",
+      "leaveType": "Leave type",
+      "from": "From",
+      "to": "To",
+      "reason": "Reason",
+      "priority": "Priority",
+      "resolved": "Resolved",
+      "approvals": "Approvals",
+      "step": "Step",
+      "approver": "Approver",
+      "decision": "Decision",
+      "when": "When"
+    },
+    "finance": {
+      "account": "Account",
+      "balance": "Balance",
+      "opening": "Opening balance",
+      "ledger": "Ledger account",
+      "transactions": "Transactions",
+      "payee": "Payee",
+      "category": "Category",
+      "kind": "Type",
+      "noTransactions": "No transactions yet."
+    },
+    "petty": {
+      "custodian": "Held by {name}",
+      "float": "Float",
+      "limit": "Limit",
+      "receiptOver": "Receipt required over",
+      "reconciled": "Last counted",
+      "never": "Not yet",
+      "toReview": "{count, plural, one {One entry to review} other {# entries to review}}",
+      "log": "Entries",
+      "entry": "Entry",
+      "by": "By",
+      "status": "Status",
+      "after": "Balance after",
+      "noEntries": "No entries yet."
+    },
+    "fleet": {
+      "km": "{km, number} km",
+      "documents": "Documents",
+      "document": "Document",
+      "reference": "Reference",
+      "maintenance": "Maintenance",
+      "service": "Service",
+      "nextDate": "Next date",
+      "nextKm": "Next at",
+      "remaining": "Remaining",
+      "noPlans": "No maintenance plans.",
+      "vehicle": "Vehicle",
+      "drivers": "Drivers",
+      "secondary": "secondary",
+      "fuelType": "Fuel",
+      "ownership": "Ownership",
+      "fuel": "Fuel log",
+      "fuelSummary": "{count, plural, =0 {No fills recorded} one {# fill · {cost}} other {# fills · {cost}}}",
+      "odometer": "Odometer",
+      "reading": "Reading",
+      "source": "Source",
+      "noReadings": "No readings."
+    },
+    "wo": {
+      "unassigned": "Unassigned",
+      "details": "Details",
+      "assignee": "Assigned to",
+      "requester": "Requested by",
+      "due": "Due",
+      "completed": "Completed",
+      "estimate": "Estimate",
+      "actual": "Actual cost",
+      "description": "Description",
+      "instructions": "Instructions",
+      "safety": "Safety",
+      "photo": "Photo required",
+      "translationPending": "Translation pending review"
+    },
+    "doc": {
+      "IQAMA": "Iqama",
+      "PASSPORT": "Passport",
+      "VISA": "Visa",
+      "BORDER_NUMBER": "Border number",
+      "WORK_PERMIT": "Work permit",
+      "MEDICAL_INSURANCE": "Medical insurance",
+      "DRIVING_LICENSE": "Driving licence",
+      "CONTRACT": "Contract",
+      "OTHER": "Other"
+    },
+    "channel": {
+      "MUSANED": "Musaned",
+      "BANK_TRANSFER": "Bank transfer",
+      "CASH": "Cash",
+      "DIGITAL_WALLET": "Digital wallet"
+    },
+    "payStatus": {
+      "RECORDED": "Recorded, not yet confirmed",
+      "ACKNOWLEDGED": "Confirmed by worker",
+      "DISPUTED": "Disputed",
+      "REVERSED": "Reversed"
+    },
+    "medical": {
+      "VALID": "Valid",
+      "DUE_SOON": "Due soon",
+      "OVERDUE": "Overdue",
+      "MISSING": "None on file",
+      "NOT_REQUIRED": "Not required"
+    },
+    "allowance": {
+      "FOOD": "Food allowance",
+      "HOUSING": "Housing allowance",
+      "TRANSPORT": "Transport allowance",
+      "PHONE": "Phone allowance",
+      "OTHER": "Other allowance"
+    },
+    "requestType": {
+      "PURCHASE": "Purchase",
+      "REIMBURSEMENT": "Reimbursement",
+      "SALARY_ADVANCE": "Salary advance",
+      "LEAVE": "Leave",
+      "ALLOWANCE_TOPUP": "Allowance top-up",
+      "CARD_LIMIT_CHANGE": "Card limit change",
+      "VEHICLE_USAGE": "Vehicle use",
+      "MAINTENANCE": "Maintenance",
+      "GENERAL": "General"
+    },
+    "requestStatus": {
+      "DRAFT": "Draft",
+      "SUBMITTED": "Submitted",
+      "IN_REVIEW": "Awaiting decision",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "CANCELLED": "Cancelled",
+      "FULFILLED": "Done"
+    },
+    "decision": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "DELEGATED": "Delegated"
+    },
+    "leaveType": {
+      "ANNUAL": "Annual",
+      "SICK": "Sick",
+      "EMERGENCY": "Emergency",
+      "UNPAID": "Unpaid",
+      "HAJJ_UMRAH": "Hajj / Umrah",
+      "VACATION_TRAVEL": "Vacation travel"
+    },
+    "priority": {
+      "LOW": "Low",
+      "NORMAL": "Normal",
+      "HIGH": "High",
+      "URGENT": "Urgent"
+    },
+    "accountType": {
+      "BANK_CURRENT": "Current account",
+      "BANK_SAVINGS": "Savings account",
+      "CREDIT_CARD": "Credit card",
+      "CASH_BOX": "Cash box",
+      "WALLET": "Wallet"
+    },
+    "txType": {
+      "EXPENSE": "Expense",
+      "INCOME": "Income",
+      "TRANSFER": "Transfer",
+      "ALLOWANCE": "Allowance",
+      "REFUND": "Refund",
+      "ADJUSTMENT": "Adjustment"
+    },
+    "txStatus": {
+      "PENDING": "Pending",
+      "POSTED": "Posted",
+      "RECONCILED": "Reconciled",
+      "REVERSED": "Reversed"
+    },
+    "pettyType": {
+      "TOP_UP": "Top-up",
+      "EXPENSE": "Expense",
+      "RETURN": "Return",
+      "ADJUSTMENT": "Adjustment"
+    },
+    "pettyStatus": {
+      "PENDING_REVIEW": "To review",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "maintenance": {
+      "OIL_CHANGE": "Oil change",
+      "TIRES": "Tyres",
+      "BRAKES": "Brakes",
+      "BATTERY": "Battery",
+      "INSPECTION": "Inspection",
+      "REPAIR": "Repair",
+      "BODYWORK": "Bodywork",
+      "CLEANING": "Cleaning",
+      "OTHER": "Other"
+    },
+    "fuel": {
+      "PETROL_91": "Petrol 91",
+      "PETROL_95": "Petrol 95",
+      "DIESEL": "Diesel",
+      "HYBRID": "Hybrid",
+      "ELECTRIC": "Electric"
+    },
+    "ownership": {
+      "OWNED": "Owned",
+      "LEASED": "Leased",
+      "RENTED": "Rented",
+      "COMPANY": "Company"
+    },
+    "vehicleStatus": {
+      "ACTIVE": "In use",
+      "IN_SERVICE": "At the workshop",
+      "SOLD": "Sold",
+      "INACTIVE": "Not in use"
+    },
+    "readingSource": {
+      "MANUAL": "Entered",
+      "FUEL": "At a fill",
+      "TRIP": "Trip",
+      "SERVICE": "At service",
+      "INITIAL": "On registration"
+    },
+    "woStatus": {
+      "NEW": "New",
+      "ASSIGNED": "Assigned",
+      "IN_PROGRESS": "In progress",
+      "ON_HOLD": "On hold",
+      "COMPLETED": "Completed",
+      "VERIFIED": "Verified",
+      "CANCELLED": "Cancelled"
+    },
+    "woCategory": {
+      "CLEANING": "Cleaning",
+      "COOKING": "Cooking",
+      "CHILDCARE": "Childcare",
+      "DRIVING": "Driving",
+      "ERRAND": "Errand",
+      "GARDENING": "Gardening",
+      "MAINTENANCE": "Maintenance",
+      "EVENT_PREP": "Event preparation",
+      "OTHER": "Other"
     }
   }
 }

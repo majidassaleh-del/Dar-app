@@ -40,6 +40,20 @@ export async function apiGet<T>(path: string, opts: { household?: string | null;
 
 export interface MeHousehold { householdId: string; slug: string; name: string; role: string }
 
+/** POST to the API under the user's session (server actions only). Throws with the API's problem detail. */
+export async function apiPost<T>(path: string, body: unknown, opts: { household: string; locale?: string }): Promise<T> {
+  const token = await authToken();
+  if (!token) throw new Error('not signed in');
+  const r = await fetch(`${API_URL}${path}`, {
+    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(8000),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept-Language': opts.locale ?? 'ar', 'X-Household-Id': opts.household },
+    body: JSON.stringify(body ?? {}),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j as { detail?: string }).detail ?? `HTTP ${r.status}`);
+  return j as T;
+}
+
 /**
  * The household a request works in, one rule for pages and API routes:
  *  - on a tenant subdomain, that household, and nothing if the user is not a member there

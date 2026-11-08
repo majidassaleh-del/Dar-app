@@ -1,21 +1,55 @@
 {
-  "app": { "name": "Household ERP", "tagline": "Lahat ng tungkol sa tahanan, sa iisang lugar" },
-  "nav": { "dashboard": "Home", "staff": "Mga kasambahay", "finance": "Pananalapi", "pettyCash": "Petty cash", "workOrders": "Mga gawain", "travel": "Biyahe", "policies": "Mga patakaran", "pulse": "Pang-araw-araw na Buod", "fleet": "Mga sasakyan" },
+  "app": {
+    "name": "Household ERP",
+    "tagline": "Lahat ng tungkol sa tahanan, sa iisang lugar"
+  },
+  "nav": {
+    "dashboard": "Home",
+    "staff": "Mga kasambahay",
+    "finance": "Pananalapi",
+    "pettyCash": "Petty cash",
+    "workOrders": "Mga gawain",
+    "travel": "Biyahe",
+    "policies": "Mga patakaran",
+    "pulse": "Pang-araw-araw na Buod",
+    "fleet": "Mga sasakyan"
+  },
   "dashboard": {
     "greeting": "Kumusta {name}",
     "pendingApprovals": "{count, plural, =0 {Walang request na naghihintay sa iyo} one {# request ang naghihintay ng iyong pag-apruba} other {# na request ang naghihintay ng iyong pag-apruba}}",
     "expiringDocuments": "{count, plural, =0 {Walang dokumentong malapit nang mag-expire} one {# dokumento ang mag-e-expire sa loob ng {days} araw} other {# na dokumento ang mag-e-expire sa loob ng {days} araw}}",
     "today": "Ngayon ay {date}"
   },
-  "pettyCash": { "balance": "Natitirang pera: {amount}", "logExpense": "Itala ang gastos", "pendingReview": "Hinihintay ang pagsusuri" },
+  "pettyCash": {
+    "balance": "Natitirang pera: {amount}",
+    "logExpense": "Itala ang gastos",
+    "pendingReview": "Hinihintay ang pagsusuri"
+  },
   "workOrder": {
-    "status": { "NEW": "Bago", "ASSIGNED": "Naitalaga", "IN_PROGRESS": "Ginagawa", "COMPLETED": "Tapos na", "VERIFIED": "Na-verify" },
+    "status": {
+      "NEW": "Bago",
+      "ASSIGNED": "Naitalaga",
+      "IN_PROGRESS": "Ginagawa",
+      "COMPLETED": "Tapos na",
+      "VERIFIED": "Na-verify"
+    },
     "translatedBadge": "Isinalin ng makina mula sa {language}",
     "showOriginal": "Ipakita ang orihinal"
   },
-  "policy": { "acknowledge": "Nabasa ko at sumasang-ayon ako", "acknowledgedOn": "Kinilala noong {date}" },
-  "receipt": { "scanned": "Na-scan ang resibo", "zatcaVerified": "Wastong ZATCA QR", "total": "Kabuuan {amount}" },
-  "common": { "language": "Wika", "save": "I-save", "cancel": "Kanselahin" },
+  "policy": {
+    "acknowledge": "Nabasa ko at sumasang-ayon ako",
+    "acknowledgedOn": "Kinilala noong {date}"
+  },
+  "receipt": {
+    "scanned": "Na-scan ang resibo",
+    "zatcaVerified": "Wastong ZATCA QR",
+    "total": "Kabuuan {amount}"
+  },
+  "common": {
+    "language": "Wika",
+    "save": "I-save",
+    "cancel": "Kanselahin"
+  },
   "notify": {
     "title": {
       "document": "Malapit nang mag-expire",
@@ -268,6 +302,380 @@
       "ABSCONDED": "Lumayas (huroob)",
       "TERMINATED": "Tinapos",
       "FINAL_EXIT": "Final exit"
+    }
+  },
+  "ui": {
+    "office": "EFA Private Office",
+    "sections": "Mga seksyon",
+    "sample": "Sample na datos",
+    "signedOut": "Mag-sign in para makita ang seksyong ito. Kung walang session, sample na buod lang ang makikita.",
+    "back": "← {section}",
+    "open": "Buksan",
+    "amount": "Halaga",
+    "date": "Petsa",
+    "encrypted": "Naka-encrypt",
+    "notOnFile": "Wala sa file",
+    "unavailable": "Hindi available ngayon.",
+    "daysCount": "{count, plural, one {# araw} other {# araw}}",
+    "protectedNote": "Naka-encrypt gamit ang susi ng sambahayang ito ang mga ID number, IBAN at health record; huling apat na karakter lang ang ipinapakita.",
+    "nav": {
+      "brief": "Ngayon",
+      "staff": "Mga kawani",
+      "requests": "Mga kahilingan",
+      "finance": "Pananalapi",
+      "pettyCash": "Petty cash",
+      "fleet": "Mga sasakyan",
+      "workOrders": "Mga work order"
+    },
+    "tenant": {
+      "label": "Sambahayan",
+      "current": "Kasalukuyan"
+    },
+    "empty": {
+      "staff": "Wala pang kawani.",
+      "requests": "Walang kahilingan.",
+      "finance": "Wala pang account.",
+      "pettyCash": "Wala pang petty cash.",
+      "fleet": "Wala pang sasakyan.",
+      "workOrders": "Walang work order."
+    },
+    "brief": {
+      "title": "Buod ngayong araw",
+      "workforce": "May {count, plural, one {isang kawani} other {# kawani}} ang sambahayan: {active} aktibo, {probation} nasa probation at {onLeave} naka-leave.",
+      "decisions": "{count, plural, =0 {Walang naghihintay ng iyong desisyon ngayon.} one {Isang usapin ang naghihintay ng iyong desisyon.} other {# usapin ang naghihintay ng iyong desisyon.}}",
+      "decideTitle": "Naghihintay ng desisyon mo",
+      "alsoNote": "Para sa kaalaman:",
+      "docDue": "mag-e-expire ang {doc} sa loob ng {days, plural, one {# araw} other {# araw}}",
+      "serviceDue": "kailangan na ang {item}",
+      "serviceDueKm": "kailangan ang {item} sa loob ng {km, number} km",
+      "and": ", at ",
+      "vehicleOk": "maayos; ang susunod ay {doc} sa loob ng {days, plural, one {# araw} other {# araw}}.",
+      "vehicleOkPlain": "maayos.",
+      "esbTitle": "Katapusan ng serbisyo",
+      "esb": "Ang provision para sa katapusan ng serbisyo ng {count, plural, one {isang kawani} other {# kawani}} ay {provision}; {vested} ang dapat bayaran ngayon.",
+      "protected": "Naka-encrypt gamit ang susi ng sambahayang ito ang mga ID number, IBAN at health record.",
+      "allStaff": "Lahat ng kawani"
+    },
+    "settle": {
+      "worker": "Kung natapos ang serbisyo ni",
+      "asOf": "noong",
+      "noWorkers": "Wala pang kawani na may kontrata.",
+      "loading": "Kinakalkula…",
+      "error": "Hindi makalkula.",
+      "sentence": "may matatanggap siyang {esb} na end-of-service (Art. 16) at {leave} para sa {days} araw na hindi nagamit na leave (Art. 10), bawas ang {advances} na advance: {net} SAR lahat.",
+      "wageLine": "Sahod na {wage} kada buwan, {daily} kada araw; {provision} ang itinatabi bawat buwan.",
+      "item": "Item",
+      "basis": "Batayan",
+      "sar": "SAR",
+      "esb": "End of service",
+      "esbBasis": "Art. 16 · {years} taon ng serbisyo · {periods} buong 4-taong yugto",
+      "leave": "Hindi nagamit na leave",
+      "leaveBasis": "Art. 10 · {days} araw × {daily}",
+      "advances": "Natitirang advance",
+      "advancesBasis": "Ibinabawas sa huling bayad",
+      "net": "Netong dapat bayaran",
+      "footnote": "Sahod {wage} kada buwan; provision {provision} kada buwan (sahod ÷ 48). Susunod na hakbang ng end-of-service {next}; susunod na 30 araw ng leave {leaveNext}."
+    },
+    "staff": {
+      "tab": {
+        "profile": "Profile",
+        "settlement": "Mga karapatan",
+        "leave": "Leave",
+        "pay": "Sahod at advance",
+        "documents": "Mga dokumento"
+      },
+      "noMedical": "walang valid na medical",
+      "person": "Tao",
+      "role": "Tungkulin",
+      "status": "Katayuan",
+      "hired": "Natanggap",
+      "probationEnds": "Tapos ng probation",
+      "nationality": "Nasyonalidad",
+      "payout": "Paraan ng bayad",
+      "iban": "IBAN",
+      "medical": "Medical check",
+      "health": "Health record",
+      "contract": "Kontrata",
+      "basic": "Batayang sahod",
+      "monthly": "Kabuuan kada buwan",
+      "annualLeave": "Taunang leave",
+      "since": "Mula",
+      "sinceDate": "mula {date}",
+      "noContract": "Walang kontrata sa file.",
+      "leaveTitle": "Natitirang leave (Art. 10)",
+      "accrued": "Naipon",
+      "taken": "Nagamit",
+      "balance": "Hindi nagamit",
+      "availableNow": "Magagamit ngayon",
+      "nextEntitlement": "Susunod na 30 araw sa",
+      "rate": "Pag-ipon",
+      "rateValue": "{count, plural, one {# araw} other {# araw}} kada taon",
+      "payments": "Mga bayad ng sahod",
+      "period": "Buwan",
+      "channel": "Paraan",
+      "paymentStatus": "Katayuan",
+      "noPayments": "Walang naitalang bayad.",
+      "advances": "Mga advance",
+      "issued": "Ibinigay",
+      "granted": "Halaga",
+      "repaid": "Nabayaran",
+      "outstanding": "Natitira",
+      "installment": "Hulog",
+      "installmentValue": "{amount} · {count, plural, one {# natitira} other {# natitira}}",
+      "noAdvances": "Walang advance.",
+      "documents": "Mga dokumento",
+      "docType": "Dokumento",
+      "number": "Numero",
+      "expires": "Expiry",
+      "daysLeft": "Natitirang araw",
+      "noDocuments": "Walang dokumento sa file."
+    },
+    "requests": {
+      "approve": "Aprubahan",
+      "reject": "Tanggihan",
+      "details": "Mga detalye",
+      "installments": "Mga hulog",
+      "leaveType": "Uri ng leave",
+      "from": "Mula",
+      "to": "Hanggang",
+      "reason": "Dahilan",
+      "priority": "Prayoridad",
+      "resolved": "Napagpasyahan",
+      "approvals": "Mga pag-apruba",
+      "step": "Hakbang",
+      "approver": "Nag-aapruba",
+      "decision": "Desisyon",
+      "when": "Kailan"
+    },
+    "finance": {
+      "account": "Account",
+      "balance": "Balanse",
+      "opening": "Panimulang balanse",
+      "ledger": "Ledger account",
+      "transactions": "Mga transaksyon",
+      "payee": "Binayaran",
+      "category": "Kategorya",
+      "kind": "Uri",
+      "noTransactions": "Wala pang transaksyon."
+    },
+    "petty": {
+      "custodian": "Hawak ni {name}",
+      "float": "Float",
+      "limit": "Limitasyon",
+      "receiptOver": "Kailangan ng resibo kung lampas",
+      "reconciled": "Huling bilang",
+      "never": "Hindi pa",
+      "toReview": "{count, plural, one {Isang entry na susuriin} other {# entry na susuriin}}",
+      "log": "Mga entry",
+      "entry": "Entry",
+      "by": "Ni",
+      "status": "Katayuan",
+      "after": "Balanse pagkatapos",
+      "noEntries": "Wala pang entry."
+    },
+    "fleet": {
+      "km": "{km, number} km",
+      "documents": "Mga dokumento",
+      "document": "Dokumento",
+      "reference": "Reference",
+      "maintenance": "Maintenance",
+      "service": "Serbisyo",
+      "nextDate": "Susunod na petsa",
+      "nextKm": "Susunod sa",
+      "remaining": "Natitira",
+      "noPlans": "Walang maintenance plan.",
+      "vehicle": "Sasakyan",
+      "drivers": "Mga driver",
+      "secondary": "pangalawa",
+      "fuelType": "Gasolina",
+      "ownership": "Pagmamay-ari",
+      "fuel": "Fuel log",
+      "fuelSummary": "{count, plural, =0 {Walang naitalang pagkarga} one {# pagkarga · {cost}} other {# pagkarga · {cost}}}",
+      "odometer": "Odometer",
+      "reading": "Reading",
+      "source": "Pinagmulan",
+      "noReadings": "Walang reading."
+    },
+    "wo": {
+      "unassigned": "Hindi naka-assign",
+      "details": "Mga detalye",
+      "assignee": "Naka-assign kay",
+      "requester": "Hiniling ni",
+      "due": "Takdang petsa",
+      "completed": "Natapos",
+      "estimate": "Tantiya",
+      "actual": "Aktwal na gastos",
+      "description": "Paglalarawan",
+      "instructions": "Mga tagubilin",
+      "safety": "Kaligtasan",
+      "photo": "Kailangan ng larawan",
+      "translationPending": "Sinusuri pa ang salin"
+    },
+    "doc": {
+      "IQAMA": "Iqama",
+      "PASSPORT": "Pasaporte",
+      "VISA": "Visa",
+      "BORDER_NUMBER": "Border number",
+      "WORK_PERMIT": "Work permit",
+      "MEDICAL_INSURANCE": "Medical insurance",
+      "DRIVING_LICENSE": "Lisensya sa pagmamaneho",
+      "CONTRACT": "Kontrata",
+      "OTHER": "Iba pa"
+    },
+    "channel": {
+      "MUSANED": "Musaned",
+      "BANK_TRANSFER": "Bank transfer",
+      "CASH": "Cash",
+      "DIGITAL_WALLET": "Digital wallet"
+    },
+    "payStatus": {
+      "RECORDED": "Naitala, hindi pa kinumpirma",
+      "ACKNOWLEDGED": "Kinumpirma ng kawani",
+      "DISPUTED": "Kinukuwestiyon",
+      "REVERSED": "Binawi"
+    },
+    "medical": {
+      "VALID": "Valid",
+      "DUE_SOON": "Malapit na",
+      "OVERDUE": "Lampas na",
+      "MISSING": "Wala sa file",
+      "NOT_REQUIRED": "Hindi kailangan"
+    },
+    "allowance": {
+      "FOOD": "Allowance sa pagkain",
+      "HOUSING": "Allowance sa tirahan",
+      "TRANSPORT": "Allowance sa pamasahe",
+      "PHONE": "Allowance sa telepono",
+      "OTHER": "Ibang allowance"
+    },
+    "requestType": {
+      "PURCHASE": "Pagbili",
+      "REIMBURSEMENT": "Reimbursement",
+      "SALARY_ADVANCE": "Salary advance",
+      "LEAVE": "Leave",
+      "ALLOWANCE_TOPUP": "Dagdag na allowance",
+      "CARD_LIMIT_CHANGE": "Pagbabago ng card limit",
+      "VEHICLE_USAGE": "Paggamit ng sasakyan",
+      "MAINTENANCE": "Maintenance",
+      "GENERAL": "Pangkalahatan"
+    },
+    "requestStatus": {
+      "DRAFT": "Draft",
+      "SUBMITTED": "Naipasa",
+      "IN_REVIEW": "Naghihintay ng desisyon",
+      "APPROVED": "Inaprubahan",
+      "REJECTED": "Tinanggihan",
+      "CANCELLED": "Kinansela",
+      "FULFILLED": "Tapos na"
+    },
+    "decision": {
+      "PENDING": "Nakabinbin",
+      "APPROVED": "Inaprubahan",
+      "REJECTED": "Tinanggihan",
+      "DELEGATED": "Ipinasa"
+    },
+    "leaveType": {
+      "ANNUAL": "Taunan",
+      "SICK": "Sakit",
+      "EMERGENCY": "Emergency",
+      "UNPAID": "Walang bayad",
+      "HAJJ_UMRAH": "Hajj / Umrah",
+      "VACATION_TRAVEL": "Bakasyon"
+    },
+    "priority": {
+      "LOW": "Mababa",
+      "NORMAL": "Karaniwan",
+      "HIGH": "Mataas",
+      "URGENT": "Apurahan"
+    },
+    "accountType": {
+      "BANK_CURRENT": "Current account",
+      "BANK_SAVINGS": "Savings account",
+      "CREDIT_CARD": "Credit card",
+      "CASH_BOX": "Cash box",
+      "WALLET": "Wallet"
+    },
+    "txType": {
+      "EXPENSE": "Gastos",
+      "INCOME": "Kita",
+      "TRANSFER": "Transfer",
+      "ALLOWANCE": "Allowance",
+      "REFUND": "Refund",
+      "ADJUSTMENT": "Adjustment"
+    },
+    "txStatus": {
+      "PENDING": "Nakabinbin",
+      "POSTED": "Naitala",
+      "RECONCILED": "Na-reconcile",
+      "REVERSED": "Binawi"
+    },
+    "pettyType": {
+      "TOP_UP": "Top-up",
+      "EXPENSE": "Gastos",
+      "RETURN": "Ibinalik",
+      "ADJUSTMENT": "Adjustment"
+    },
+    "pettyStatus": {
+      "PENDING_REVIEW": "Susuriin",
+      "APPROVED": "Inaprubahan",
+      "REJECTED": "Tinanggihan"
+    },
+    "maintenance": {
+      "OIL_CHANGE": "Change oil",
+      "TIRES": "Gulong",
+      "BRAKES": "Preno",
+      "BATTERY": "Baterya",
+      "INSPECTION": "Inspeksyon",
+      "REPAIR": "Pagkumpuni",
+      "BODYWORK": "Bodywork",
+      "CLEANING": "Paglilinis",
+      "OTHER": "Iba pa"
+    },
+    "fuel": {
+      "PETROL_91": "Gasolina 91",
+      "PETROL_95": "Gasolina 95",
+      "DIESEL": "Diesel",
+      "HYBRID": "Hybrid",
+      "ELECTRIC": "Electric"
+    },
+    "ownership": {
+      "OWNED": "Pag-aari",
+      "LEASED": "Leased",
+      "RENTED": "Inuupahan",
+      "COMPANY": "Kumpanya"
+    },
+    "vehicleStatus": {
+      "ACTIVE": "Ginagamit",
+      "IN_SERVICE": "Nasa talyer",
+      "SOLD": "Naibenta",
+      "INACTIVE": "Hindi ginagamit"
+    },
+    "readingSource": {
+      "MANUAL": "Inilagay",
+      "FUEL": "Sa pagkarga",
+      "TRIP": "Biyahe",
+      "SERVICE": "Sa serbisyo",
+      "INITIAL": "Sa pagrehistro"
+    },
+    "woStatus": {
+      "NEW": "Bago",
+      "ASSIGNED": "Naka-assign",
+      "IN_PROGRESS": "Ginagawa",
+      "ON_HOLD": "Naka-hold",
+      "COMPLETED": "Tapos",
+      "VERIFIED": "Na-verify",
+      "CANCELLED": "Kinansela"
+    },
+    "woCategory": {
+      "CLEANING": "Paglilinis",
+      "COOKING": "Pagluluto",
+      "CHILDCARE": "Pag-aalaga ng bata",
+      "DRIVING": "Pagmamaneho",
+      "ERRAND": "Utos",
+      "GARDENING": "Paghahalaman",
+      "MAINTENANCE": "Maintenance",
+      "EVENT_PREP": "Paghahanda ng okasyon",
+      "OTHER": "Iba pa"
     }
   }
 }

@@ -61,8 +61,10 @@ const efaStaff = [
   { type: 'NANNY', name: { en: 'Tigist Bekele', ar: 'تيغيست بيكيلي' }, nat: 'ET', hire: '2024-09-01', membership: M.nanny, basic: 1800, food: 200, doc: { type: 'IQAMA', number: iqama(3105562), expiry: day(20), country: 'SA' }, fit: true },
   { type: 'GARDENER', name: { en: 'Samir Hassan', ar: 'سمير حسن' }, nat: 'EG', hire: day(-45), membership: M.gardener, basic: 1600, food: 150 },
 ];
-for (const s of efaStaff) await staff(U.head, H1, s);
+const extrasOnly = process.argv.includes('--extras-only');
+if (!extrasOnly) for (const s of efaStaff) await staff(U.head, H1, s);
 
+if (!extrasOnly) {
 const yukon = await call(U.head, H1, 'POST', '/v1/vehicles', { make: 'GMC', model: 'Yukon Denali', year: 2024, plateNumber: 'ABC 1234', plateNumberAr: 'أ ب ح ١٢٣٤', odometerKm: 38410,
   registrationNumber: 'IST-778812', registrationExpiry: day(212), insuranceProvider: 'Tawuniya', insurancePolicy: 'P-55102', insuranceExpiry: day(24), inspectionExpiry: day(140), tankCapacityL: 98, expectedKmPerL: 6 });
 const camry = await call(U.head, H1, 'POST', '/v1/vehicles', { make: 'Toyota', model: 'Camry', year: 2023, plateNumber: 'XYZ 5678', plateNumberAr: 'ص ي ز ٥٦٧٨', odometerKm: 61200,
@@ -79,5 +81,56 @@ await call(U.head2, H2, 'POST', '/v1/staff', { staffType: 'COOK', fullName: { en
   .then((p) => call(U.head2, H2, 'POST', `/v1/staff/${p.id}/contracts`, { startDate: '2023-02-01', basicSalary: 1700, allowances: [{ code: 'FOOD', amount: 200 }] }));
 await call(U.head2, H2, 'POST', '/v1/vehicles', { make: 'Lexus', model: 'LX 600', year: 2025, plateNumber: 'RST 9001', plateNumberAr: 'ر س ط ٩٠٠١', odometerKm: 8200,
   registrationExpiry: day(320), insuranceExpiry: day(41), inspectionExpiry: day(290) });
+}
+
+// Every section of the web app gets something to show: bank account and transactions,
+// a petty-cash float, work orders, open requests and two of October's salaries.
+// `node scripts/demo-seed.mjs --extras-only` adds just this part to an already seeded database.
+const U3 = { maid: 'a0000000-0000-0000-0000-000000000003', nanny: 'a0000000-0000-0000-0000-000000000005' };
+const efa = (await call(U.head, H1, 'GET', '/v1/staff')).data;
+const byName = (en) => efa.find((x) => x.fullName?.en === en)?.id;
+const cats = (await call(U.head, H1, 'GET', '/v1/categories')).data ?? [];
+const cat = async (kind, name) => cats.find((c) => c.kind === kind && Object.values(c.name ?? {}).concat(c.name).includes(name))?.id
+  ?? (await call(U.head, H1, 'POST', '/v1/categories', { kind, name })).id;
+const groceries = await cat('EXPENSE', 'بقالة');
+const utilities = await cat('EXPENSE', 'كهرباء وماء');
+const fuel = await cat('EXPENSE', 'وقود');
+const existingBank = (await call(U.head, H1, 'GET', '/v1/accounts')).data.find((a) => a.name === 'Al Rajhi current');
+const bank = existingBank ?? await call(U.head, H1, 'POST', '/v1/accounts', { type: 'BANK_CURRENT', name: 'Al Rajhi current', institution: 'Al Rajhi Bank',
+  iban: saIban('80', '608010004418'), openingBalance: 25000 });
+const tx = (b) => call(U.head, H1, 'POST', '/v1/transactions', { accountId: bank.id, ...b });
+if (!existingBank) {
+await tx({ type: 'EXPENSE', amount: 412.5, categoryId: groceries, merchantName: 'Danube', occurredAt: `${day(-6)}T10:00:00Z` });
+await tx({ type: 'EXPENSE', amount: 640, categoryId: utilities, merchantName: 'Saudi Electricity Co.', occurredAt: `${day(-4)}T10:00:00Z` });
+await tx({ type: 'EXPENSE', amount: 180, categoryId: fuel, merchantName: 'Aldrees', occurredAt: `${day(-2)}T10:00:00Z` });
+await tx({ type: 'EXPENSE', amount: 96.75, categoryId: groceries, merchantName: 'Tamimi Markets', occurredAt: `${day(-1)}T10:00:00Z` });
+}
+const existingFloat = (await call(U.head, H1, 'GET', '/v1/petty-cash')).data.find((f) => f.name === 'Household float');
+if (!existingFloat) {
+const float = await call(U.head, H1, 'POST', '/v1/petty-cash', { custodianId: M.maid, name: 'Household float', floatLimit: 1000, receiptRequiredOver: 100 });
+await call(U.head, H1, 'POST', `/v1/petty-cash/${float.id}/top-ups`, { amount: 800 });
+const veg = await call(U3.maid, H1, 'POST', `/v1/petty-cash/${float.id}/expenses`, { amount: 60, description: 'خضار', categoryId: groceries });
+await call(U.head, H1, 'POST', `/v1/petty-cash/logs/${veg.entry.id}/review`, { decision: 'APPROVED' });
+await call(U3.maid, H1, 'POST', `/v1/petty-cash/${float.id}/expenses`, { amount: 35, description: 'خبز وحليب', categoryId: groceries });
+await call(U3.maid, H1, 'POST', `/v1/petty-cash/${float.id}/expenses`, { amount: 85, description: 'مواد تنظيف' });
+}
+if (!(await call(U.head, H1, 'GET', '/v1/work-orders')).data.length) {
+await call(U.head, H1, 'POST', '/v1/work-orders', { title: 'تنظيف المجلس قبل زيارة الخميس', category: 'CLEANING', priority: 'HIGH',
+  assigneeId: M.maid, dueAt: `${day(4)}T09:00:00Z`, instructions: [{ text: 'تلميع الطاولات الخشبية' }, { text: 'غسل السجاد الصغير', requiresPhoto: true }] }).catch((e) => console.warn(e.message));
+await call(U.head, H1, 'POST', '/v1/work-orders', { title: 'تقليم أسوار الحديقة', category: 'GARDENING', assigneeId: M.gardener, dueAt: `${day(6)}T09:00:00Z`,
+  instructions: [{ text: 'الأسوار الأمامية فقط' }] }).catch((e) => console.warn(e.message));
+await call(U.head, H1, 'POST', '/v1/work-orders', { title: 'غسيل اليوكن', category: 'DRIVING', assigneeId: M.driver, dueAt: `${day(1)}T09:00:00Z`,
+  instructions: [{ text: 'من الداخل والخارج' }] }).catch((e) => console.warn(e.message));
+}
+if (!(await call(U.head, H1, 'GET', '/v1/requests')).data.some((r) => r.type === 'LEAVE')) {
+await call(U3.nanny, H1, 'POST', '/v1/requests', { type: 'LEAVE', leaveType: 'ANNUAL', startDate: day(42), endDate: day(46) }).catch((e) => console.warn(e.message));
+await call(U3.maid, H1, 'POST', '/v1/requests', { type: 'SALARY_ADVANCE', amount: 500, installments: 2, reason: 'School fees' }).catch((e) => console.warn(e.message));
+}
+const lastMonth = new Date(); lastMonth.setUTCDate(1); lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+for (const en of ['Rahim Uddin', 'Maria Santos']) {
+  const id = byName(en);
+  if (id) await call(U.head, H1, 'POST', `/v1/staff/${id}/salary-payments`, { periodYear: lastMonth.getUTCFullYear(), periodMonth: lastMonth.getUTCMonth() + 1,
+    ...(en === 'Rahim Uddin' ? { channel: 'BANK_TRANSFER', externalRef: 'ARB-SAL-2026-10-0417' } : { channel: 'CASH' }) }).catch((e) => console.warn(e.message));
+}
 
 console.log(`seeded. HERP_DEV_TOKEN for the EFA office (both households):\n${token(U.efa, 12)}`);
