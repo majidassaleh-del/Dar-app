@@ -712,6 +712,67 @@
       "calculator": "Worker entitlement calculator",
       "team": "The team today",
       "noMedicalShort": "No valid medical"
+    },
+    "sec": {
+      "staff": {
+        "summary": "{count, plural, one {One worker} other {# workers}} in the household: {active} active, {probation} on probation, {onLeave} on leave.",
+        "workers": "Workers"
+      },
+      "requests": {
+        "summary": "{count, plural, =0 {Nothing is waiting for your decision.} one {One request is waiting for your decision.} other {# requests are waiting for your decision.}}"
+      },
+      "finance": {
+        "summary": "{count, plural, one {One account} other {# accounts}} holding {amount} in all."
+      },
+      "petty": {
+        "summary": "{count, plural, =0 {No entries are waiting for review.} one {One entry is waiting for your review.} other {# entries are waiting for your review.}}"
+      },
+      "fleet": {
+        "summary": "{count, plural, one {One vehicle} other {# vehicles}}; {due, plural, =0 {nothing due in the next 30 days.} one {one item due in the next 30 days.} other {# items due in the next 30 days.}}"
+      },
+      "wo": {
+        "summary": "{count, plural, =0 {No open work orders.} one {One open work order} other {# open work orders}}{overdue, plural, =0 {.} one {, one overdue.} other {, # overdue.}}"
+      },
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "since": "Since {date}",
+      "compliance": "Compliance",
+      "settleNote": "If the service ended on the chosen date",
+      "entitlement": "Entitlement",
+      "twelveMonths": "Salaries, last 12 months",
+      "legend": "✓ paid · ✕ not paid · — before hiring",
+      "advanceOf": "Advance of {amount} on {date}",
+      "esbToday": "End of service today",
+      "duration": "Duration",
+      "submittedBy": "Submitted by {name}",
+      "approvedMonth": "Approved this month",
+      "rejectedMonth": "Rejected this month",
+      "allRequests": "All requests",
+      "uncategorised": "Uncategorised",
+      "spentMonth": "Spent this month",
+      "lastMovement": "Last movement",
+      "byCategory": "Spending by category",
+      "bank": "Bank",
+      "movements": "Transactions",
+      "totalBalance": "Total balance",
+      "incomeMonth": "Income this month",
+      "movementsMonth": "Transactions this month",
+      "held": "Cash held",
+      "floats": "Floats",
+      "nearestDoc": "Nearest expiry",
+      "nextService": "Next service",
+      "serviceNote": "Bars show how much of each service interval has been used.",
+      "efficiency": "Average consumption",
+      "kmPerL": "{value} km per litre",
+      "vehicles": "Vehicles",
+      "docsDue": "Documents due in 30 days",
+      "servicesDue": "Services due",
+      "totalKm": "Total distance",
+      "progress": "Progress",
+      "open": "Open",
+      "overdue": "Overdue",
+      "dueWeek": "Due this week",
+      "completedMonth": "Completed this month"
     }
   }
 }

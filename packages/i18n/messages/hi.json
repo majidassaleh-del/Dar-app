@@ -712,6 +712,67 @@
       "calculator": "कर्मचारी हक़ कैलकुलेटर",
       "team": "आज की टीम",
       "noMedicalShort": "मान्य चिकित्सा नहीं"
+    },
+    "sec": {
+      "staff": {
+        "summary": "घर में {count, plural, one {एक कर्मचारी} other {# कर्मचारी}}: {active} काम पर, {probation} परिवीक्षा पर, {onLeave} छुट्टी पर।",
+        "workers": "कर्मचारी"
+      },
+      "requests": {
+        "summary": "{count, plural, =0 {कोई अनुरोध आपके निर्णय की प्रतीक्षा में नहीं।} one {एक अनुरोध आपके निर्णय की प्रतीक्षा में है।} other {# अनुरोध आपके निर्णय की प्रतीक्षा में हैं।}}"
+      },
+      "finance": {
+        "summary": "{count, plural, one {एक खाता} other {# खाते}}, कुल {amount}।"
+      },
+      "petty": {
+        "summary": "{count, plural, =0 {कोई प्रविष्टि समीक्षा की प्रतीक्षा में नहीं।} one {एक प्रविष्टि आपकी समीक्षा की प्रतीक्षा में है।} other {# प्रविष्टियाँ आपकी समीक्षा की प्रतीक्षा में हैं।}}"
+      },
+      "fleet": {
+        "summary": "{count, plural, one {एक वाहन} other {# वाहन}}; {due, plural, =0 {अगले 30 दिनों में कुछ देय नहीं।} one {अगले 30 दिनों में एक मद देय।} other {अगले 30 दिनों में # मद देय।}}"
+      },
+      "wo": {
+        "summary": "{count, plural, =0 {कोई खुला कार्य आदेश नहीं} one {एक खुला कार्य आदेश} other {# खुले कार्य आदेश}}{overdue, plural, =0 {।} one {, एक विलंबित।} other {, # विलंबित।}}"
+      },
+      "paid": "दिया गया",
+      "unpaid": "नहीं दिया",
+      "since": "{date} से",
+      "compliance": "अनुपालन",
+      "settleNote": "यदि चुनी गई तारीख को सेवा समाप्त हो",
+      "entitlement": "हक़",
+      "twelveMonths": "पिछले 12 महीनों का वेतन",
+      "legend": "✓ दिया · ✕ नहीं दिया · — नियुक्ति से पहले",
+      "advanceOf": "{date} को {amount} अग्रिम",
+      "esbToday": "आज सेवा समाप्ति",
+      "duration": "अवधि",
+      "submittedBy": "{name} ने भेजा",
+      "approvedMonth": "इस महीने स्वीकृत",
+      "rejectedMonth": "इस महीने अस्वीकृत",
+      "allRequests": "सभी अनुरोध",
+      "uncategorised": "बिना श्रेणी",
+      "spentMonth": "इस महीने खर्च",
+      "lastMovement": "अंतिम लेन-देन",
+      "byCategory": "श्रेणी अनुसार खर्च",
+      "bank": "बैंक",
+      "movements": "लेन-देन",
+      "totalBalance": "कुल शेष",
+      "incomeMonth": "इस महीने आय",
+      "movementsMonth": "इस महीने लेन-देन",
+      "held": "रखा नकद",
+      "floats": "नकद",
+      "nearestDoc": "निकटतम समाप्ति",
+      "nextService": "अगली सर्विस",
+      "serviceNote": "पट्टियाँ दिखाती हैं कि हर सर्विस अंतराल का कितना हिस्सा उपयोग हुआ।",
+      "efficiency": "औसत खपत",
+      "kmPerL": "{value} किमी प्रति लीटर",
+      "vehicles": "वाहन",
+      "docsDue": "30 दिनों में देय दस्तावेज़",
+      "servicesDue": "देय सर्विस",
+      "totalKm": "कुल दूरी",
+      "progress": "प्रगति",
+      "open": "खुले",
+      "overdue": "विलंबित",
+      "dueWeek": "इस सप्ताह देय",
+      "completedMonth": "इस महीने पूरे"
     }
   }
 }

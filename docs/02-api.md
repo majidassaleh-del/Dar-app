@@ -786,7 +786,13 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
     * Workforce by status, medical checks, salaries paid and documents due.
     * Bank balance and this week's spending, the petty-cash float, and the end-of-service provision.
     * The team.
-* **`/[locale]/[section]` and `/[locale]/[section]/[id]`: list and record** in two panels, like a mail client. On a phone only one shows, with a way back. The sections:
+* **`/[locale]/[section]` and `/[locale]/[section]/[id]`.** Every section follows the home page's pattern:
+  * A heading with a one-line summary and a strip of figures, for example workers, valid medical checks, last month's salaries and documents due.
+  * The list in a panel. Each row has an avatar or status dot and a value at the end.
+  * The selected record: a heading panel with its key figures, then sub-panels with bars (document and service time left, leave, advances repaid, spend by category), steps (the approval chain, work-order progress), a 12-month salary grid, and tables.
+  * On a phone only the list or the record shows, with a way back.
+
+  The sections:
   * `staff`: tabs for profile, entitlements (Art. 16 / Art. 10 statement), leave, pay and advances, and documents.
   * `requests`: details and the approval chain, with Approve and Reject.
   * `finance`: accounts and transactions.

@@ -712,6 +712,67 @@
       "calculator": "حاسبة مستحقات عامل",
       "team": "الفريق اليوم",
       "noMedicalShort": "بلا فحص طبي"
+    },
+    "sec": {
+      "staff": {
+        "summary": "في المنزل {count, plural, one {عامل واحد} two {عاملان} few {# عمّال} many {# عاملًا} other {# عامل}}: {active} على رأس العمل، و{probation} تحت التجربة، و{onLeave} في إجازة.",
+        "workers": "العمّال"
+      },
+      "requests": {
+        "summary": "{count, plural, =0 {لا طلبات تنتظر قرارك.} one {طلب واحد ينتظر قرارك.} two {طلبان ينتظران قرارك.} few {# طلبات تنتظر قرارك.} many {# طلبًا ينتظر قرارك.} other {# طلب ينتظر قرارك.}}"
+      },
+      "finance": {
+        "summary": "{count, plural, one {حساب واحد} two {حسابان} few {# حسابات} many {# حسابًا} other {# حساب}} بإجمالي {amount}."
+      },
+      "petty": {
+        "summary": "{count, plural, =0 {لا قيود تنتظر المراجعة.} one {قيد واحد ينتظر مراجعتك.} two {قيدان ينتظران مراجعتك.} few {# قيود تنتظر مراجعتك.} many {# قيدًا ينتظر مراجعتك.} other {# قيد ينتظر مراجعتك.}}"
+      },
+      "fleet": {
+        "summary": "{count, plural, one {مركبة واحدة} two {مركبتان} few {# مركبات} many {# مركبة} other {# مركبة}}؛ {due, plural, =0 {لا شيء مستحق خلال ٣٠ يومًا.} one {بند واحد مستحق خلال ٣٠ يومًا.} two {بندان مستحقان خلال ٣٠ يومًا.} few {# بنود مستحقة خلال ٣٠ يومًا.} many {# بندًا مستحقًا خلال ٣٠ يومًا.} other {# بند مستحق خلال ٣٠ يومًا.}}"
+      },
+      "wo": {
+        "summary": "{count, plural, =0 {لا أوامر عمل مفتوحة} one {أمر عمل واحد مفتوح} two {أمرا عمل مفتوحان} few {# أوامر عمل مفتوحة} many {# أمر عمل مفتوحًا} other {# أمر عمل مفتوح}}{overdue, plural, =0 {.} one {، منها واحد متأخر.} two {، منها اثنان متأخران.} other {، منها # متأخرة.}}"
+      },
+      "paid": "مصروف",
+      "unpaid": "لم يُصرف",
+      "since": "منذ {date}",
+      "compliance": "الامتثال",
+      "settleNote": "لو انتهت الخدمة في التاريخ المختار",
+      "entitlement": "الاستحقاق",
+      "twelveMonths": "الرواتب في آخر ١٢ شهرًا",
+      "legend": "✓ مصروف · ✕ لم يُصرف · — قبل التعيين",
+      "advanceOf": "سلفة {amount} في {date}",
+      "esbToday": "نهاية الخدمة اليوم",
+      "duration": "المدة",
+      "submittedBy": "قدّمه {name}",
+      "approvedMonth": "مُعتمدة هذا الشهر",
+      "rejectedMonth": "مرفوضة هذا الشهر",
+      "allRequests": "كل الطلبات",
+      "uncategorised": "بلا تصنيف",
+      "spentMonth": "مصروفات الشهر",
+      "lastMovement": "آخر حركة",
+      "byCategory": "المصروفات حسب التصنيف",
+      "bank": "البنك",
+      "movements": "الحركات",
+      "totalBalance": "إجمالي الأرصدة",
+      "incomeMonth": "إيرادات الشهر",
+      "movementsMonth": "حركات الشهر",
+      "held": "النقد في العُهد",
+      "floats": "العُهد",
+      "nearestDoc": "أقرب انتهاء",
+      "nextService": "الصيانة التالية",
+      "serviceNote": "تبيّن الأشرطة كم استُهلك من فترة كل صيانة.",
+      "efficiency": "متوسط الاستهلاك",
+      "kmPerL": "{value} كم لكل لتر",
+      "vehicles": "المركبات",
+      "docsDue": "وثائق خلال ٣٠ يومًا",
+      "servicesDue": "صيانة مستحقة",
+      "totalKm": "إجمالي المسافة",
+      "progress": "سير العمل",
+      "open": "مفتوحة",
+      "overdue": "متأخرة",
+      "dueWeek": "مستحقة هذا الأسبوع",
+      "completedMonth": "مُنجزة هذا الشهر"
     }
   }
 }

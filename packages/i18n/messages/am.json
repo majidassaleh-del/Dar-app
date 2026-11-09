@@ -712,6 +712,67 @@
       "calculator": "የሰራተኛ መብት ማስያ",
       "team": "የዛሬው ቡድን",
       "noMedicalShort": "የህክምና ምርመራ የለም"
+    },
+    "sec": {
+      "staff": {
+        "summary": "በቤቱ {count, plural, one {አንድ ሰራተኛ} other {# ሰራተኞች}}፦ {active} በስራ ላይ፣ {probation} በሙከራ፣ {onLeave} በፈቃድ።",
+        "workers": "ሰራተኞች"
+      },
+      "requests": {
+        "summary": "{count, plural, =0 {ውሳኔዎን የሚጠብቅ ጥያቄ የለም።} one {አንድ ጥያቄ ውሳኔዎን ይጠብቃል።} other {# ጥያቄዎች ውሳኔዎን ይጠብቃሉ።}}"
+      },
+      "finance": {
+        "summary": "{count, plural, one {አንድ ሂሳብ} other {# ሂሳቦች}}፣ በአጠቃላይ {amount}።"
+      },
+      "petty": {
+        "summary": "{count, plural, =0 {ለግምገማ የሚጠብቅ መዝገብ የለም።} one {አንድ መዝገብ ግምገማዎን ይጠብቃል።} other {# መዝገቦች ግምገማዎን ይጠብቃሉ።}}"
+      },
+      "fleet": {
+        "summary": "{count, plural, one {አንድ ተሽከርካሪ} other {# ተሽከርካሪዎች}}፤ {due, plural, =0 {በ30 ቀናት ውስጥ ምንም የለም።} one {በ30 ቀናት ውስጥ አንድ ንጥል።} other {በ30 ቀናት ውስጥ # ንጥሎች።}}"
+      },
+      "wo": {
+        "summary": "{count, plural, =0 {ክፍት የስራ ትዕዛዝ የለም} one {አንድ ክፍት የስራ ትዕዛዝ} other {# ክፍት የስራ ትዕዛዞች}}{overdue, plural, =0 {።} one {፣ አንዱ ዘግይቷል።} other {፣ # ዘግይተዋል።}}"
+      },
+      "paid": "ተከፍሏል",
+      "unpaid": "አልተከፈለም",
+      "since": "ከ{date} ጀምሮ",
+      "compliance": "ተገዢነት",
+      "settleNote": "አገልግሎቱ በተመረጠው ቀን ቢያበቃ",
+      "entitlement": "መብት",
+      "twelveMonths": "የመጨረሻዎቹ 12 ወራት ደመወዝ",
+      "legend": "✓ ተከፍሏል · ✕ አልተከፈለም · — ከቅጥር በፊት",
+      "advanceOf": "በ{date} የ{amount} ቅድሚያ",
+      "esbToday": "የዛሬ አገልግሎት ማብቂያ",
+      "duration": "ቆይታ",
+      "submittedBy": "ያቀረበው {name}",
+      "approvedMonth": "በዚህ ወር የጸደቁ",
+      "rejectedMonth": "በዚህ ወር ውድቅ የሆኑ",
+      "allRequests": "ሁሉም ጥያቄዎች",
+      "uncategorised": "ያልተመደበ",
+      "spentMonth": "የዚህ ወር ወጪ",
+      "lastMovement": "የመጨረሻ ግብይት",
+      "byCategory": "ወጪ በምድብ",
+      "bank": "ባንክ",
+      "movements": "ግብይቶች",
+      "totalBalance": "ጠቅላላ ቀሪ",
+      "incomeMonth": "የዚህ ወር ገቢ",
+      "movementsMonth": "የዚህ ወር ግብይቶች",
+      "held": "የተያዘ ጥሬ ገንዘብ",
+      "floats": "ጥሬ ገንዘቦች",
+      "nearestDoc": "ቅርብ ማብቂያ",
+      "nextService": "ቀጣይ አገልግሎት",
+      "serviceNote": "አሞሌዎቹ የእያንዳንዱ አገልግሎት ጊዜ ምን ያህል እንደተጠቀመ ያሳያሉ።",
+      "efficiency": "አማካይ ፍጆታ",
+      "kmPerL": "በሊትር {value} ኪ.ሜ",
+      "vehicles": "ተሽከርካሪዎች",
+      "docsDue": "በ30 ቀናት የሚያበቁ ሰነዶች",
+      "servicesDue": "የደረሱ አገልግሎቶች",
+      "totalKm": "ጠቅላላ ርቀት",
+      "progress": "ሂደት",
+      "open": "ክፍት",
+      "overdue": "የዘገዩ",
+      "dueWeek": "በዚህ ሳምንት",
+      "completedMonth": "በዚህ ወር የተጠናቀቁ"
     }
   }
 }

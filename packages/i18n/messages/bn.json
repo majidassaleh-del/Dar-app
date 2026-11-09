@@ -712,6 +712,67 @@
       "calculator": "কর্মীর পাওনা হিসাবকারী",
       "team": "আজকের দল",
       "noMedicalShort": "বৈধ মেডিকেল নেই"
+    },
+    "sec": {
+      "staff": {
+        "summary": "বাড়িতে {count, plural, one {একজন কর্মী} other {# জন কর্মী}}: {active} জন কাজে, {probation} জন শিক্ষানবিশ, {onLeave} জন ছুটিতে।",
+        "workers": "কর্মী"
+      },
+      "requests": {
+        "summary": "{count, plural, =0 {কোনো অনুরোধ আপনার সিদ্ধান্তের অপেক্ষায় নেই।} one {একটি অনুরোধ আপনার সিদ্ধান্তের অপেক্ষায়।} other {#টি অনুরোধ আপনার সিদ্ধান্তের অপেক্ষায়।}}"
+      },
+      "finance": {
+        "summary": "{count, plural, one {একটি অ্যাকাউন্ট} other {#টি অ্যাকাউন্ট}}, মোট {amount}।"
+      },
+      "petty": {
+        "summary": "{count, plural, =0 {কোনো এন্ট্রি পর্যালোচনার অপেক্ষায় নেই।} one {একটি এন্ট্রি আপনার পর্যালোচনার অপেক্ষায়।} other {#টি এন্ট্রি আপনার পর্যালোচনার অপেক্ষায়।}}"
+      },
+      "fleet": {
+        "summary": "{count, plural, one {একটি যানবাহন} other {#টি যানবাহন}}; {due, plural, =0 {আগামী ৩০ দিনে কিছু বাকি নেই।} one {আগামী ৩০ দিনে একটি বিষয় বাকি।} other {আগামী ৩০ দিনে #টি বিষয় বাকি।}}"
+      },
+      "wo": {
+        "summary": "{count, plural, =0 {কোনো খোলা কাজের আদেশ নেই} one {একটি খোলা কাজের আদেশ} other {#টি খোলা কাজের আদেশ}}{overdue, plural, =0 {।} one {, একটি বিলম্বিত।} other {, #টি বিলম্বিত।}}"
+      },
+      "paid": "পরিশোধিত",
+      "unpaid": "অপরিশোধিত",
+      "since": "{date} থেকে",
+      "compliance": "সম্মতি",
+      "settleNote": "যদি বেছে নেওয়া তারিখে চাকরি শেষ হয়",
+      "entitlement": "পাওনা",
+      "twelveMonths": "শেষ ১২ মাসের বেতন",
+      "legend": "✓ দেওয়া · ✕ দেওয়া হয়নি · — নিয়োগের আগে",
+      "advanceOf": "{date}-এ {amount} অগ্রিম",
+      "esbToday": "আজ চাকরি শেষের পাওনা",
+      "duration": "মেয়াদ",
+      "submittedBy": "{name} জমা দিয়েছেন",
+      "approvedMonth": "এ মাসে অনুমোদিত",
+      "rejectedMonth": "এ মাসে প্রত্যাখ্যাত",
+      "allRequests": "সব অনুরোধ",
+      "uncategorised": "শ্রেণিহীন",
+      "spentMonth": "এ মাসের খরচ",
+      "lastMovement": "শেষ লেনদেন",
+      "byCategory": "শ্রেণি অনুযায়ী খরচ",
+      "bank": "ব্যাংক",
+      "movements": "লেনদেন",
+      "totalBalance": "মোট ব্যালান্স",
+      "incomeMonth": "এ মাসের আয়",
+      "movementsMonth": "এ মাসের লেনদেন",
+      "held": "রাখা নগদ",
+      "floats": "নগদ",
+      "nearestDoc": "নিকটতম মেয়াদ শেষ",
+      "nextService": "পরের সার্ভিস",
+      "serviceNote": "বারগুলো দেখায় প্রতিটি সার্ভিস ব্যবধানের কতটা ব্যবহৃত হয়েছে।",
+      "efficiency": "গড় খরচ",
+      "kmPerL": "লিটারে {value} কিমি",
+      "vehicles": "যানবাহন",
+      "docsDue": "৩০ দিনের মধ্যে কাগজ",
+      "servicesDue": "বাকি সার্ভিস",
+      "totalKm": "মোট দূরত্ব",
+      "progress": "অগ্রগতি",
+      "open": "খোলা",
+      "overdue": "বিলম্বিত",
+      "dueWeek": "এ সপ্তাহে বাকি",
+      "completedMonth": "এ মাসে সম্পন্ন"
     }
   }
 }

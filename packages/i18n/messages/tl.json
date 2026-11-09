@@ -712,6 +712,67 @@
       "calculator": "Calculator ng karapatan ng kawani",
       "team": "Ang team ngayon",
       "noMedicalShort": "Walang valid na medical"
+    },
+    "sec": {
+      "staff": {
+        "summary": "{count, plural, one {Isang kawani} other {# kawani}} sa sambahayan: {active} aktibo, {probation} nasa probation, {onLeave} naka-leave.",
+        "workers": "Mga kawani"
+      },
+      "requests": {
+        "summary": "{count, plural, =0 {Walang kahilingang naghihintay ng desisyon mo.} one {Isang kahilingan ang naghihintay ng desisyon mo.} other {# kahilingan ang naghihintay ng desisyon mo.}}"
+      },
+      "finance": {
+        "summary": "{count, plural, one {Isang account} other {# account}} na may kabuuang {amount}."
+      },
+      "petty": {
+        "summary": "{count, plural, =0 {Walang entry na susuriin.} one {Isang entry ang naghihintay ng pagsusuri mo.} other {# entry ang naghihintay ng pagsusuri mo.}}"
+      },
+      "fleet": {
+        "summary": "{count, plural, one {Isang sasakyan} other {# sasakyan}}; {due, plural, =0 {walang takda sa susunod na 30 araw.} one {isang item na takda sa susunod na 30 araw.} other {# item na takda sa susunod na 30 araw.}}"
+      },
+      "wo": {
+        "summary": "{count, plural, =0 {Walang bukas na work order} one {Isang bukas na work order} other {# bukas na work order}}{overdue, plural, =0 {.} one {, isa ang lampas na.} other {, # ang lampas na.}}"
+      },
+      "paid": "Bayad",
+      "unpaid": "Hindi bayad",
+      "since": "Mula {date}",
+      "compliance": "Pagsunod",
+      "settleNote": "Kung natapos ang serbisyo sa piniling petsa",
+      "entitlement": "Karapatan",
+      "twelveMonths": "Sahod, huling 12 buwan",
+      "legend": "✓ bayad · ✕ hindi bayad · — bago natanggap",
+      "advanceOf": "Advance na {amount} noong {date}",
+      "esbToday": "End of service ngayon",
+      "duration": "Tagal",
+      "submittedBy": "Ipinasa ni {name}",
+      "approvedMonth": "Inaprubahan ngayong buwan",
+      "rejectedMonth": "Tinanggihan ngayong buwan",
+      "allRequests": "Lahat ng kahilingan",
+      "uncategorised": "Walang kategorya",
+      "spentMonth": "Gastos ngayong buwan",
+      "lastMovement": "Huling galaw",
+      "byCategory": "Gastos ayon sa kategorya",
+      "bank": "Bangko",
+      "movements": "Mga transaksyon",
+      "totalBalance": "Kabuuang balanse",
+      "incomeMonth": "Kita ngayong buwan",
+      "movementsMonth": "Transaksyon ngayong buwan",
+      "held": "Hawak na cash",
+      "floats": "Mga float",
+      "nearestDoc": "Pinakamalapit na expiry",
+      "nextService": "Susunod na serbisyo",
+      "serviceNote": "Ipinapakita ng bar kung gaano na nagamit ang bawat agwat ng serbisyo.",
+      "efficiency": "Karaniwang konsumo",
+      "kmPerL": "{value} km kada litro",
+      "vehicles": "Mga sasakyan",
+      "docsDue": "Dokumento sa loob ng 30 araw",
+      "servicesDue": "Serbisyong takda",
+      "totalKm": "Kabuuang layo",
+      "progress": "Pag-usad",
+      "open": "Bukas",
+      "overdue": "Lampas na",
+      "dueWeek": "Takda ngayong linggo",
+      "completedMonth": "Natapos ngayong buwan"
     }
   }
 }
