@@ -5,6 +5,7 @@ import type { Household } from '@/lib/dashboard';
 import { fmt } from '@/lib/fmt';
 import { SECTIONS, loose, today, type Section } from '@/lib/sections';
 import { cn } from '@/lib/utils';
+import { signOut } from '@/lib/auth-actions';
 import { LocaleSwitcher } from './LocaleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { TenantSwitcher } from './TenantSwitcher';
@@ -41,6 +42,12 @@ export async function Shell({ current, households, household, mode, back, pendin
               <TenantSwitcher households={households} current={household} back={back} />
               <LocaleSwitcher />
               <ThemeToggle />
+              {mode === 'live' && (
+                <form action={signOut}>
+                  <input type="hidden" name="locale" value={f.locale} />
+                  <button type="submit" className="field-header cursor-pointer px-3">{t('auth.signOut')}</button>
+                </form>
+              )}
             </div>
           </div>
           <nav aria-label={t('sections')} className="-mx-1 overflow-x-auto">

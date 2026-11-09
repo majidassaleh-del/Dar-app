@@ -16,6 +16,8 @@ const securityHeaders = [
 const config: NextConfig = {
   transpilePackages: ['@herp/i18n'],
   poweredByHeader: false,
+  // A second local dev server (e.g. without the dev token) needs its own build folder.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // Local stand-in for tenant subdomains: efa.localhost:3000 (HERP_TENANT_BASE_DOMAIN=localhost).
   allowedDevOrigins: ['*.localhost'],
   async headers() { return [{ source: '/:path*', headers: securityHeaders }]; },

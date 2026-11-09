@@ -1,7 +1,7 @@
 import 'server-only';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { apiGet, authToken, currentTenantSlug, requestHost, resolveHousehold } from './api';
-import { tenantOrigin } from './config';
+import { tenantOrigin, webConfig } from './config';
 
 export type Severity = 'critical' | 'warning' | 'info';
 /** `origin` is set when tenant subdomains are configured: the switcher then links to https://<slug>.<base>. */
@@ -60,7 +60,10 @@ export async function loadSession(locale: string): Promise<Session> {
   const ctx = await resolveHousehold(locale);
   // A tenant subdomain the signed-in user is not a member of: 404, never another household's data or a sample.
   if (!ctx) {
-    if (await authToken() && await currentTenantSlug()) notFound();
+    const signedIn = !!(await authToken());
+    if (signedIn && await currentTenantSlug()) notFound();
+    // Nobody signed in: the sign-in page (the labelled sample only on demo deployments).
+    if (!signedIn && !webConfig.demo) redirect(`/${locale}/sign-in`);
     return { mode: 'sample', households: SAMPLE.households, current: SAMPLE.current, opts: null, pendingRequests: 0 };
   }
   const host = await requestHost();

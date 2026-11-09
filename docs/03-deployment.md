@@ -37,6 +37,7 @@ Use one wildcard TLS certificate (`*.darhub.net`) plus one for the apex. Point `
 | Variable | Production value | Purpose |
 |---|---|---|
 | `HERP_API_URL` | `https://api.darhub.net` (or the internal service URL) | Server-side API base URL |
+| `HERP_AUTH_URL`, `HERP_AUTH_KEY` | `https://<project>.supabase.co/auth/v1`, the project's anon key | Identity provider for the sign-in code (called server-side only) |
 | `HERP_SESSION_COOKIE` | `__Secure-herp_session` | httpOnly cookie holding the bearer token |
 | `HERP_HOUSEHOLD_COOKIE` | `herp_household` | Switcher choice on the app host |
 | `HERP_COOKIE_DOMAIN` | `.darhub.net` | One sign-in covers `app.` and every tenant subdomain. Leave unset for host-only cookies |

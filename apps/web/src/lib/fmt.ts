@@ -8,6 +8,7 @@ export async function fmt() {
   const d = (v: string | null | undefined, style: 'medium' | 'long' = 'medium') =>
     v ? f.dateTime(new Date(v.length === 10 ? `${v}T12:00:00Z` : v), { dateStyle: style }) : '—';
   return {
+    locale,
     money: (v: string | number | null | undefined, currency = 'SAR') => (v == null ? '—' : f.number(Number(v), { style: 'currency', currency })),
     num: (v: number | string | null | undefined, digits = 0) => (v == null ? '—' : f.number(Number(v), { maximumFractionDigits: digits })),
     date: d,

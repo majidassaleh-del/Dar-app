@@ -1,5 +1,6 @@
 import 'server-only';
 import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { tenantSlugFromHost, webConfig } from './config';
 
 /**
@@ -29,16 +30,33 @@ export async function currentTenantSlug() { return tenantSlugFromHost(await requ
 export async function apiGet<T>(path: string, opts: { household?: string | null; locale?: string } = {}): Promise<T | null> {
   const token = await authToken();
   if (!token) return null;
+  let signedOut = false;
   try {
     const r = await fetch(`${API_URL}${path}`, {
       headers: { Authorization: `Bearer ${token}`, 'Accept-Language': opts.locale ?? 'ar', ...(opts.household ? { 'X-Household-Id': opts.household } : {}) },
       cache: 'no-store', signal: AbortSignal.timeout(4000),
     });
+    if (r.status === 401) signedOut = true;
     return r.ok ? ((await r.json()) as T) : null;
   } catch { return null; }
+  finally { if (signedOut) redirect(`/${opts.locale ?? 'ar'}/sign-in?expired=1`); }
 }
 
 export interface MeHousehold { householdId: string; slug: string; name: string; role: string }
+
+/**
+ * Sign-in steps: call the API with the identity provider's token (not a session yet), no household.
+ * Returns the status and JSON so the caller can tell the user what to do next.
+ */
+export async function apiAuth<T>(method: 'GET' | 'POST', path: string, token: string, body?: unknown, locale = 'ar'): Promise<{ status: number; body: T }> {
+  const r = await fetch(`${API_URL}${path}`, {
+    method, cache: 'no-store', signal: AbortSignal.timeout(8000),
+    headers: { Authorization: `Bearer ${token}`, 'Accept-Language': locale, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  }).catch(() => null);
+  if (!r) return { status: 503, body: {} as T };
+  return { status: r.status, body: (await r.json().catch(() => ({}))) as T };
+}
 
 /** POST to the API under the user's session (server actions only). Throws with the API's problem detail. */
 export async function apiPost<T>(path: string, body: unknown, opts: { household: string; locale?: string }): Promise<T> {

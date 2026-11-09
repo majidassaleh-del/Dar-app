@@ -31,8 +31,10 @@ FROM (VALUES ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-0
 JOIN roles r ON r."householdId" = 'b0000000-0000-0000-0000-000000000001' AND r."systemRole" = v.role::"SystemRole";
 RESET app.user_id;
 
--- Fixture users have completed onboarding (phone + email + authenticator), so the
--- e2e suites exercise the modules; the onboarding suite uses fresh users.
-INSERT INTO user_auth_factors ("userId", "phoneVerifiedAt", "emailVerifiedAt", "totpVerifiedAt", "onboardedAt")
-SELECT id, now(), now(), now(), now() FROM users WHERE id::text LIKE 'a0000000-%';
+-- Fixture users count as onboarded (phone + email verified), so the e2e suites exercise the
+-- modules; the onboarding suite uses fresh users. They have no authenticator yet: a person
+-- signing in on the web enrols one on first sign-in (an authenticator is never marked verified
+-- without a secret behind it).
+INSERT INTO user_auth_factors ("userId", "phoneVerifiedAt", "emailVerifiedAt", "onboardedAt")
+SELECT id, now(), now(), now() FROM users WHERE id::text LIKE 'a0000000-%';
 

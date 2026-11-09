@@ -39,10 +39,11 @@ scripts/dev-db.sh herp_dev --fixtures       # then: cd apps/api && cp .env.examp
 psql herp_dev -f scripts/demo-households.sql            # EFA Private Office + AFA Household
 AUTH_JWT_SECRET=… node scripts/demo-seed.mjs            # seeds via the API, prints HERP_DEV_TOKEN=…
 # node scripts/demo-seed.mjs --extras-only              # adds bank, petty cash, work orders, requests, salaries to an existing seed
+AUTH_JWT_SECRET=… node scripts/dev-idp.mjs             # sign-in stand-in on :9999; codes print here (users: scripts/dev-idp-users.json)
 HERP_API_URL=http://localhost:4000 HERP_DEV_TOKEN=… pnpm --filter @herp/web dev
 ```
 
-`HERP_DEV_TOKEN` is ignored when `NODE_ENV=production`, where the token comes from the httpOnly `herp_session` cookie. Without either, the dashboard shows labelled sample data.
+`HERP_DEV_TOKEN` is ignored when `NODE_ENV=production`. Without it, open `/ar` and sign in. For example, use `0500000002` (the EFA office user): the code shows in the dev-idp console, and on first sign-in you set up an authenticator app. The session lives in the httpOnly `herp_session` cookie until 04:00 Riyadh.
 
 Production on a SaaS domain (`darhub.net`: app, API and tenant subdomains, CORS and cookies) is described in [`docs/03-deployment.md`](docs/03-deployment.md).
 

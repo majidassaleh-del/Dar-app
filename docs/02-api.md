@@ -149,6 +149,7 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 | POST | `/auth/onboarding/totp/verify` | `{ code }`: confirms enrolment; `complete` becomes true |
 | POST | `/auth/devices` | `{ deviceId, publicKeyJwk (P-256), label?, totpCode }`. Requires onboarding, a fresh sign-in (≤ 10 min) and an authenticator code |
 | GET · DELETE | `/auth/devices` · `/auth/devices/{id}` | List and revoke this user's devices |
+| POST | `/auth/web/session` | Browser sign-in, last step: a fresh identity-provider sign-in (≤ 10 min) + `{ code }` from the authenticator → `{ token, expiresAt }`, a session until 04:00 Riyadh with `did: "web"`. It satisfies `AUTH_REQUIRE_DEVICE_SESSION`; it never counts as a fresh sign-in (cannot mint another session or register a device) |
 | POST | `/auth/unlock/challenge` | `{ deviceId }` → `{ challengeId, nonce, message }` (2 minutes) |
 | POST | `/auth/unlock` | `{ challengeId, nonce, signature }`. ECDSA P-256/SHA-256 over `message`; raw (WebCrypto) or DER (iOS / Android) signatures are accepted. Returns `{ token, expiresAt, deviceKeyId }` |
 | POST | `/auth/unlock/totp` | Fallback when biometrics changed: fresh sign-in + `{ deviceId, code }` → the same session |
@@ -811,6 +812,15 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 **Actions** (`src/lib/actions.ts`, server actions):
 * Approving or rejecting a request, and reviewing a petty-cash entry, forward the click to the API under the user's own session.
 * The API re-checks membership, approver step, permissions and RLS.
+
+**Sign-in** (`/[locale]/sign-in`, `src/lib/auth-actions.ts`):
+1. **Identity-provider code.** The user enters a mobile number or email, and the identity provider sends a code. Supabase Auth's `/otp` and `/verify` are called from the server, never from the browser. Unknown addresses get the same "code sent" answer, so registered numbers cannot be probed.
+2. **First sign-in only.** The API's onboarding verifies the phone and the email, then enrols an authenticator. The QR code and manual key are shown for 10 minutes.
+3. **Authenticator code.** `POST /v1/auth/web/session` returns the session. The web stores it in an httpOnly cookie that expires at 04:00 Riyadh, and the provider session is signed out.
+4. **The steps between** are held in short httpOnly cookies (10 minutes).
+5. **Signed out.** With no session every page redirects to sign-in; a 401 from the API does too. `HERP_DEMO=true` shows the labelled sample instead.
+6. **Sign out** clears all sign-in cookies. A web session is not revocable server-side before 04:00. It is not a fresh sign-in either, so it cannot register a device or mint another session.
+7. **Development.** `scripts/dev-idp.mjs` stands in for the provider. Its users are listed in `scripts/dev-idp-users.json`, and it prints codes to its console. The API prints its own onboarding codes when `NODE_ENV=development`.
 
 **Live binding:**
 * **API client.** `src/lib/api.ts` is server-only, so the token never reaches the browser. It calls `HERP_API_URL` with the bearer token from the httpOnly session cookie (`HERP_SESSION_COOKIE`, default `herp_session`). All settings are in `src/lib/config.ts` and `apps/web/.env.example`.

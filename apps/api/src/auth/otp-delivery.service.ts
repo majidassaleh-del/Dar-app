@@ -17,7 +17,12 @@ export class OtpDeliveryService {
   constructor(@Inject(ENV) private readonly env: Env) {}
 
   async send(m: OtpMessage) {
-    if (!this.env.OTP_WEBHOOK_URL) { this.outbox.push(m); return; }
+    if (!this.env.OTP_WEBHOOK_URL) {
+      this.outbox.push(m);
+      // Development only (production refuses to start without a gateway): show the code so a person can sign in locally.
+      if (this.env.NODE_ENV === 'development') this.log.log(`${m.channel} to ${m.to}: ${m.text.match(/\b(\d{6})\b/)?.[1] ?? '(no code)'}`);
+      return;
+    }
     const r = await fetch(this.env.OTP_WEBHOOK_URL, { method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(this.env.OTP_WEBHOOK_TOKEN ? { Authorization: `Bearer ${this.env.OTP_WEBHOOK_TOKEN}` } : {}) },
       body: JSON.stringify(m) });

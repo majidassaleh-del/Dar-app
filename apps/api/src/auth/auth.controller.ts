@@ -11,6 +11,7 @@ import { AuthCryptoService } from './auth-crypto.service';
 import { OtpDeliveryService } from './otp-delivery.service';
 import { OnboardingGuard } from './onboarding.guard';
 import { newTotpSecret, otpauthUri, verifyTotp } from './totp';
+import { WEB_SESSION } from './session';
 
 const Phone = z.object({ phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'E.164, e.g. +9665XXXXXXXX') }).strict();
 const Email = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict();
@@ -160,6 +161,20 @@ export class AuthController {
     if (!k) throw new NotFoundException('this device is not registered (or was revoked)');
     await this.totp(ctx, b.code);
     return { ...(await this.crypto.issueSession({ sub: ctx.userId, did: k.id, amr: ['otp', 'totp'] })), deviceKeyId: k.id };
+  }
+
+  /**
+   * Web sign-in, last step: a fresh identity-provider sign-in (SMS / email code, ≤ 10 min) plus an
+   * authenticator code gives a browser session until 04:00 Riyadh. The browser has no device key,
+   * so this is the authenticator path of the daily unlock; the web keeps the token in an httpOnly cookie.
+   */
+  @Post('web/session')
+  async webSession(@Ctx() ctx: RequestContext, @Body(new ZodBody(Totp)) b: z.infer<typeof Totp>) {
+    this.requireFresh(ctx);
+    const [on] = await this.db.withRls(ctx, (tx) => tx.$queryRaw<Array<{ ok: boolean }>>`SELECT app.user_onboarded(${ctx.userId}::uuid) AS ok`);
+    if (!on?.ok) throw new ForbiddenException('complete onboarding first');
+    await this.totp(ctx, b.code);
+    return this.crypto.issueSession({ sub: ctx.userId, did: WEB_SESSION, amr: ['otp', 'totp'] });
   }
 
   // ---------------------------------------------------------------------------------------

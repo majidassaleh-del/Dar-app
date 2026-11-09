@@ -773,6 +773,60 @@
       "overdue": "Overdue",
       "dueWeek": "Due this week",
       "completedMonth": "Completed this month"
+    },
+    "auth": {
+      "signOut": "Sign out",
+      "codeLabel": "Six-digit code",
+      "addressLabel": "Mobile number or email",
+      "sendCode": "Send code",
+      "verify": "Verify",
+      "resend": "Send a new code",
+      "changeAddress": "Use another number or email",
+      "phoneLabel": "Mobile number",
+      "emailLabel": "Email",
+      "enrolStep1": "Install Microsoft Authenticator or Google Authenticator on your phone.",
+      "enrolStep2": "Scan the code that appears next.",
+      "enrolStep3": "Enter the six digits it shows.",
+      "enrolStart": "Set up the authenticator",
+      "manualKey": "Or enter this key by hand:",
+      "enrolConfirm": "Confirm",
+      "signIn": "Sign in",
+      "progress": "Step {step} of {total}",
+      "footer": "Your session ends at 4:00 a.m. Riyadh time. Identity numbers, IBANs and health records stay encrypted.",
+      "title": {
+        "address": "Sign in",
+        "code": "Enter the code",
+        "setup-phone": "Confirm your mobile number",
+        "setup-phone-code": "Enter the code",
+        "setup-email": "Confirm your email",
+        "setup-email-code": "Enter the code",
+        "enrol": "Add an authenticator app",
+        "enrol-scan": "Scan with the app",
+        "totp": "Authenticator code"
+      },
+      "hint": {
+        "address": "Enter the mobile number or email registered with the office. We will send you a one-time code.",
+        "code": "We sent a six-digit code to {address}.",
+        "setup-phone": "First sign-in: confirm the number we will use for codes.",
+        "setup-phone-code": "We sent a code to {address}.",
+        "setup-email": "Confirm the email we will use for codes.",
+        "setup-email-code": "We sent a code to {address}.",
+        "enrol": "An authenticator app protects the account even if someone gets your phone number.",
+        "enrol-scan": "Scan the code, then enter the six digits the app shows.",
+        "totp": "Enter the code shown in your authenticator app for EFA Private Office."
+      },
+      "e": {
+        "address": "Enter a mobile number like 05xxxxxxxx, or an email address.",
+        "code": "That code is not right. Check it and try again.",
+        "expired": "This step took too long. Start again.",
+        "unavailable": "The service is not responding. Try again in a minute.",
+        "tooMany": "Too many codes were requested. Try again in an hour.",
+        "locked": "Too many wrong codes. Wait 15 minutes, then try again.",
+        "used": "That code was already used. Wait for the next code in the app.",
+        "resent": "A new code is on its way.",
+        "enrolled": "The authenticator is set up. Enter the next code it shows to finish.",
+        "signedOut": "You have signed out."
+      }
     }
   }
 }

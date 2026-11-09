@@ -25,6 +25,11 @@ export const webConfig = {
   tenantBaseDomain: env.HERP_TENANT_BASE_DOMAIN?.trim().toLowerCase().replace(/^\.+|\.+$/g, '') || null,
   /** Subdomains that are never a household slug. */
   reservedSubdomains: new Set(list(env.HERP_TENANT_RESERVED, 'app,www,api,admin,auth,static,cdn,mail,status')),
+  /** Identity provider (Supabase Auth / GoTrue) base URL and public key, e.g. https://<project>.supabase.co/auth/v1. */
+  authUrl: (env.HERP_AUTH_URL ?? 'http://localhost:9999/auth/v1').replace(/\/+$/, ''),
+  authKey: env.HERP_AUTH_KEY ?? '',
+  /** Show the labelled sample instead of the sign-in page when nobody is signed in (demos only). */
+  demo: env.HERP_DEMO === 'true',
   /** The dev token (local API only) is never honoured in production builds. */
   devToken: env.NODE_ENV !== 'production' ? env.HERP_DEV_TOKEN ?? null : null,
 };
