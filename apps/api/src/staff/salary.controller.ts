@@ -7,6 +7,7 @@ import { assertWritten } from '../common/rls-write';
 import type { RequestContext } from '../tenancy/request-context';
 import { Acknowledge, Reason, RecordSalaryPayment, SalaryListQuery } from './staff.schemas';
 import { contractMonthly, salaryDto } from './staff.dto';
+import { assertProof } from './salary-proof';
 
 const StatementQuery = z.object({ year: z.coerce.number().int().min(2000).max(2100) });
 
@@ -15,7 +16,7 @@ const StatementQuery = z.object({ year: z.coerce.number().int().min(2000).max(21
  * wallet. Deliberately no WPS / Mudad rules (households are outside WPS): no
  * SIF file, no Saudi-bank IBAN requirement, cash is allowed. What is enforced
  * is the evidence trail:
- *   - MUSANED / BANK_TRANSFER need the transfer reference (DB CHECK too);
+ *   - MUSANED / BANK_TRANSFER need the transfer reference or a screenshot of it (DB CHECK too);
  *   - rows are immutable; corrections are REVERSED + a new row;
  *   - only the worker can ACKNOWLEDGE or DISPUTE their own pay (DB trigger).
  */
@@ -44,9 +45,10 @@ export class SalaryPaymentsController {
       if (amount == null) throw new BadRequestException('amount: required when the worker has no active contract');
       const channel = b.channel ?? staff.defaultPayoutChannel;
       if (!channel) throw new BadRequestException('channel: required (the worker has no default payout channel)');
-      if ((channel === 'MUSANED' || channel === 'BANK_TRANSFER') && !b.externalRef) {
-        throw new BadRequestException(`externalRef: the ${channel === 'MUSANED' ? 'Musaned transfer' : 'bank transfer'} reference is required`);
+      if ((channel === 'MUSANED' || channel === 'BANK_TRANSFER') && !b.externalRef && !b.proofFileId) {
+        throw new BadRequestException(`externalRef: the ${channel === 'MUSANED' ? 'Musaned transfer' : 'bank transfer'} reference is required, or attach a screenshot of the transfer (proofFileId)`);
       }
+      await assertProof(tx, b.proofFileId, staffId);
       const payoutLast4 = channel === 'BANK_TRANSFER' ? staff.payoutIbanLast4
         : channel === 'MUSANED' || channel === 'DIGITAL_WALLET' ? staff.payoutWalletRef?.slice(-4) ?? null : null;
 

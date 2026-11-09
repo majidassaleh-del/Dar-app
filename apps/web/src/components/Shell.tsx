@@ -11,7 +11,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { TenantSwitcher } from './TenantSwitcher';
 
 export const NAV_KEY: Record<Section | 'brief', string> = {
-  brief: 'brief', staff: 'staff', requests: 'requests', finance: 'finance', 'petty-cash': 'pettyCash', fleet: 'fleet', 'work-orders': 'workOrders',
+  brief: 'brief', staff: 'staff', payroll: 'payroll', requests: 'requests', finance: 'finance', 'petty-cash': 'pettyCash', fleet: 'fleet', 'work-orders': 'workOrders',
 };
 
 /**

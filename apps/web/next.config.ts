@@ -20,6 +20,8 @@ const config: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   // Local stand-in for tenant subdomains: efa.localhost:3000 (HERP_TENANT_BASE_DOMAIN=localhost).
   allowedDevOrigins: ['*.localhost'],
+  // Transfer screenshots and documents are posted to server actions (the API accepts up to 15 MB).
+  experimental: { serverActions: { bodySizeLimit: '16mb' } },
   async headers() { return [{ source: '/:path*', headers: securityHeaders }]; },
 };
 

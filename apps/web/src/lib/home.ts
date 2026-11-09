@@ -51,8 +51,12 @@ export async function loadHome(locale: string): Promise<Home> {
   if (!session.opts) return sampleHome(session);
   const opts = session.opts;
   const lm = lastMonth();
-  const [pulse, staffR, comp, pays, reqs, wos, docs, vehs, accts, txs, floats, esb, names] = await Promise.all([
-    apiGet<{ attention: Array<{ severity: string; key: string; count: number; deepLink: string }> }>('/v1/dashboard/pulse', opts),
+  // The month whose pay day (28) has most recently passed decides who is "unpaid".
+  const pulse = await apiGet<{ attention: Array<{ severity: string; key: string; count: number; deepLink: string }>; payroll?: { due: { year: number; month: number } } }>('/v1/dashboard/pulse', opts);
+  const duePeriod = pulse?.payroll?.due;
+  if (duePeriod) { lm.y = duePeriod.year; lm.m = duePeriod.month; lm.end = new Date(Date.UTC(duePeriod.year, duePeriod.month, 0)).toISOString().slice(0, 10); }
+  const [, staffR, comp, pays, reqs, wos, docs, vehs, accts, txs, floats, esb, names] = await Promise.all([
+    Promise.resolve(null),
     apiGet<Rows<Staff>>('/v1/staff', opts),
     apiGet<Rows<{ staffId: string; medical: { status: string } }>>('/v1/compliance/staff', opts),
     apiGet<Rows<{ staffId: string; status: string }>>(`/v1/salary-payments?year=${lm.y}&month=${lm.m}`, opts),

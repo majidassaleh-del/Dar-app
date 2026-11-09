@@ -44,6 +44,33 @@ export async function apiGet<T>(path: string, opts: { household?: string | null;
 
 export interface MeHousehold { householdId: string; slug: string; name: string; role: string }
 
+/** Any write under the user's session; returns status + JSON (or the problem detail) instead of throwing. */
+export async function apiSend<T>(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, opts: { household: string; locale?: string },
+  body?: unknown, raw?: Buffer): Promise<{ ok: boolean; status: number; body: T; detail?: string }> {
+  const token = await authToken();
+  if (!token) return { ok: false, status: 401, body: {} as T, detail: 'signed out' };
+  const r = await fetch(`${API_URL}${path}`, {
+    method, cache: 'no-store', signal: AbortSignal.timeout(30_000),
+    headers: { Authorization: `Bearer ${token}`, 'Accept-Language': opts.locale ?? 'ar', 'X-Household-Id': opts.household,
+      ...(raw ? { 'Content-Type': 'application/octet-stream' } : body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    body: raw ? new Uint8Array(raw) : body !== undefined ? JSON.stringify(body) : undefined,
+  }).catch(() => null);
+  if (!r) return { ok: false, status: 503, body: {} as T, detail: 'the service is not responding' };
+  const j = (await r.json().catch(() => ({}))) as T & { detail?: string | string[] };
+  return { ok: r.ok, status: r.status, body: j, detail: Array.isArray(j?.detail) ? j.detail.join(' · ') : j?.detail };
+}
+
+/** Upload a file the three-step way (declare, send bytes, sha256 checked by the API); returns its id. */
+export async function apiUpload(file: File, meta: { entityType: string; entityId: string; staffId?: string }, opts: { household: string; locale?: string }) {
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const { createHash } = await import('node:crypto');
+  const d = await apiSend<{ id?: string; upload?: { url: string } }>('POST', '/v1/files', opts, { ...meta, fileName: file.name.slice(0, 200) || 'upload',
+    mimeType: file.type || 'application/octet-stream', sizeBytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
+  if (!d.ok || !d.body.id || !d.body.upload) return { id: null, detail: d.detail };
+  const u = await apiSend('PUT', d.body.upload.url, opts, undefined, bytes);
+  return u.ok ? { id: d.body.id, detail: undefined } : { id: null, detail: u.detail };
+}
+
 /**
  * Sign-in steps: call the API with the identity provider's token (not a session yet), no household.
  * Returns the status and JSON so the caller can tell the user what to do next.

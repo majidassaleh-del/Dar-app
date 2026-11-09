@@ -23,11 +23,14 @@ const WORKING = ['ACTIVE', 'ON_PROBATION', 'ON_LEAVE'];
 const medOk = (s?: string) => ['VALID', 'DUE_SOON', 'NOT_REQUIRED'].includes(s ?? '');
 const daysTone = (d: number | null | undefined): Tone | undefined => (d == null ? undefined : d < 0 ? 'critical' : d <= 30 ? 'warning' : undefined);
 const lastMonth = () => { const d = new Date(`${today()}T00:00:00Z`); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1 }; };
+/** Falls back to last month; the pulse's pay-day rule (28th) decides when the API answers. */
 
 export async function StaffSection({ opts, id, tab }: { opts: Opts; id: string | null; tab: string | null }) {
   const [t0, tl0, f] = await Promise.all([getTranslations('ui'), getTranslations('lux'), fmt()]);
   const t = loose(t0);
   const lm = lastMonth();
+  const due = (await apiGet<{ payroll?: { due: { year: number; month: number } } }>('/v1/dashboard/pulse', opts))?.payroll?.due;
+  if (due) { lm.y = due.year; lm.m = due.month; }
   const [list, comp, monthPays, expiring] = await Promise.all([
     apiGet<Rows<Staff>>('/v1/staff', opts), apiGet<Rows<Compliance>>('/v1/compliance/staff', opts),
     apiGet<Rows<{ staffId: string; status: string }>>(`/v1/salary-payments?year=${lm.y}&month=${lm.m}`, opts),

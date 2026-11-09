@@ -6,6 +6,7 @@ import { isoDate } from '../common/rls-write';
 import type { RequestContext } from '../tenancy/request-context';
 import { BudgetsController } from '../banking/budgets.controller';
 import { todayIn } from '../staff/staff.dto';
+import { payDayOf } from '../staff/salary-proof';
 
 type Attention = { severity: 'critical' | 'warning' | 'info'; key: string; count: number; deepLink: string };
 
@@ -29,10 +30,12 @@ export class PulseController {
       const today = todayIn(h.timezone);
       const y = today.getUTCFullYear(), m = today.getUTCMonth() + 1;
       const prev = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
-      const monthEnd = new Date(Date.UTC(y, m, 0));
+      // Salaries are due on the household's pay day (28 unless configured); a month counts as overdue once that day has passed.
+      const payDay = await payDayOf(tx, ctx.householdId!);
+      const dueDate = new Date(Date.UTC(y, m - 1, payDay));
 
       const [payroll, documents, medical, workOrders, approvals, petty, budgets, funding, handovers, disputes, remindersToday, fleet] = await Promise.all([
-        this.payroll(tx, y, m, prev, monthEnd, today), this.documents(tx, ctx), this.medical(tx, ctx, today), this.workOrders(tx),
+        this.payroll(tx, y, m, prev, dueDate, today, payDay), this.documents(tx, ctx), this.medical(tx, ctx, today), this.workOrders(tx),
         this.approvals(tx, ctx), this.pettyCash(tx), this.budgetAlerts(tx, ctx, today), this.funding(tx), this.handovers(tx),
         tx.salaryPayment.count({ where: { status: 'DISPUTED' } }),
         tx.reminder.count({ where: { status: 'PENDING', remindAt: { lte: new Date() } } }),
@@ -44,7 +47,7 @@ export class PulseController {
       add(documents.byTier.EXPIRED ?? 0, 'critical', 'pulse.documentsExpired', 'herp://staff/documents/expiring');
       add(medical.overdue + medical.missing, 'critical', 'pulse.medicalOverdue', 'herp://compliance/staff');
       add(disputes, 'critical', 'pulse.salaryDisputes', 'herp://salary-payments?status=DISPUTED');
-      add(payroll.previousMonth.unpaidWorkers, 'critical', 'pulse.salaryUnpaidLastMonth', 'herp://salary-payments');
+      add(payroll.due.unpaidWorkers, 'critical', payroll.due.current ? 'pulse.salaryUnpaidThisMonth' : 'pulse.salaryUnpaidLastMonth', 'herp://salary-payments');
       add(handovers.overdue, 'warning', 'pulse.itemsOverdue', 'herp://compliance/staff');
       add(documents.byTier['15'] ?? 0, 'warning', 'pulse.documentsDue15', 'herp://staff/documents/expiring');
       add(workOrders.overdue, 'warning', 'pulse.workOrdersOverdue', 'herp://work-orders?overdue=true');
@@ -57,7 +60,7 @@ export class PulseController {
       add(fleet.documentsDue, 'warning', 'pulse.vehicleDocsDue', 'herp://fleet/overview');
       add(fleet.servicesOverdue, 'warning', 'pulse.vehicleServiceOverdue', 'herp://fleet/overview');
       add(fleet.fuelFlagged, 'warning', 'pulse.fuelFlagged', 'herp://fleet/overview');
-      if (payroll.currentMonth.status === 'NONE' && payroll.currentMonth.daysUntilDue <= 5) attention.push({ severity: 'warning', key: 'pulse.payrollNotStarted', count: 1, deepLink: 'herp://payroll-runs' });
+      if (payroll.currentMonth.status === 'NONE' && payroll.currentMonth.daysUntilDue >= 0 && payroll.currentMonth.daysUntilDue <= 5) attention.push({ severity: 'warning', key: 'pulse.payrollNotStarted', count: 1, deepLink: 'herp://payroll-runs' });
       const rank = { critical: 0, warning: 1, info: 2 } as const;
       attention.sort((a, b) => rank[a.severity] - rank[b.severity] || b.count - a.count);
 
@@ -78,19 +81,24 @@ export class PulseController {
     return { vehicles: vehicles.length, documentsDue, servicesOverdue, fuelFlagged };
   }
 
-  private async payroll(tx: Tx, y: number, m: number, prev: { y: number; m: number }, monthEnd: Date, today: Date) {
+  private async payroll(tx: Tx, y: number, m: number, prev: { y: number; m: number }, dueDate: Date, today: Date, payDay: number) {
     const cur = await tx.payrollRun.findFirst({ where: { periodYear: y, periodMonth: m } });
-    const last = await tx.payrollRun.findFirst({ where: { periodYear: prev.y, periodMonth: prev.m } });
-    // Workers employed last month with an active contract and no (non-reversed) salary payment for it.
-    const prevStart = new Date(Date.UTC(prev.y, prev.m - 1, 1)), prevEnd = new Date(Date.UTC(prev.y, prev.m, 0));
+    // The month whose pay day has most recently passed: this month after the pay day, else last month.
+    const current = today.getTime() > dueDate.getTime();
+    const d = current ? { y, m } : prev;
+    const run = current ? cur : await tx.payrollRun.findFirst({ where: { periodYear: d.y, periodMonth: d.m } });
+    // Workers employed in that month with a contract covering it and no (non-reversed) salary payment for it.
+    const dStart = new Date(Date.UTC(d.y, d.m - 1, 1)), dEnd = new Date(Date.UTC(d.y, d.m, 0));
     const unpaid = await tx.staffProfile.count({ where: {
       deletedAt: null, status: { in: ['ACTIVE', 'ON_PROBATION', 'ON_LEAVE'] },
-      contracts: { some: { startDate: { lte: prevEnd }, OR: [{ endDate: null }, { endDate: { gte: prevStart } }] } },
-      salaryPayments: { none: { periodYear: prev.y, periodMonth: prev.m, status: { not: 'REVERSED' } } } } });
+      contracts: { some: { startDate: { lte: dEnd }, OR: [{ endDate: null }, { endDate: { gte: dStart } }] } },
+      salaryPayments: { none: { periodYear: d.y, periodMonth: d.m, status: { not: 'REVERSED' } } } } });
+    const period = (a: { y: number; m: number }) => `${a.y}-${String(a.m).padStart(2, '0')}`;
     return {
-      currentMonth: { period: `${y}-${String(m).padStart(2, '0')}`, status: cur?.status ?? 'NONE', dueDate: isoDate(monthEnd),
-                      daysUntilDue: Math.round((monthEnd.getTime() - today.getTime()) / 86_400_000), total: cur ? Number(cur.totalAmount).toFixed(2) : null },
-      previousMonth: { period: `${prev.y}-${String(prev.m).padStart(2, '0')}`, status: last?.status ?? 'NONE', unpaidWorkers: unpaid },
+      payDay,
+      currentMonth: { period: period({ y, m }), status: cur?.status ?? 'NONE', dueDate: isoDate(dueDate),
+                      daysUntilDue: Math.round((dueDate.getTime() - today.getTime()) / 86_400_000), total: cur ? Number(cur.totalAmount).toFixed(2) : null },
+      due: { period: period(d), year: d.y, month: d.m, current, status: run?.status ?? 'NONE', unpaidWorkers: unpaid },
     };
   }
 

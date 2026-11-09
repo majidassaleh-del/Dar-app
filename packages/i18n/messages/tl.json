@@ -112,6 +112,7 @@
     "medicalOverdue": "{count, plural, one {# manggagawa ang walang valid na medical} other {# manggagawa ang walang valid na medical}}",
     "salaryDisputes": "{count, plural, one {# bayad sa sahod ang kinokontra} other {# bayad sa sahod ang kinokontra}}",
     "salaryUnpaidLastMonth": "{count, plural, one {# manggagawa ang hindi nabayaran noong nakaraang buwan} other {# manggagawa ang hindi nabayaran noong nakaraang buwan}}",
+    "salaryUnpaidThisMonth": "{count, plural, one {Lampas na ang araw ng sahod: # kawani ang hindi pa nababayaran ngayong buwan} other {Lampas na ang araw ng sahod: # kawani ang hindi pa nababayaran ngayong buwan}}",
     "itemsOverdue": "{count, plural, one {# gamit ang lampas na sa petsa ng pagbalik} other {# gamit ang lampas na sa petsa ng pagbalik}}",
     "documentsDue15": "{count, plural, one {# dokumento ang mag-e-expire sa loob ng 15 araw} other {# dokumento ang mag-e-expire sa loob ng 15 araw}}",
     "workOrdersOverdue": "{count, plural, one {# work order ang lampas na} other {# work order ang lampas na}}",
@@ -325,7 +326,8 @@
       "finance": "Pananalapi",
       "pettyCash": "Petty cash",
       "fleet": "Mga sasakyan",
-      "workOrders": "Mga work order"
+      "workOrders": "Mga work order",
+      "payroll": "Sahod"
     },
     "tenant": {
       "label": "Sambahayan",
@@ -827,6 +829,87 @@
         "enrolled": "Naka-set up na ang authenticator. Ilagay ang susunod na code para matapos.",
         "signedOut": "Naka-sign out ka na."
       }
+    },
+    "runStatus": {
+      "DRAFT": "Draft",
+      "APPROVED": "Inaprubahan",
+      "PAID": "Bayad na",
+      "CANCELLED": "Kinansela"
+    },
+    "lineType": {
+      "BASIC_SALARY": "Batayang sahod",
+      "ALLOWANCE": "Allowance",
+      "UNPAID_LEAVE": "Leave na walang bayad",
+      "ADVANCE_RECOVERY": "Hulog ng advance",
+      "BONUS": "Bonus",
+      "OVERTIME": "Overtime",
+      "DEDUCTION": "Bawas"
+    },
+    "payroll": {
+      "notPrepared": "Hindi pa handa ang sahod ng {month}",
+      "payDayNote": "Araw ng sahod: {date}",
+      "prepareHint": "Ihanda ito para makita ang sahod, allowance at bawas ng bawat kawani bago aprubahan.",
+      "prepare": "Ihanda ang sahod ng {month}",
+      "title": "Sahod ng {month}",
+      "payDay": "Araw ng sahod {date}",
+      "approve": "Aprubahan ang sahod",
+      "reopen": "Buksan muli para baguhin",
+      "total": "Kabuuang neto",
+      "workers": "Mga kawani",
+      "paid": "Bayad na",
+      "proven": "May patunay",
+      "workersTitle": "Mga kawani",
+      "capNote": "Hindi lalampas sa kalahati ng sahod ang bawas (Art. 9)",
+      "noWorkers": "Walang kawaning may kontrata ngayong buwan.",
+      "grossDed": "Gross {gross} · bawas {ded}",
+      "toPay": "Babayaran",
+      "remove": "Alisin",
+      "net": "Neto",
+      "addLine": "Magdagdag ng bonus o bawas",
+      "addLineBtn": "Idagdag",
+      "recordTitle": "Itala ang bayad na {amount}",
+      "proof": "Screenshot ng transfer",
+      "reference": "Reference ng transfer (opsyonal)",
+      "proofHint": "Sapat na ang screenshot ng bank transfer: dumaraan sa Musaned ang mga transfer sa kasambahay.",
+      "record": "Itala ang bayad",
+      "paidOn": "Binayaran noong {date}",
+      "payslip": "Payslip",
+      "viewProof": "Tingnan ang patunay",
+      "empty": "Wala pang sahod.",
+      "summary": "Binabayaran ang sahod tuwing ika-{day} ng buwan, may screenshot ng transfer sa bawat kawani.",
+      "payDayLabel": "Araw ng sahod",
+      "months": "Mga buwan",
+      "lastPaid": "Huling nabayaran",
+      "stepHint": {
+        "DRAFT": "Suriin, magdagdag ng bonus o bawas, saka aprubahan.",
+        "APPROVED": "Bayaran ang bawat kawani at ilakip ang screenshot.",
+        "PAID": "Bayad na ang lahat.",
+        "CANCELLED": "Kinansela."
+      }
+    },
+    "slip": {
+      "print": "I-print / i-save bilang PDF",
+      "title": "Payslip",
+      "employee": "Kawani",
+      "role": "Tungkulin",
+      "period": "Buwan",
+      "payDate": "Petsa ng bayad",
+      "earnings": "Kita",
+      "gross": "Kabuuang kita",
+      "deductions": "Mga bawas",
+      "noDeductions": "Walang bawas ngayong buwan",
+      "totalDeductions": "Kabuuang bawas",
+      "capNote": "Hindi lalampas sa kalahati ng kinitang sahod ang bawas (Domestic Workers Regulation, Art. 9).",
+      "net": "Netong sahod",
+      "channel": "Paraan ng bayad",
+      "notPaid": "Hindi pa bayad",
+      "reference": "Reference",
+      "proofAttached": "May kalakip na screenshot",
+      "ack": "Kumpirmasyon ng kawani",
+      "ackDone": "Kinumpirma noong {date}",
+      "ackPending": "Hindi pa kinukumpirma",
+      "footer": "Mula sa opisina ng tahanan. Kinukumpirma ng kawani ang pagtanggap sa app; nakalista dito ang lahat ng ibinayad at ibinawas.",
+      "signature": "Pirma"
     }
   }
 }

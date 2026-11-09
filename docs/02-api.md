@@ -171,6 +171,8 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 > **Status: implemented**: everything in this section. Code is in `apps/api/src/staff/`, with e2e tests in `apps/api/test/staff.e2e.test.ts` and `hr.e2e.test.ts`. Notes on the implementation:
 > * **Attendance.** Workers check in and out for *today* (household time zone), once each, with server-stamped times. Only `staff.payroll.manage` can correct a day (`PUT /attendance/{staffId}/{date}`).
 > * **Leave.** Leave is requested with `POST /requests {type: "LEAVE", leaveType, startDate, endDate}`. Final approval creates the `LeaveRecord` in the database, and the request becomes `FULFILLED`. Filing for another worker needs `staff.payroll.manage`. `GET /staff/{id}/leave-balance?asOf=&year=` returns the Art. 10 leave position (see §3b).
+> * **Pay day.** Salaries are due on the household's pay day: `households.settings.payDay`, 1–28, default **28**. The pulse counts a month's salaries as overdue once that day has passed (`pulse.salaryUnpaidThisMonth`); before it, it counts last month's (`pulse.salaryUnpaidLastMonth`). It warns 5 days ahead when the month's run has not been prepared. `payroll.due` says which month that is.
+> * **Proof of transfer.** A Musaned or bank transfer needs its reference **or** a screenshot of the transfer (`proofFileId`, an uploaded file of that worker). Banks route domestic-worker transfers through Musaned, so the bank's confirmation is the evidence. This is enforced by the API and by the `salary_ref_required` CHECK (migration 0014).
 > * **Payroll.** `POST /payroll-runs` generates the lines:
 >   * basic salary and each allowance, pro-rated by days employed;
 >   * unpaid leave deducted at basic ÷ 30 per day;
@@ -210,7 +212,8 @@ Until all three are verified, every endpoint except `/auth/*` answers **403** "c
 | GET | `/payroll-runs/{id}` | `staff.payroll.read` (ALL) | |
 | PATCH | `/payroll-runs/{id}/lines/{lineId}` | `staff.payroll.manage` | Adjust bonus or deduction while DRAFT |
 | POST | `/payroll-runs/{id}/approve` | `staff.payroll.manage` | |
-| POST | `/payroll-runs/{id}/pay` | `staff.payroll.manage` | `{ fromAccountId }` posts ledger transactions and sends payslips |
+| POST | `/payroll-runs/{id}/pay` | `staff.payroll.manage` | Pay every remaining worker at once: `{ payments: [{ staffId, channel?, externalRef?, proofFileId? }], paidAt? }`. Validates everyone first (no partial write); workers already paid one by one are skipped |
+| POST | `/payroll-runs/{id}/pay/{staffId}` | `staff.payroll.manage` | Pay one worker of an APPROVED run: their net from the run's lines, `{ channel?, externalRef?, proofFileId?, paidAt? }`. Advance instalments on their lines are recovered. The run becomes PAID with the last worker. `409` if already paid |
 | GET | `/payslips` | `staff.payroll.read` | Staff see their own; `?format=pdf` renders in the staff member's locale |
 | GET | `/salary-advances` | `staff.payroll.read` | |
 | POST | `/staff/{id}/salary-payments` | `staff.payroll.manage` | Domestic-worker pay log, **outside WPS/Mudad** (no SIF file, no Saudi-bank IBAN rule, cash allowed). `{ periodYear, periodMonth, amount?, channel?, externalRef?, paidAt?, note?, proofFileId? }`. `amount` defaults to the active contract (basic + allowances) and `channel` to the worker's default. MUSANED and BANK_TRANSFER require `externalRef`. The response includes the period summary and an over-payment warning |
@@ -795,6 +798,12 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 
   The sections:
   * `staff`: tabs for profile, entitlements (Art. 16 / Art. 10 statement), leave, pay and advances, and documents.
+  * `payroll`: one record per month: Draft → Approved → Paid.
+    * While a draft: each worker's lines (basic, allowances, unpaid leave, advance instalment), plus adding or removing a bonus, overtime, allowance or deduction.
+    * Once approved: per worker, upload the transfer screenshot (or give the reference) and record the payment.
+    * Figures: workers paid and payments with proof.
+    * Each worker has a **payslip** (`/[locale]/payslip/{runId}/{staffId}`). It is A4 and bilingual: Arabic plus the worker's language. It shows earnings, every deduction, net, how it was paid, and the worker's confirmation. *Print / save as PDF* uses the browser's print dialog.
+    * Proof files open through `/api/files/{id}`, which streams them under the user's session.
   * `requests`: details and the approval chain, with Approve and Reject.
   * `finance`: accounts and transactions.
   * `petty-cash`: entries to review, with Approve and Reject, and the log.

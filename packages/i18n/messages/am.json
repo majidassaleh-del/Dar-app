@@ -112,6 +112,7 @@
     "medicalOverdue": "{count, plural, one {# ሠራተኛ የሚሰራ የሕክምና ምርመራ የለውም} other {# ሠራተኞች የሚሰራ የሕክምና ምርመራ የላቸውም}}",
     "salaryDisputes": "{count, plural, one {# የደመወዝ ክፍያ ተቃውሞ አለበት} other {# የደመወዝ ክፍያዎች ተቃውሞ አለባቸው}}",
     "salaryUnpaidLastMonth": "{count, plural, one {# ሠራተኛ ያለፈው ወር ደመወዝ አልተከፈለውም} other {# ሠራተኞች ያለፈው ወር ደመወዝ አልተከፈላቸውም}}",
+    "salaryUnpaidThisMonth": "{count, plural, one {የደመወዝ ቀን አልፏል፦ # ሰራተኛ በዚህ ወር አልተከፈለም} other {የደመወዝ ቀን አልፏል፦ # ሰራተኞች በዚህ ወር አልተከፈሉም}}",
     "itemsOverdue": "{count, plural, one {# የተሰጠ ዕቃ የመመለሻ ጊዜው አልፏል} other {# የተሰጡ ዕቃዎች የመመለሻ ጊዜያቸው አልፏል}}",
     "documentsDue15": "{count, plural, one {# ሰነድ በ15 ቀናት ውስጥ ጊዜው ያልፋል} other {# ሰነዶች በ15 ቀናት ውስጥ ጊዜያቸው ያልፋል}}",
     "workOrdersOverdue": "{count, plural, one {# የሥራ ትዕዛዝ ዘግይቷል} other {# የሥራ ትዕዛዞች ዘግይተዋል}}",
@@ -325,7 +326,8 @@
       "finance": "ፋይናንስ",
       "pettyCash": "አነስተኛ ጥሬ ገንዘብ",
       "fleet": "ተሽከርካሪዎች",
-      "workOrders": "የስራ ትዕዛዞች"
+      "workOrders": "የስራ ትዕዛዞች",
+      "payroll": "ደመወዝ"
     },
     "tenant": {
       "label": "ቤት",
@@ -827,6 +829,87 @@
         "enrolled": "አረጋጋጩ ተዘጋጅቷል። ለመጨረስ ቀጣዩን ኮድ ያስገቡ።",
         "signedOut": "ወጥተዋል።"
       }
+    },
+    "runStatus": {
+      "DRAFT": "ረቂቅ",
+      "APPROVED": "ጸድቋል",
+      "PAID": "ተከፍሏል",
+      "CANCELLED": "ተሰርዟል"
+    },
+    "lineType": {
+      "BASIC_SALARY": "መሰረታዊ ደመወዝ",
+      "ALLOWANCE": "አበል",
+      "UNPAID_LEAVE": "ያለክፍያ ፈቃድ",
+      "ADVANCE_RECOVERY": "የቅድሚያ ክፍያ ቅናሽ",
+      "BONUS": "ጉርሻ",
+      "OVERTIME": "ትርፍ ሰዓት",
+      "DEDUCTION": "ቅናሽ"
+    },
+    "payroll": {
+      "notPrepared": "የ{month} ደመወዝ ገና አልተዘጋጀም",
+      "payDayNote": "የደመወዝ ቀን፦ {date}",
+      "prepareHint": "ከማጽደቅዎ በፊት የእያንዳንዱን ሰራተኛ ደመወዝ፣ አበል እና ቅናሽ ለማየት ያዘጋጁት።",
+      "prepare": "የ{month} ደመወዝ አዘጋጅ",
+      "title": "የ{month} ደመወዝ",
+      "payDay": "የደመወዝ ቀን {date}",
+      "approve": "ደመወዙን አጽድቅ",
+      "reopen": "ለማስተካከል እንደገና ክፈት",
+      "total": "ጠቅላላ የተጣራ",
+      "workers": "ሰራተኞች",
+      "paid": "ተከፍሏል",
+      "proven": "ከማስረጃ ጋር",
+      "workersTitle": "ሰራተኞች",
+      "capNote": "ቅናሾች ከደመወዙ ግማሽ አይበልጡም (አንቀጽ 9)",
+      "noWorkers": "በዚህ ወር ውል ያለው ሰራተኛ የለም።",
+      "grossDed": "ጠቅላላ {gross} · ቅናሽ {ded}",
+      "toPay": "የሚከፈል",
+      "remove": "አስወግድ",
+      "net": "የተጣራ",
+      "addLine": "ጉርሻ ወይም ቅናሽ ያክሉ",
+      "addLineBtn": "አክል",
+      "recordTitle": "የ{amount} ክፍያ መዝግብ",
+      "proof": "የዝውውር ቅጽበታዊ ምስል",
+      "reference": "የዝውውር ማጣቀሻ (አማራጭ)",
+      "proofHint": "የባንክ ዝውውር ምስል በቂ ነው፦ ለቤት ሰራተኞች የሚደረጉ የባንክ ዝውውሮች በሙሳነድ ያልፋሉ።",
+      "record": "ክፍያ መዝግብ",
+      "paidOn": "በ{date} ተከፍሏል",
+      "payslip": "የደመወዝ ወረቀት",
+      "viewProof": "ማስረጃ ይመልከቱ",
+      "empty": "እስካሁን ደመወዝ የለም።",
+      "summary": "ደመወዝ በየወሩ በ{day}ኛው ቀን ይከፈላል፣ ለእያንዳንዱ ሰራተኛ የዝውውር ምስል ይያያዛል።",
+      "payDayLabel": "የደመወዝ ቀን",
+      "months": "ወራት",
+      "lastPaid": "የመጨረሻ የተከፈለ",
+      "stepHint": {
+        "DRAFT": "መስመሮቹን ይመልከቱ፣ ጉርሻ ወይም ቅናሽ ያክሉ፣ ከዚያ ያጽድቁ።",
+        "APPROVED": "ለእያንዳንዱ ሰራተኛ ይክፈሉ እና ምስሉን ያያይዙ።",
+        "PAID": "ሁሉም ተከፍለዋል።",
+        "CANCELLED": "ተሰርዟል።"
+      }
+    },
+    "slip": {
+      "print": "አትም / PDF አስቀምጥ",
+      "title": "የደመወዝ ወረቀት",
+      "employee": "ሰራተኛ",
+      "role": "ሚና",
+      "period": "ወር",
+      "payDate": "የተከፈለበት",
+      "earnings": "ገቢዎች",
+      "gross": "ጠቅላላ ገቢ",
+      "deductions": "ቅናሾች",
+      "noDeductions": "በዚህ ወር ቅናሽ የለም",
+      "totalDeductions": "ጠቅላላ ቅናሽ",
+      "capNote": "ቅናሾች ከተገኘው ደመወዝ ግማሽ አይበልጡም (የቤት ሰራተኞች ደንብ፣ አንቀጽ 9)።",
+      "net": "የተጣራ ደመወዝ",
+      "channel": "የክፍያ መንገድ",
+      "notPaid": "ገና አልተከፈለም",
+      "reference": "ማጣቀሻ",
+      "proofAttached": "የዝውውር ምስል ተያይዟል",
+      "ack": "የሰራተኛው ማረጋገጫ",
+      "ackDone": "በ{date} አረጋግጧል",
+      "ackPending": "ገና አላረጋገጠም",
+      "footer": "በቤቱ ቢሮ የተሰጠ። ሰራተኛው በመተግበሪያው መቀበሉን ያረጋግጣል፤ ይህ ወረቀት የተከፈለውንና የተቀነሰውን ሁሉ ያሳያል።",
+      "signature": "ፊርማ"
     }
   }
 }

@@ -42,7 +42,7 @@ export default async function Home({ params }: { params: Promise<{ locale: Local
           <div className="font-semibold">{t('home.unpaidTitle', { month: f.monthName(d.period), count: d.names.length })}</div>
           <div className="text-xs text-muted-foreground">{t('home.unpaidDetail', { names: d.names.join('، '), paid: d.paid, total: d.total })}</div>
         </div>
-        <Link href="/staff?tab=pay" className="btn btn-primary">{t('home.reviewPay')}</Link>
+        <Link href="/payroll" className="btn btn-primary">{t('home.reviewPay')}</Link>
       </div>
     );
     if (d.kind === 'medical') return (

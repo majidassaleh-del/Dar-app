@@ -19,7 +19,7 @@ describe('catalogues', () => {
         active: 1, probation: 1, onLeave: 1, provision: 'P', vested: 'V', esb: 'E', leave: 'L', advances: 'A', net: 'N', wage: 'W', daily: 'D',
         next: 'N', leaveNext: 'N', periods: 1, section: 'S', cost: 'C',
         decisions: 2, upcoming: 3, names: 'N', paid: 1, title: 'T', reason: 'R', type: 'T', from: 'F', to: 'T',
-        due: 2, overdue: 1, value: 'V', step: 1, address: 'A' });
+        due: 2, overdue: 1, value: 'V', step: 1, address: 'A', day: 28, gross: 'G', ded: 'D' });
       expect(String(out), key).not.toMatch(/\{|\}/);
     }
   });

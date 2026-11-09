@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query, UnprocessableEntityException } from '@nestjs/common';
 import { z } from 'zod';
 import { resolveI18n, type I18nText } from '@herp/i18n';
 import type { PayrollLine, PayrollRun, Prisma } from '@prisma/client';
@@ -9,6 +9,7 @@ import { assertWritten, money } from '../common/rls-write';
 import type { RequestContext } from '../tenancy/request-context';
 import { PAYOUT_CHANNELS } from './staff.schemas';
 import { monthlyWage, unpaidLeaveDeduction } from '../hr/esb';
+import { assertProof, proofProblem } from './salary-proof';
 
 const CreateRun = z.object({ year: z.number().int().min(2000).max(2100), month: z.number().int().min(1).max(12) }).strict();
 const AddLine = z.object({
@@ -16,10 +17,12 @@ const AddLine = z.object({
   amount: z.number().positive().max(1_000_000), description: z.string().trim().min(1).max(200),
 }).strict();
 const EditLine = z.object({ amount: z.number().max(1_000_000).optional(), description: z.string().trim().min(1).max(200).optional() }).strict();
+const PayOne = z.object({ channel: z.enum(PAYOUT_CHANNELS).optional(), externalRef: z.string().trim().min(1).max(80).optional(), proofFileId: z.guid().optional() }).strict();
 const Pay = z.object({
   paidAt: z.string().datetime({ offset: true }).optional(),
-  payments: z.array(z.object({ staffId: z.guid(), channel: z.enum(PAYOUT_CHANNELS).optional(), externalRef: z.string().trim().min(1).max(80).optional() }).strict()).default([]),
+  payments: z.array(PayOne.extend({ staffId: z.guid() }).strict()).default([]),
 }).strict();
+const PayWorker = PayOne.extend({ paidAt: z.string().datetime({ offset: true }).optional() }).strict();
 const ListQuery = z.object({ year: z.coerce.number().int().optional(), month: z.coerce.number().int().min(1).max(12).optional() });
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -157,47 +160,93 @@ export class PayrollController {
   @Post(':id/reopen')  reopen(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string) { return this.setStatus(ctx, id, 'DRAFT'); }
   @Post(':id/cancel')  cancel(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string) { return this.setStatus(ctx, id, 'CANCELLED'); }
 
+  /** Pay the whole (APPROVED) run at once. Workers already paid one by one are skipped. Validates everyone first: no partial write. */
   @Post(':id/pay')
   pay(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodBody(Pay)) b: z.infer<typeof Pay>) {
     return this.db.withRls(ctx, async (tx) => {
       const run = await this.find(tx, id);
       if (run.status !== 'APPROVED') throw new UnprocessableEntityException(`only an APPROVED run can be paid (this one is ${run.status})`);
-      const lines = await tx.payrollLine.findMany({ where: { payrollRunId: id } });
-      const nets = new Map<string, number>();
-      for (const l of lines) nets.set(l.staffId, round2((nets.get(l.staffId) ?? 0) + Number(l.amount)));
+      const { nets, paid } = await this.runState(tx, id);
       const staff = await tx.staffProfile.findMany({ where: { id: { in: [...nets.keys()] } } });
       const override = new Map(b.payments.map((p) => [p.staffId, p]));
-
-      // Validate everything first: no partial payroll.
       const plan = []; const problems: string[] = [];
       for (const s of staff) {
         const net = nets.get(s.id)!;
-        if (net <= 0) continue;
+        if (net <= 0 || paid.has(s.id)) continue;
         const o = override.get(s.id);
         const channel = o?.channel ?? s.defaultPayoutChannel;
         const name = resolveI18n(s.fullNameI18n as I18nText, { locale: ctx.locale }).text;
         if (!channel) { problems.push(`${name}: no payout channel`); continue; }
-        if ((channel === 'MUSANED' || channel === 'BANK_TRANSFER') && !o?.externalRef) { problems.push(`${name}: ${channel} needs externalRef`); continue; }
-        plan.push({ s, net, channel, externalRef: o?.externalRef });
+        const problem = proofProblem(channel, o?.externalRef, o?.proofFileId);
+        if (problem) { problems.push(`${name}: ${problem}`); continue; }
+        await assertProof(tx, o?.proofFileId, s.id);
+        plan.push({ s, net, channel, externalRef: o?.externalRef, proofFileId: o?.proofFileId });
       }
       if (problems.length) throw new BadRequestException(problems);
-
-      for (const p of plan) {
-        await tx.salaryPayment.create({ data: {
-          householdId: ctx.householdId!, staffId: p.s.id, payrollRunId: id, periodYear: run.periodYear, periodMonth: run.periodMonth,
-          amount: p.net, currency: run.currency, channel: p.channel, externalRef: p.externalRef,
-          payoutLast4: p.channel === 'BANK_TRANSFER' ? p.s.payoutIbanLast4 : p.channel === 'CASH' ? null : p.s.payoutWalletRef?.slice(-4) ?? null,
-          paidAt: b.paidAt ? new Date(b.paidAt) : new Date(), recordedById: ctx.membershipId!, note: `Payroll ${runDto(run).period}`,
-        } });
-      }
-      for (const l of lines.filter((x) => x.type === 'ADVANCE_RECOVERY' && x.advanceId)) {
-        await tx.salaryAdvance.updateMany({ where: { id: l.advanceId! }, data: { outstanding: { decrement: Math.abs(Number(l.amount)) } } });
-        await tx.salaryAdvance.updateMany({ where: { id: l.advanceId!, outstanding: { lte: 0 }, settledAt: null }, data: { settledAt: new Date() } });
-      }
-      const { count } = await tx.payrollRun.updateMany({ where: { id }, data: { status: 'PAID' } });
-      await assertWritten(count, async () => run, 'payroll run');
+      for (const p of plan) await this.recordPayment(tx, ctx, run, p, b.paidAt);
+      await this.closeIfDone(tx, run);
       return { ...(await this.detail(tx, ctx, id)), paymentsRecorded: plan.length };
     });
+  }
+
+  /**
+   * Pay one worker of an APPROVED run (transfers are usually made one by one): their net from the
+   * run's lines, with the transfer reference or a screenshot. The run becomes PAID with the last worker.
+   */
+  @Post(':id/pay/:staffId')
+  payWorker(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string, @Param('staffId', ParseUUIDPipe) staffId: string,
+            @Body(new ZodBody(PayWorker)) b: z.infer<typeof PayWorker>) {
+    return this.db.withRls(ctx, async (tx) => {
+      const run = await this.find(tx, id);
+      if (run.status !== 'APPROVED') throw new UnprocessableEntityException(`only an APPROVED run can be paid (this one is ${run.status})`);
+      const { nets, paid } = await this.runState(tx, id);
+      const net = nets.get(staffId);
+      if (net == null) throw new NotFoundException('this worker is not in the run');
+      if (net <= 0) throw new UnprocessableEntityException('nothing to pay this worker for this month');
+      if (paid.has(staffId)) throw new ConflictException('this worker is already paid for this run');
+      const s = await tx.staffProfile.findFirst({ where: { id: staffId } });
+      if (!s) throw new NotFoundException('staff member not found');
+      const channel = b.channel ?? s.defaultPayoutChannel;
+      if (!channel) throw new BadRequestException('channel: required (the worker has no default payout channel)');
+      const problem = proofProblem(channel, b.externalRef, b.proofFileId);
+      if (problem) throw new BadRequestException(problem);
+      await assertProof(tx, b.proofFileId, staffId);
+      await this.recordPayment(tx, ctx, run, { s, net, channel, externalRef: b.externalRef, proofFileId: b.proofFileId }, b.paidAt);
+      await this.closeIfDone(tx, run);
+      return this.detail(tx, ctx, id);
+    });
+  }
+
+  private async runState(tx: Tx, id: string) {
+    const lines = await tx.payrollLine.findMany({ where: { payrollRunId: id } });
+    const nets = new Map<string, number>();
+    for (const l of lines) nets.set(l.staffId, round2((nets.get(l.staffId) ?? 0) + Number(l.amount)));
+    const payments = await tx.salaryPayment.findMany({ where: { payrollRunId: id, status: { not: 'REVERSED' } }, select: { staffId: true } });
+    return { lines, nets, paid: new Set(payments.map((p) => p.staffId)) };
+  }
+
+  private async recordPayment(tx: Tx, ctx: RequestContext, run: PayrollRun,
+    p: { s: { id: string; payoutIbanLast4: string | null; payoutWalletRef: string | null }; net: number; channel: string; externalRef?: string; proofFileId?: string }, paidAt?: string) {
+    await tx.salaryPayment.create({ data: {
+      householdId: ctx.householdId!, staffId: p.s.id, payrollRunId: run.id, periodYear: run.periodYear, periodMonth: run.periodMonth,
+      amount: p.net, currency: run.currency, channel: p.channel as never, externalRef: p.externalRef, proofFileId: p.proofFileId,
+      payoutLast4: p.channel === 'BANK_TRANSFER' ? p.s.payoutIbanLast4 : p.channel === 'CASH' ? null : p.s.payoutWalletRef?.slice(-4) ?? null,
+      paidAt: paidAt ? new Date(paidAt) : new Date(), recordedById: ctx.membershipId!, note: `Payroll ${runDto(run).period}`,
+    } });
+    // Advance instalments on this worker's lines are recovered with this payment.
+    const recov = await tx.payrollLine.findMany({ where: { payrollRunId: run.id, staffId: p.s.id, type: 'ADVANCE_RECOVERY', advanceId: { not: null } } });
+    for (const l of recov) {
+      await tx.salaryAdvance.updateMany({ where: { id: l.advanceId! }, data: { outstanding: { decrement: Math.abs(Number(l.amount)) } } });
+      await tx.salaryAdvance.updateMany({ where: { id: l.advanceId!, outstanding: { lte: 0 }, settledAt: null }, data: { settledAt: new Date() } });
+    }
+  }
+
+  /** The run is PAID once every worker with something to pay has a (non-reversed) payment. */
+  private async closeIfDone(tx: Tx, run: PayrollRun) {
+    const { nets, paid } = await this.runState(tx, run.id);
+    if ([...nets.entries()].some(([staffId, net]) => net > 0 && !paid.has(staffId))) return;
+    const { count } = await tx.payrollRun.updateMany({ where: { id: run.id }, data: { status: 'PAID' } });
+    await assertWritten(count, async () => run, 'payroll run');
   }
 
   private setStatus(ctx: RequestContext, id: string, status: 'APPROVED' | 'DRAFT' | 'CANCELLED') {

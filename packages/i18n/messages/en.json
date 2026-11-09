@@ -112,6 +112,7 @@
     "medicalOverdue": "{count, plural, one {# worker has no valid medical checkup} other {# workers have no valid medical checkup}}",
     "salaryDisputes": "{count, plural, one {# salary payment is disputed} other {# salary payments are disputed}}",
     "salaryUnpaidLastMonth": "{count, plural, one {# worker was not paid last month} other {# workers were not paid last month}}",
+    "salaryUnpaidThisMonth": "{count, plural, one {# worker has not been paid this month (pay day has passed)} other {# workers have not been paid this month (pay day has passed)}}",
     "itemsOverdue": "{count, plural, one {# issued item is overdue for return} other {# issued items are overdue for return}}",
     "documentsDue15": "{count, plural, one {# document expires within 15 days} other {# documents expire within 15 days}}",
     "workOrdersOverdue": "{count, plural, one {# work order is overdue} other {# work orders are overdue}}",
@@ -325,7 +326,8 @@
       "finance": "Finance",
       "pettyCash": "Petty cash",
       "fleet": "Vehicles",
-      "workOrders": "Work orders"
+      "workOrders": "Work orders",
+      "payroll": "Payroll"
     },
     "tenant": {
       "label": "Household",
@@ -827,6 +829,87 @@
         "enrolled": "The authenticator is set up. Enter the next code it shows to finish.",
         "signedOut": "You have signed out."
       }
+    },
+    "runStatus": {
+      "DRAFT": "Draft",
+      "APPROVED": "Approved",
+      "PAID": "Paid",
+      "CANCELLED": "Cancelled"
+    },
+    "lineType": {
+      "BASIC_SALARY": "Basic salary",
+      "ALLOWANCE": "Allowance",
+      "UNPAID_LEAVE": "Unpaid leave",
+      "ADVANCE_RECOVERY": "Advance instalment",
+      "BONUS": "Bonus",
+      "OVERTIME": "Overtime",
+      "DEDUCTION": "Deduction"
+    },
+    "payroll": {
+      "notPrepared": "{month} payroll is not prepared yet",
+      "payDayNote": "Pay day: {date}",
+      "prepareHint": "Prepare it to see each worker's salary, allowances and deductions before approving.",
+      "prepare": "Prepare {month} payroll",
+      "title": "{month} payroll",
+      "payDay": "Pay day {date}",
+      "approve": "Approve payroll",
+      "reopen": "Reopen for changes",
+      "total": "Total net",
+      "workers": "Workers",
+      "paid": "Paid",
+      "proven": "With proof",
+      "workersTitle": "Workers",
+      "capNote": "Deductions never exceed half the wage (Art. 9)",
+      "noWorkers": "No workers with a contract this month.",
+      "grossDed": "Gross {gross} · deductions {ded}",
+      "toPay": "To pay",
+      "remove": "Remove",
+      "net": "Net",
+      "addLine": "Add a bonus or deduction",
+      "addLineBtn": "Add",
+      "recordTitle": "Record payment of {amount}",
+      "proof": "Transfer screenshot",
+      "reference": "Transfer reference (optional)",
+      "proofHint": "A screenshot of the bank transfer is enough: bank transfers to domestic workers go through Musaned.",
+      "record": "Record payment",
+      "paidOn": "Paid on {date}",
+      "payslip": "Payslip",
+      "viewProof": "View proof",
+      "empty": "No payroll yet.",
+      "summary": "Salaries are paid on day {day} of each month, with a transfer screenshot for each worker.",
+      "payDayLabel": "Pay day",
+      "months": "Months",
+      "lastPaid": "Last paid",
+      "stepHint": {
+        "DRAFT": "Review lines, add bonuses or deductions, then approve.",
+        "APPROVED": "Pay each worker and attach the transfer screenshot.",
+        "PAID": "All workers paid.",
+        "CANCELLED": "Cancelled."
+      }
+    },
+    "slip": {
+      "print": "Print / save as PDF",
+      "title": "Payslip",
+      "employee": "Employee",
+      "role": "Role",
+      "period": "Month",
+      "payDate": "Paid on",
+      "earnings": "Earnings",
+      "gross": "Total earnings",
+      "deductions": "Deductions",
+      "noDeductions": "No deductions this month",
+      "totalDeductions": "Total deductions",
+      "capNote": "Deductions are capped at half the wage earned (Domestic Workers Regulation, Art. 9).",
+      "net": "Net pay",
+      "channel": "Paid by",
+      "notPaid": "Not paid yet",
+      "reference": "Reference",
+      "proofAttached": "Transfer screenshot attached",
+      "ack": "Worker confirmation",
+      "ackDone": "Confirmed on {date}",
+      "ackPending": "Not confirmed yet",
+      "footer": "Issued by the household office. The worker confirms receipt in the app; this payslip lists every amount paid and deducted.",
+      "signature": "Signature"
     }
   }
 }
