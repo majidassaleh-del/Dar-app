@@ -13,18 +13,19 @@ export async function ListDetail({ title, base, items, selectedId, explicit, det
   { title: string; base: string; items: ListItem[]; selectedId: string | null; explicit: boolean; detail: ReactNode; empty: string }) {
   const t = await getTranslations('ui');
   return (
-    <div className="lg:flex lg:min-h-dvh">
-      <section aria-label={title} className={cn('border-e lg:w-80 lg:shrink-0', explicit && 'hidden lg:block')}>
-        <header className="flex items-baseline justify-between gap-3 border-b px-5 py-4">
-          <h1 className="text-lg font-semibold">{title}</h1>
+    <div className="mx-auto flex max-w-[1280px] items-start gap-6 px-4 py-7 sm:px-8">
+      <section aria-label={title} className={cn('panel w-full overflow-hidden lg:sticky lg:top-4 lg:w-80 lg:shrink-0', explicit && 'hidden lg:block')}>
+        <header className="flex items-baseline justify-between gap-3 border-b border-hairline px-5 py-4">
+          <h1 className="text-xl">{title}</h1>
           <span className="text-xs text-muted-foreground tabular">{items.length}</span>
         </header>
         {items.length === 0 ? <p className="px-5 py-4 text-muted-foreground">{empty}</p> : (
           <ul>
-            {items.map((i) => (
+            {items.map((i, n) => (
               <li key={i.id}>
                 <Link href={`${base}/${i.id}`} aria-current={i.id === selectedId ? 'true' : undefined}
-                  className={cn('block border-b px-5 py-3 hover:bg-muted', i.id === selectedId && 'bg-muted')}>
+                  className={cn('block border-hairline px-5 py-3 hover:bg-muted', n > 0 && 'border-t',
+                    i.id === selectedId && 'bg-selected shadow-[inset_3px_0_0_var(--primary)] rtl:shadow-[inset_-3px_0_0_var(--primary)]')}>
                   <span className={cn('block', i.id === selectedId ? 'font-semibold' : 'font-medium')}>{i.primary}</span>
                   {i.secondary && <span className={cn('block text-xs text-muted-foreground', i.tone === 'critical' && 'text-critical', i.tone === 'warning' && 'text-warning')}>{i.secondary}</span>}
                 </Link>
@@ -33,7 +34,7 @@ export async function ListDetail({ title, base, items, selectedId, explicit, det
           </ul>
         )}
       </section>
-      <div className={cn('min-w-0 flex-1 px-5 py-6 sm:px-8', !explicit && 'hidden lg:block')}>
+      <div className={cn('panel min-w-0 flex-1 px-5 py-6 sm:px-8', !explicit && 'hidden lg:block')}>
         {explicit && <Link href={base} className="link mb-4 inline-block lg:hidden">{t('back', { section: title })}</Link>}
         {detail}
       </div>
@@ -46,7 +47,7 @@ export function RecordHeader({ title, meta, actions }: { title: ReactNode; meta?
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h2 className="text-xl font-semibold">{title}</h2>
+        <h2 className="text-2xl">{title}</h2>
         {meta && <p className="text-muted-foreground">{meta}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -69,7 +70,7 @@ export function Facts({ rows }: { rows: Array<[ReactNode, ReactNode] | null | fa
 export function Block({ title, children, className }: { title: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn('min-w-0', className)}>
-      <h3 className="mb-2 text-lg font-semibold">{title}</h3>
+      <h3 className="mb-2 font-display text-xl">{title}</h3>
       {children}
     </section>
   );
@@ -88,7 +89,7 @@ export function Table({ head, rows, numeric = [], empty }: { head: ReactNode[]; 
         </thead>
         <tbody>
           {rows.map((r, ri) => (
-            <tr key={ri} className="border-t">
+            <tr key={ri} className="border-t border-hairline">
               {r.map((c, ci) => <td key={ci} className={cn('py-2 pe-4 align-top', numeric.includes(ci) && 'text-end tabular whitespace-nowrap')}>{c}</td>)}
             </tr>
           ))}
@@ -100,10 +101,10 @@ export function Table({ head, rows, numeric = [], empty }: { head: ReactNode[]; 
 
 export function Tabs({ base, current, tabs }: { base: string; current: string; tabs: Array<{ key: string; label: string }> }) {
   return (
-    <nav className="mb-6 flex gap-6 overflow-x-auto border-b" aria-label="tabs">
+    <nav className="mb-6 flex gap-6 overflow-x-auto border-b border-hairline" aria-label="tabs">
       {tabs.map((tb) => (
         <Link key={tb.key} href={`${base}?tab=${tb.key}`} aria-current={tb.key === current ? 'page' : undefined}
-          className={cn('-mb-px whitespace-nowrap border-b-2 border-transparent py-2', tb.key === current ? 'border-foreground font-semibold' : 'text-muted-foreground hover:text-foreground')}>
+          className={cn('-mb-px whitespace-nowrap border-b-2 border-transparent py-2', tb.key === current ? 'border-brass font-semibold' : 'text-muted-foreground hover:text-foreground')}>
           {tb.label}
         </Link>
       ))}

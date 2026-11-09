@@ -11,7 +11,7 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   return (
-    <select aria-label={t('toggle')} value={mounted ? theme : 'system'} onChange={(e) => setTheme(e.target.value)} className="field h-8 text-xs">
+    <select aria-label={t('toggle')} value={mounted ? theme : 'system'} onChange={(e) => setTheme(e.target.value)} className="field-header">
       {(['system', 'light', 'dark'] as const).map((v) => <option key={v} value={v}>{t(v)}</option>)}
     </select>
   );

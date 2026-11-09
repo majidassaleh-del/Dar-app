@@ -14,9 +14,9 @@ export default async function Onboarding({ params }: { params: Promise<{ locale:
   const [t, s] = await Promise.all([getTranslations('exec.onboarding'), loadSession(locale)]);
   const current = STEPS.find((k) => !state[k]);
   return (
-    <Shell current={null} households={s.households} household={s.current} mode={s.mode} back={`/${locale}/onboarding`}>
-      <div className="max-w-xl px-5 py-8 sm:px-8">
-        <h1 className="text-xl font-semibold">{t('title')}</h1>
+    <Shell current={null} households={s.households} household={s.current} mode={s.mode} back={`/${locale}/onboarding`} pendingRequests={s.pendingRequests}>
+      <div className="mx-auto max-w-[1280px] px-4 py-8 sm:px-8"><div className="panel max-w-xl px-6 py-5">
+        <h1 className="text-xl">{t('title')}</h1>
         <p className="text-muted-foreground">{t('subtitle')}</p>
         <ol className="mt-6 grid list-decimal ps-6">
           {STEPS.map((k) => {
@@ -31,7 +31,7 @@ export default async function Onboarding({ params }: { params: Promise<{ locale:
             );
           })}
         </ol>
-      </div>
+      </div></div>
     </Shell>
   );
 }

@@ -53,7 +53,7 @@ interface VehicleResponse {
  * session and the active household. Falls back to a labelled sample when no API
  * session is configured (the page says "Sample data").
  */
-export interface Session { mode: 'live' | 'sample'; households: Household[]; current: Household; opts: { household: string; locale: string } | null }
+export interface Session { mode: 'live' | 'sample'; households: Household[]; current: Household; opts: { household: string; locale: string } | null; pendingRequests: number }
 
 /** Who is looking and in which household; the same rule for every page. Sample when no API session. */
 export async function loadSession(locale: string): Promise<Session> {
@@ -61,12 +61,15 @@ export async function loadSession(locale: string): Promise<Session> {
   // A tenant subdomain the signed-in user is not a member of: 404, never another household's data or a sample.
   if (!ctx) {
     if (await authToken() && await currentTenantSlug()) notFound();
-    return { mode: 'sample', households: SAMPLE.households, current: SAMPLE.current, opts: null };
+    return { mode: 'sample', households: SAMPLE.households, current: SAMPLE.current, opts: null, pendingRequests: 0 };
   }
   const host = await requestHost();
   const households = ctx.households.map((h, i) => household(h.householdId, h.name, h.role, i, tenantOrigin(h.slug, host)));
   const current = households.find((h) => h.id === ctx.id)!;
-  return { mode: 'live', households, current, opts: { household: current.id, locale } };
+  const opts = { household: current.id, locale };
+  const reqs = await apiGet<{ data: Array<{ status: string }> }>('/v1/requests', opts);
+  const pendingRequests = (reqs?.data ?? []).filter((r) => r.status === 'SUBMITTED' || r.status === 'IN_REVIEW').length;
+  return { mode: 'live', households, current, opts, pendingRequests };
 }
 
 export async function loadDashboard(locale: string): Promise<Dashboard> {

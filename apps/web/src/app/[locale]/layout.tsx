@@ -5,6 +5,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getDirection, localeMeta, type Locale } from '@herp/i18n';
 import { routing } from '@/i18n/routing';
 import '@fontsource-variable/inter';
+import '@fontsource/amiri/400.css';
+import '@fontsource/amiri/700.css';
 import '@fontsource/ibm-plex-sans-arabic/400.css';
 import '@fontsource/ibm-plex-sans-arabic/500.css';
 import '@fontsource/ibm-plex-sans-arabic/600.css';

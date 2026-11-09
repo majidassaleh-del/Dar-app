@@ -771,27 +771,36 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 ## 16. Web app (`apps/web`)
 
 **Structure:**
-* **`/[locale]`: the daily brief.** It reads as a short letter.
-  * One paragraph on the workforce.
-  * A numbered list of what needs a decision, each linking to its section.
-  * One sentence per vehicle.
-  * The end-of-service position, with a one-line settlement calculator for any worker on any date.
-* **`/[locale]/[section]` and `/[locale]/[section]/[id]`: list and record, like a mail client.** The list sits on one side and the selected record beside it. On a phone only one shows, with a way back. The sections:
+* **Header** (every page):
+  * The official green band, with the EFA seal, the office name, and the Gregorian and Hijri dates.
+  * The household switcher, language and theme.
+  * The section tabs, with a count of requests awaiting a decision.
+* **`/[locale]`: home** (`src/lib/home.ts` loads it). One server-side load assembles it from the API:
+  * **Needs your decision:**
+    * Last month's unpaid salaries, from `salary-payments` against the working staff.
+    * Workers without a valid medical check.
+    * Each open request, with Approve and Reject.
+  * **The next 30 days:** a timeline of work orders, expiring staff and vehicle documents, and service due by date. Service due by distance is listed separately.
+  * **Vehicle cards:** plate, driver, odometer, and how long each document has left.
+  * **State-of-the-household column:**
+    * Workforce by status, medical checks, salaries paid and documents due.
+    * Bank balance and this week's spending, the petty-cash float, and the end-of-service provision.
+    * The team.
+* **`/[locale]/[section]` and `/[locale]/[section]/[id]`: list and record** in two panels, like a mail client. On a phone only one shows, with a way back. The sections:
   * `staff`: tabs for profile, entitlements (Art. 16 / Art. 10 statement), leave, pay and advances, and documents.
   * `requests`: details and the approval chain, with Approve and Reject.
-  * `finance`: bank accounts and their transactions.
-  * `petty-cash`: the float, entries to review (Approve and Reject), and the log.
+  * `finance`: accounts and transactions.
+  * `petty-cash`: entries to review, with Approve and Reject, and the log.
   * `fleet`: documents, maintenance, drivers and odometer.
-  * `work-orders`: details and ordered instructions, with safety items marked.
-* **`/[locale]/onboarding`**: the account set-up steps.
+  * `work-orders`: ordered instructions, with safety items marked.
 
-**Look** (`src/app/globals.css`):
-* **One family.** IBM Plex Sans Arabic, with Inter for Latin script, both self-hosted.
-* **Four sizes.** 13, 15, 17 and 22 px.
-* **One accent.** Household green for buttons, links and focus. Red and amber are used only for state, as text colour, never as badges.
-* **No decoration.** No glass, gradients, shadows or animation. Structure comes from spacing and hairline rules.
+**Look** (`src/app/globals.css`, the "Diwan" theme):
+* **Panels.** White panels on a soft paper ground, under a deep green header with brass for the seal, the current tab and "awaiting you".
+* **Fonts.** Amiri for headings, and IBM Plex Sans Arabic (Inter for Latin script) for everything else, all self-hosted.
+* **Colour.** One action colour (green). Red and amber are used only for state.
+* **No decoration.** No glass, gradients or animation.
 * **Dark mode** uses the same tokens (`.dark`).
-* **RTL.** Logical utilities only, so Arabic mirrors.
+* **RTL.** Logical utilities only.
 
 **Actions** (`src/lib/actions.ts`, server actions):
 * Approving or rejecting a request, and reviewing a petty-cash entry, forward the click to the API under the user's own session.
@@ -804,7 +813,7 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
   * **On a tenant subdomain** (`efa.darhub.net`, with `HERP_TENANT_BASE_DOMAIN=darhub.net`), the household is the one with that slug. A user who is not a member there gets a 404. There is never a fall-back to another household.
   * **On the app host**, it comes from the switcher's httpOnly cookie (`HERP_HOUSEHOLD_COOKIE`). If the cookie names a household the user does not belong to, the first membership is used.
 * **Settlement proxy.** `GET /api/settlement?staffId&asOf&locale` calls `end-of-service`, `leave-balance` and `final-settlement`. The browser never computes amounts in live mode.
-* **Sample mode.** Without a session the brief shows labelled sample data, and the sections ask the user to sign in.
+* **Sample mode.** Without a session the home page shows labelled sample data, and the sections ask the user to sign in.
 
 **Data protection:**
 * Identity numbers and IBANs appear only as `•••• last4`.
@@ -813,7 +822,7 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 
 **Translations.** All UI text is in the `ui` namespace of the six catalogues. `packages/i18n/test` checks that every locale has the same keys and that every message is valid ICU.
 
-**Screenshots** are in `docs/screenshots/`: `brief-ar.png`, `brief-en-dark.png`, `brief-ar-phone.png`, `staff-ar.png`, `finance-en.png`, `fleet-ar-dark.png`, `requests-ar-phone.png` and `onboarding-ar.png`.
+**Screenshots** are in `docs/screenshots/`: `home-ar.png`, `home-en-dark.png`, `home-ar-phone.png`, `staff-ar.png`, `finance-en.png`, `fleet-ar-dark.png`, `requests-ar-phone.png` and `onboarding-ar.png`.
 
 ## 15. Example
 

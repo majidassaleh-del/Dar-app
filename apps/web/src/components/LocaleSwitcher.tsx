@@ -12,7 +12,7 @@ export function LocaleSwitcher() {
   const pathname = usePathname();
   const [pending, start] = useTransition();
   return (
-    <select aria-label={t('language')} value={locale} disabled={pending} className="field h-8 text-xs"
+    <select aria-label={t('language')} value={locale} disabled={pending} className="field-header"
       onChange={(e) => start(() => router.replace(pathname, { locale: e.target.value as Locale }))}>
       {locales.map((l) => <option key={l} value={l} lang={l}>{localeMeta[l].endonym}</option>)}
     </select>

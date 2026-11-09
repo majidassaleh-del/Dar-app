@@ -29,11 +29,11 @@ export default async function SectionPage({ params, searchParams }:
   if (selected && !/^[0-9a-f-]{36}$/.test(selected)) notFound();
   const Render = RENDER[section];
   return (
-    <Shell current={section} households={session.households} household={session.current} mode={session.mode}
+    <Shell current={section} households={session.households} household={session.current} mode={session.mode} pendingRequests={session.pendingRequests}
       back={`/${locale}/${section}${selected ? `/${selected}` : ''}`}>
       {session.opts
         ? <Render opts={session.opts} id={selected} tab={tab ?? null} />
-        : <div className="max-w-xl px-5 py-8 sm:px-8"><h1 className="text-xl font-semibold">{t(`nav.${section === 'petty-cash' ? 'pettyCash' : section === 'work-orders' ? 'workOrders' : section}`)}</h1>
+        : <div className="mx-auto max-w-[1280px] px-4 py-8 sm:px-8"><h1 className="text-3xl">{t(`nav.${section === 'petty-cash' ? 'pettyCash' : section === 'work-orders' ? 'workOrders' : section}`)}</h1>
             <p className="mt-2 text-muted-foreground">{t('signedOut')}</p></div>}
     </Shell>
   );

@@ -17,7 +17,8 @@ describe('catalogues', () => {
     for (const [key, msg] of Object.entries(flatten(load(l)))) {
       const out = new IntlMessageFormat(msg, localeMeta[l].intlTag).format({ name: 'X', count: 3, days: 30, date: 'D', amount: 'A', language: 'L', item: 'I', km: 1000, period: 'P', month: 'M', time: 'T', valid: 1, total: 2, doc: 'D', years: 2,
         active: 1, probation: 1, onLeave: 1, provision: 'P', vested: 'V', esb: 'E', leave: 'L', advances: 'A', net: 'N', wage: 'W', daily: 'D',
-        next: 'N', leaveNext: 'N', periods: 1, section: 'S', cost: 'C' });
+        next: 'N', leaveNext: 'N', periods: 1, section: 'S', cost: 'C',
+        decisions: 2, upcoming: 3, names: 'N', paid: 1, title: 'T', reason: 'R', type: 'T', from: 'F', to: 'T' });
       expect(String(out), key).not.toMatch(/\{|\}/);
     }
   });

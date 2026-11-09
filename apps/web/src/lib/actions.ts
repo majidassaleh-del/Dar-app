@@ -17,6 +17,7 @@ export async function decideRequest(form: FormData) {
   if (!s.opts) return;
   await apiPost(`/v1/requests/${id}/${decision}`, {}, s.opts);
   revalidatePath(`/${locale}/requests/${id}`);
+  revalidatePath(`/${locale}`);
 }
 
 export async function reviewPettyCash(form: FormData) {
