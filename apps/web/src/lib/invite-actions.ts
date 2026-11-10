@@ -22,18 +22,20 @@ export async function createInvitation(f: FormData) {
   const back = (e?: string): never => redirect(`/${l}/invitations${e ? `?e=${e}` : '?created=1'}`);
   const s = await loadSession(l);
   if (!s.opts) return back('failed');
-  const phone = parseAddress(String(f.get('phone') ?? ''));
-  if (!phone || phone.kind !== 'phone') return back('phone');
+  const rawPhone = String(f.get('phone') ?? '').trim();
+  const phone = rawPhone ? parseAddress(rawPhone) : null;
+  if (rawPhone && (!phone || phone.kind !== 'phone')) return back('phone');
   const rawEmail = String(f.get('email') ?? '').trim();
   const email = rawEmail ? parseAddress(rawEmail) : null;
   if (rawEmail && (!email || email.kind !== 'email')) return back('email');
+  if (!phone && !email) return back('contact');
   const roleId = String(f.get('roleId') ?? ''), name = String(f.get('name') ?? '').trim().slice(0, 80), lang = String(f.get('language') ?? l);
   const hours = Number(f.get('hours') ?? 72);
   const r = await apiSend<{ path?: string; url?: string | null; expiresAt?: string }>('POST', '/v1/invitations', s.opts, {
-    phone: phone.value, ...(email ? { email: email.value } : {}), roleId, ...(name ? { displayName: name } : {}),
+    ...(phone ? { phone: phone.value } : {}), ...(email ? { email: email.value } : {}), roleId, ...(name ? { displayName: name } : {}),
     locale: LOCALES.includes(lang) ? lang : l, expiresInHours: [24, 72, 168].includes(hours) ? hours : 72 });
   if (!r.ok || !r.body.path) return back(r.status === 403 ? 'owner' : 'failed');
-  (await cookies()).set(NEW_LINK, JSON.stringify({ path: r.body.path, url: r.body.url ?? null, phone: phone.value }),
+  (await cookies()).set(NEW_LINK, JSON.stringify({ path: r.body.path, url: r.body.url ?? null, to: phone?.value ?? email!.value }),
     { httpOnly: true, sameSite: 'lax', secure: webConfig.secureCookies, path: `/${l}/invitations`, maxAge: 120 });
   revalidatePath(`/${l}/invitations`);
   return back();
@@ -48,7 +50,7 @@ export async function revokeInvitation(f: FormData) {
 }
 
 /** The link just created, for the two minutes its cookie lives (null afterwards). */
-export async function newInvitationLink(): Promise<{ path: string; url: string | null; phone: string } | null> {
+export async function newInvitationLink(): Promise<{ path: string; url: string | null; to: string } | null> {
   try { return JSON.parse((await cookies()).get(NEW_LINK)?.value ?? 'null'); } catch { return null; }
 }
 

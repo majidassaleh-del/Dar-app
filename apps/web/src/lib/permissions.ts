@@ -1,0 +1,57 @@
+/**
+ * Names of the permissions for the owner's screens, Arabic and English (other languages read
+ * the English). The catalogue itself (ids, modules) comes from the API; an id missing here
+ * shows the API's own description.
+ */
+const P: Record<string, [ar: string, en: string]> = {
+  'admin.household.manage': ['إعدادات المنزل والاشتراك', 'Household settings and billing'],
+  'admin.members.manage': ['تذكيرات الأعضاء وشؤونهم العامة', 'Member reminders and general member affairs'],
+  'admin.audit.read': ['الاطلاع على سجل التدقيق', 'Read the audit log'],
+  'staff.profile.read': ['عرض ملفات العمالة', 'View staff profiles'],
+  'staff.profile.manage': ['إضافة وتعديل العمالة والعقود والوثائق', 'Add and edit staff, contracts and documents'],
+  'staff.documents.read': ['عرض الجوازات والإقامات والتأشيرات', 'View passports, iqamas and visas'],
+  'staff.payroll.read': ['عرض الرواتب والقسائم والسلف والإجازات', 'View salaries, payslips, advances and leave'],
+  'staff.payroll.manage': ['تجهيز الرواتب وصرفها واعتماد السلف', 'Run payroll and approve advances'],
+  'staff.attendance.manage': ['تسجيل الحضور', 'Record attendance'],
+  'staff.tasks.manage': ['توزيع المهام ومتابعتها', 'Assign and follow up tasks'],
+  'staff.health.read': ['عرض السجلات الصحية والفحوص', 'Read health records and checkups'],
+  'staff.health.manage': ['تسجيل الفحوص والمعلومات الصحية', 'Record checkups and health information'],
+  'finance.accounts.read': ['عرض الحسابات والأرصدة', 'View accounts and balances'],
+  'finance.accounts.manage': ['إدارة الحسابات والمطابقة وعكس القيود', 'Manage accounts, reconcile, reverse'],
+  'finance.cards.read': ['عرض البطاقات', 'View cards'],
+  'finance.cards.manage': ['إصدار البطاقات وإيقافها وتحديد الحدود', 'Issue and freeze cards, set limits'],
+  'finance.transactions.read': ['عرض العمليات المالية', 'View transactions'],
+  'finance.transactions.create': ['تسجيل المصروفات والإيرادات', 'Record expenses and income'],
+  'finance.receipts.upload': ['رفع الإيصالات', 'Upload receipts'],
+  'finance.budgets.manage': ['إعداد الميزانيات', 'Create budgets'],
+  'finance.allowance.manage': ['إدارة مصروف الأبناء', 'Manage dependents\' allowances'],
+  'finance.reports.read': ['التقارير المالية والتصدير', 'Financial reports and exports'],
+  'finance.pettycash.read': ['عرض العهد النقدية وسجلاتها', 'View petty-cash floats and logs'],
+  'finance.pettycash.log': ['تسجيل مصروفات العهدة الخاصة به', 'Record expenses on their own float'],
+  'finance.pettycash.manage': ['إنشاء العهد وتغذيتها ومراجعة المصروفات', 'Create and top up floats, review expenses'],
+  'finance.ledger.read': ['عرض دليل الحسابات والقيود وميزان المراجعة', 'Read chart of accounts, journals, trial balance'],
+  'finance.ledger.manage': ['إدارة الدليل والقيود اليدوية وعكسها', 'Manage accounts, post and reverse journals'],
+  'requests.create': ['تقديم الطلبات', 'Submit requests'],
+  'requests.read': ['عرض الطلبات', 'View requests'],
+  'requests.approve': ['اعتماد الطلبات أو رفضها', 'Approve or reject requests'],
+  'invest.read': ['عرض المحافظ وصافي الثروة والزكاة', 'View portfolios, net worth and zakat'],
+  'invest.manage': ['تسجيل الصفقات والتقييمات', 'Record trades and valuations'],
+  'fleet.read': ['عرض المركبات', 'View vehicles'],
+  'fleet.manage': ['إدارة المركبات والتكليفات والصيانة', 'Manage vehicles, assignments, maintenance'],
+  'fleet.trips.log': ['تسجيل الرحلات وقراءة العداد', 'Log trips and odometer'],
+  'fleet.fuel.log': ['تسجيل تعبئة الوقود', 'Log fuel fill-ups'],
+  'property.read': ['عرض العقارات والعقود والفواتير', 'View properties, leases and bills'],
+  'property.manage': ['إدارة العقارات والعقود والفواتير', 'Manage properties, leases and bills'],
+  'property.tickets.create': ['الإبلاغ عن عطل', 'Report a maintenance issue'],
+  'governance.read': ['قراءة السياسات وميثاق السلوك والخصوصية', 'Read policies, code of ethics, privacy terms'],
+  'governance.manage': ['إعداد وثائق الحوكمة ونشرها', 'Draft and publish governance documents'],
+  'governance.acknowledgments.read': ['متابعة الإقرارات وسحب الموافقات', 'See acknowledgments and withdrawals'],
+  'workorders.create': ['فتح أمر عمل', 'Raise a work order'],
+  'workorders.read': ['عرض أوامر العمل', 'View work orders'],
+  'workorders.manage': ['إسناد أوامر العمل وتعديلها وإلغاؤها', 'Assign, edit and cancel work orders'],
+  'travel.read': ['عرض الرحلات والمسافرين والحجوزات', 'View trips, passengers and bookings'],
+  'travel.manage': ['تخطيط الرحلات وإدارة الحجوزات', 'Plan trips and manage bookings'],
+};
+export const permissionLabel = (id: string, locale: string, fallback?: string | null) => P[id]?.[locale === 'ar' ? 0 : 1] ?? fallback ?? id;
+export const SCOPES = ['ALL', 'OWN', 'ASSIGNED', 'WARDS'] as const;
+export const MODULES = ['admin', 'staff', 'finance', 'requests', 'workorders', 'fleet', 'property', 'travel', 'invest', 'governance'];

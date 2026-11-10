@@ -42,7 +42,7 @@ export async function Shell({ current, households, household, mode, back, pendin
               <TenantSwitcher households={households} current={household} back={back} />
               <LocaleSwitcher />
               <ThemeToggle />
-              {mode === 'live' && household.owner && <Link href="/invitations" className="field-header inline-flex items-center px-3">{t('invite.nav')}</Link>}
+              {mode === 'live' && household.owner && <Link href="/members" className="field-header inline-flex items-center px-3">{t('members.nav')}</Link>}
               {mode === 'live' && (
                 <form action={signOut}>
                   <input type="hidden" name="locale" value={f.locale} />
