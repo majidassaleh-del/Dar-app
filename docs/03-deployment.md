@@ -101,6 +101,7 @@ Browsers resolve `*.localhost` to loopback, and `next.config.ts` allows `*.local
 - [ ] DNS: the apex, `*.darerp.net` → web; `api.darerp.net` → API. TLS for both.
 - [ ] API: `NODE_ENV=production`, `PUBLIC_APP_URL`, `PUBLIC_API_URL`, `CORS_ORIGINS`, `TRUST_PROXY`, plus the existing production requirements (JWKS, Cloud KMS, signing secrets, OTP gateway). The API refuses to boot without them.
 - [ ] Identity provider: public sign-up **disabled**; `AUTH_ADMIN_URL` + `AUTH_ADMIN_KEY` (service role) set on the API only; both checks in §3a pass.
+- [ ] Operator key registered in `app.operator_keys` (`docs/02-api.md` §2c); the first household and its owner created with `POST /v1/operator/create-household`. Without a key the endpoint answers 403 to everyone.
 - [ ] Web: `HERP_API_URL`, `HERP_SESSION_COOKIE=__Secure-herp_session`, `HERP_COOKIE_DOMAIN=.darerp.net`, `HERP_TENANT_BASE_DOMAIN=darerp.net`.
 - [ ] Household slugs are lowercase DNS labels and do not collide with `HERP_TENANT_RESERVED`.
 - [ ] The proxy preserves `Host` for the web app and sets `X-Forwarded-Proto`.

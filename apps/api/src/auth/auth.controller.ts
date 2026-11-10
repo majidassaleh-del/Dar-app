@@ -20,6 +20,7 @@ const Phone = z.object({ phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'E.164, e.
 const Email = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict();
 const Verify = z.object({ challengeId: z.guid(), code: z.string().regex(/^\d{6}$/) }).strict();
 const Totp = z.object({ code: z.string().regex(/^\d{6}$/) }).strict();
+const WebSession = z.object({ code: z.string().regex(/^\d{6}$/), entry: z.enum(['owner', 'member']).optional() }).strict();
 const P256 = z.object({ kty: z.literal('EC'), crv: z.literal('P-256'), x: z.string().min(40).max(50), y: z.string().min(40).max(50) }).passthrough();
 const RegisterDevice = z.object({ deviceId: z.string().min(8).max(128), publicKeyJwk: P256, label: z.string().max(80).optional(), totpCode: z.string().regex(/^\d{6}$/) }).strict();
 const UnlockChallenge = z.object({ deviceId: z.string().min(8).max(128) }).strict();
@@ -209,12 +210,17 @@ export class AuthController {
    * so this is the authenticator path of the daily unlock; the web keeps the token in an httpOnly cookie.
    */
   @Post('web/session')
-  async webSession(@Ctx() ctx: RequestContext, @Body(new ZodBody(Totp)) b: z.infer<typeof Totp>) {
+  async webSession(@Ctx() ctx: RequestContext, @Body(new ZodBody(WebSession)) b: z.infer<typeof WebSession>) {
     this.requireFresh(ctx);
     const [on] = await this.db.withRls(ctx, (tx) => tx.$queryRaw<Array<{ ok: boolean }>>`SELECT app.user_onboarded(${ctx.userId}::uuid) AS ok`);
     if (!on?.ok) throw new ForbiddenException('complete onboarding first');
     await this.totp(ctx, b.code);
     await this.activate(ctx);
+    // The landing page's owner entry: only someone who actively heads a household gets a session through it.
+    if (b.entry === 'owner') {
+      const [o] = await this.db.withRls(ctx, (tx) => tx.$queryRaw<Array<{ ok: boolean }>>`SELECT app.owns_a_household() AS ok`);
+      if (!o?.ok) throw new ForbiddenException('access denied: this entry is for household owners; use the member sign-in');
+    }
     return this.crypto.issueSession({ sub: ctx.userId, did: WEB_SESSION, amr: ['otp', 'totp'] });
   }
 

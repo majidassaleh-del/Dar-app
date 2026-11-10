@@ -859,11 +859,11 @@ BEGIN
   WHERE n.nspname = 'app' AND p.prosecdef AND p.prorettype <> 'trigger'::regtype AND has_function_privilege('app_user', p.oid, 'EXECUTE')
     AND p.proname NOT IN ('accept_invitation', 'accept_totp_step', 'account_custodian', 'activate_invited_memberships', 'auth_brand', 'card_holder', 'close_books', 'consume_auth_challenge', 'current_household_id',
       'current_membership_id', 'custodian_staff', 'funding_credit', 'has_outstanding_items', 'has_valid_medical', 'household_today', 'invitation_preview', 'is_admin_role', 'is_head_role',
-      'is_household_admin', 'is_household_owner', 'my_households', 'my_payslip_runs', 'my_wards', 'perm_scope', 'petty_cash_custodian', 'provision_household',
+      'is_household_admin', 'is_household_owner', 'my_households', 'my_payslip_runs', 'my_wards', 'operator_create_household', 'operator_key_ok', 'operator_lookup', 'owns_a_household', 'perm_scope', 'petty_cash_custodian', 'provision_household',
       'record_receipt_extraction', 'record_totp_failure', 'request_parties', 'reverse_journal_entry', 'reverse_transaction', 'set_totp_secret',
       'staff_member', 'totp_locked', 'trip_parties', 'user_admitted', 'user_onboarded', 'vehicle_drivers', 'work_order_parties');
   IF extra IS NOT NULL THEN RAISE EXCEPTION 'FAIL  unreviewed SECURITY DEFINER functions executable by app_user: %', extra; END IF;
-  RAISE NOTICE 'PASS  definer functions reachable by requests: only the 40 reviewed, tenant-scoped ones';
+  RAISE NOTICE 'PASS  definer functions reachable by requests: only the 44 reviewed, tenant-scoped ones';
 END $$;
 
 -- Data in both households, so the sweeps below would see a leak.
@@ -1005,5 +1005,33 @@ SELECT pg_temp.expect('…once, and the household opens (without the owner-only 
   app.activate_invited_memberships() * 10 + (SELECT CASE WHEN app.current_household_id() IS NOT NULL THEN 1 ELSE 0 END) + (SELECT count(*) FROM invitations) * 100, 1);
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000aa','h2');
 SELECT pg_temp.expect('…and only that household', (SELECT CASE WHEN app.current_household_id() IS NULL THEN 0 ELSE 1 END) + pg_temp.foreign_rows(), 0);
+
+-- ======================= operator provisioning =======================
+RESET ROLE;
+INSERT INTO app.operator_keys (hash) VALUES (encode(sha256(convert_to('operator-key-operator-key-operator-key-01', 'UTF8')), 'hex'));
+SET LOCAL ROLE app_user;
+SELECT pg_temp.anonymous();
+SELECT pg_temp.expect('the request role cannot read operator keys; a wrong, short or missing key creates nothing (insufficient_privilege → 403)',
+  pg_temp.try_rows('SELECT * FROM app.operator_keys')
+  + pg_temp.try_rows($q$SELECT app.operator_create_household('wrong-key-wrong-key-wrong-key-wrong-key', gen_random_uuid(), '+966500009901', NULL, '{}', 'newhouse', '{"en":"New"}', 'ar')$q$)
+  + pg_temp.try_rows($q$SELECT app.operator_create_household('operator-key', gen_random_uuid(), '+966500009901', NULL, '{}', 'newhouse', '{"en":"New"}', 'ar')$q$)
+  + pg_temp.try_rows($q$SELECT app.operator_create_household(NULL, gen_random_uuid(), '+966500009901', NULL, '{}', 'newhouse', '{"en":"New"}', 'ar')$q$)
+  + pg_temp.try_rows($q$SELECT * FROM app.operator_lookup('wrong-key-wrong-key-wrong-key-wrong-key', NULL, NULL, 'h1')$q$)
+  + (SELECT CASE WHEN app.operator_key_ok('wrong-key-wrong-key-wrong-key-wrong-key') THEN 100 ELSE 0 END), -5);
+SELECT app.operator_create_household('operator-key-operator-key-operator-key-01', '00000000-0000-0000-0000-0000000000c1', '+966500009901', NULL, '{"ar":"أبو عبدالملك"}', 'abdulmalik', '{"ar":"دار أبو عبدالملك"}', 'ar') AS hh \gset
+RESET ROLE;
+SELECT pg_temp.expect('the operator key provisions a household: owner (active Head), 8 roles with their matrices, chart of accounts',
+  (SELECT count(*) FROM memberships m JOIN roles r ON r.id = m."roleId" WHERE m."householdId" = :'hh' AND m."userId" = '00000000-0000-0000-0000-0000000000c1' AND m.status = 'ACTIVE' AND r."systemRole" = 'HOUSEHOLD_HEAD')
+  + (SELECT count(*) FROM roles WHERE "householdId" = :'hh' AND "isDefault")
+  + (SELECT CASE WHEN count(*) > 0 THEN 1 ELSE 0 END FROM role_permissions rp JOIN roles r ON r.id = rp."roleId" WHERE r."householdId" = :'hh')
+  + (SELECT CASE WHEN count(*) > 0 THEN 1 ELSE 0 END FROM ledger_accounts WHERE "householdId" = :'hh'), 11);
+SET LOCAL ROLE app_user;
+SELECT set_config('app.user_id', '00000000-0000-0000-0000-0000000000c1', true), set_config('app.household_id', :'hh', true);
+SELECT pg_temp.expect('the new owner owns it, is admitted, and sees no row of any other household',
+  (SELECT CASE WHEN app.owns_a_household() AND app.is_household_owner() AND app.user_admitted() THEN 1 ELSE 0 END) + pg_temp.foreign_rows(), 1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h1');
+SELECT pg_temp.expect('a staff member owns no household (the owner entry is closed to them); the owner of H1 does',
+  (SELECT CASE WHEN app.owns_a_household() THEN 10 ELSE 0 END)
+  + (SELECT CASE WHEN set_config('app.user_id', '00000000-0000-0000-0000-00000000000a', true) IS NOT NULL AND app.owns_a_household() THEN 1 ELSE 0 END), 1);
 
 ROLLBACK;

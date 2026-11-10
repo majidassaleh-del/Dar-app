@@ -90,6 +90,15 @@ describe('web session: fresh sign-in + authenticator code', () => {
     spy2.mockRestore();
   });
 
+  it('the owner entry of the landing page refuses someone who heads no household (403, no session)', async () => {
+    const real = Date.now();
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(real + 90_000);
+    const r = await http().post('/v1/auth/web/session').set(await idp()).send({ code: codeAt(), entry: 'owner' }).expect(403);
+    spy.mockRestore();
+    expect(r.body.detail).toMatch(/access denied: this entry is for household owners/);
+    expect(r.body.token).toBeUndefined();
+  });
+
   it('a browser session reaches household data only where the user is a member', async () => {
     const real = Date.now();
     const spy = vi.spyOn(Date, 'now').mockReturnValue(real + 120_000);

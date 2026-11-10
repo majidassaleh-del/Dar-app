@@ -3263,6 +3263,73 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION app.provision_household TO app_user, app_service;
 
+-- ================================================== OPERATOR PROVISIONING ==
+-- New households (and their first owner) are created only by the platform operator, with a
+-- key whose SHA-256 is stored here. The request role cannot read this table; the functions
+-- below answer only for a key that matches. No key stored = provisioning is closed.
+--   INSERT INTO app.operator_keys (hash, label) VALUES (encode(sha256(convert_to('<key, 32+ chars>', 'UTF8')), 'hex'), 'ops 2026');
+CREATE TABLE IF NOT EXISTS app.operator_keys (hash text PRIMARY KEY CHECK (hash ~ '^[0-9a-f]{64}$'), label text, "createdAt" timestamptz NOT NULL DEFAULT now());
+REVOKE ALL ON app.operator_keys FROM PUBLIC, app_user;
+GRANT SELECT, INSERT, DELETE ON app.operator_keys TO app_service;
+
+CREATE OR REPLACE FUNCTION app.operator_key_ok(p_key text) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT length(COALESCE(p_key, '')) >= 32
+     AND EXISTS (SELECT 1 FROM app.operator_keys k WHERE k.hash = encode(sha256(convert_to(p_key, 'UTF8')), 'hex'))
+$$;
+GRANT EXECUTE ON FUNCTION app.operator_key_ok(text) TO app_user;
+
+-- For a valid key only: the account that already owns this phone / e-mail (if any), and whether the slug is taken.
+CREATE OR REPLACE FUNCTION app.operator_lookup(p_key text, p_phone text, p_email text, p_slug text)
+RETURNS TABLE (existing uuid, taken boolean)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF NOT app.operator_key_ok(p_key) THEN
+    RAISE EXCEPTION 'access denied: operator key required' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN QUERY SELECT (SELECT u.id FROM users u WHERE u.phone = p_phone OR u.email = p_email ORDER BY (u.phone = p_phone) DESC NULLS LAST LIMIT 1),
+                      EXISTS (SELECT 1 FROM households h WHERE h.slug = p_slug);
+END $$;
+GRANT EXECUTE ON FUNCTION app.operator_lookup(text, text, text, text) TO app_user;
+
+-- Creates the owner's user row (if new) and the household with its roles, permission matrix,
+-- chart of accounts and the owner's active Household Head membership. Re-checks the key itself.
+CREATE OR REPLACE FUNCTION app.operator_create_household(
+  p_key text, p_owner uuid, p_phone text, p_email text, p_owner_name jsonb, p_slug text, p_name jsonb, p_locale "Locale"
+) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_hh uuid; v_prev text := current_setting('app.user_id', true);
+BEGIN
+  IF NOT app.operator_key_ok(p_key) THEN
+    RAISE EXCEPTION 'access denied: operator key required' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_phone IS NULL AND p_email IS NULL THEN
+    RAISE EXCEPTION 'the owner needs a phone number or an e-mail address' USING ERRCODE = 'check_violation';
+  END IF;
+  -- The phone / e-mail identify exactly one account: p_owner.
+  IF EXISTS (SELECT 1 FROM users u WHERE u.id <> p_owner AND (u.phone = p_phone OR u.email = p_email))
+     OR EXISTS (SELECT 1 FROM users u WHERE u.id = p_owner AND NOT (COALESCE(u.phone = p_phone, false) OR COALESCE(u.email = p_email, false))) THEN
+    RAISE EXCEPTION 'this phone or e-mail already belongs to a different account' USING ERRCODE = 'check_violation';
+  END IF;
+  INSERT INTO users (id, phone, email, "fullNameI18n", "preferredLocale", "updatedAt")
+  VALUES (p_owner, p_phone, p_email, COALESCE(p_owner_name, '{}'::jsonb), p_locale, now())
+  ON CONFLICT (id) DO NOTHING;
+  PERFORM set_config('app.user_id', p_owner::text, true);
+  v_hh := app.provision_household(p_owner, p_slug, p_name, p_locale);
+  PERFORM set_config('app.user_id', COALESCE(v_prev, ''), true);
+  RETURN v_hh;
+END $$;
+GRANT EXECUTE ON FUNCTION app.operator_create_household(text, uuid, text, text, jsonb, text, jsonb, "Locale") TO app_user;
+
+-- The owner's entry on the landing page: does the caller own (actively head) any household?
+CREATE OR REPLACE FUNCTION app.owns_a_household() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT EXISTS (SELECT 1 FROM memberships m JOIN roles r ON r.id = m."roleId" JOIN households h ON h.id = m."householdId"
+                 WHERE m."userId" = app.current_user_id() AND m.status = 'ACTIVE' AND r."systemRole" = 'HOUSEHOLD_HEAD'
+                   AND (m."expiresAt" IS NULL OR m."expiresAt" > now()) AND h."deletedAt" IS NULL)
+$$;
+GRANT EXECUTE ON FUNCTION app.owns_a_household() TO app_user;
+
 -- ======================================================= TENANT HARDENING ==
 -- Internal mutators are SECURITY DEFINER (they bypass RLS) and take household / entity ids
 -- as arguments. They are called only from definer triggers and functions (which run as the

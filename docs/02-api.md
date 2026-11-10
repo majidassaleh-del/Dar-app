@@ -103,7 +103,7 @@ If wages and amounts must also be unreadable to administrators, application-leve
 | POST | `/me/devices` | self | Registers a push token |
 | DELETE | `/me/devices/{id}` | self | |
 | GET | `/me/permissions` | member | Effective permissions and scopes in the active household, plus `householdAdmin` and `householdOwner` (drives UI gating) |
-| POST | `/households` | self | Creates a household. Calls `app.provision_household`, and the caller becomes HOUSEHOLD_HEAD |
+| POST | `/operator/create-household` | **operator key** | Creates a household and its first owner (see 2c). The only way a household is created |
 | GET | `/households/current` | member | |
 | PATCH | `/households/current` | `admin.household.manage` | Locales, currency, fiscal year, approval thresholds |
 | DELETE | `/households/current` | `admin.household.manage` | Soft delete, then crypto-shred after 30 days |
@@ -151,6 +151,33 @@ An invitation addressed to an e-mail alone creates an account without a phone; t
 An accepted invitation cannot be revoked (remove the member instead). A token for a phone or e-mail that belongs to a different account is refused with `422`, as is one for somebody who is already a member.
 
 **Verification messages and the authenticator label** carry the name of the household the person belongs to (the request's `X-Household-Id` when it is one of theirs, else their first household), in the request language; `AUTH_BRAND_NAME` only when there is none.
+
+## 2c. Operator provisioning and the two entries
+
+> **Status: implemented** in `apps/api/src/operator/operator.controller.ts`, `prisma/rls.sql` (OPERATOR PROVISIONING) and `apps/web/src/components/Landing.tsx`. Tests: `apps/api/test/operator.e2e.test.ts` and the DB suite ("operator provisioning").
+
+**`POST /v1/operator/create-household`** is for the platform operator only. There is no session: the caller sends the operator key in `X-Operator-Key`, and the **database** checks it against `app.operator_keys`, which stores SHA-256 hashes the request role cannot read. No key on file, a wrong key, or any other caller (a signed-in household owner included) gets `403`, before the body is looked at.
+
+```jsonc
+// X-Operator-Key: <key, 32+ characters>
+{ "slug": "abdulmalik", "name": { "ar": "دار أبو عبدالملك", "en": "Dar Abo Abdulmalik" }, "locale": "ar",
+  "owner": { "phone": "+9665XXXXXXXX", "email": "owner@example.com", "name": { "ar": "أبو عبدالملك" } } }
+// 201 → { householdId, slug, owner: { userId, existingAccount, phone, email } }
+```
+
+It creates the owner's sign-in identity (as an accepted invitation does), the user, the household with its eight roles, permission matrices and chart of accounts, and the owner's active `HOUSEHOLD_HEAD` membership. `409` when the slug is taken, `400` for a reserved or malformed slug, `422` when the phone and e-mail belong to different accounts. An existing account (matched by phone or e-mail) simply gains a second household. The owner then signs in and invites everyone else.
+
+Register a key (once, as the database owner; keep the key itself in the operator's secret store):
+
+```sql
+INSERT INTO app.operator_keys (hash, label) VALUES (encode(sha256(convert_to('<key>', 'UTF8')), 'hex'), 'ops');
+```
+
+**Entries.** The landing page (nobody signed in) offers an owner entry, a member entry and a field for an invitation link or code. `POST /auth/web/session` takes an optional `entry`:
+* `"owner"`: the session is issued only if the caller actively heads a household; otherwise `403` and no session. The web then opens the household they own.
+* `"member"` or absent: any invited, onboarded person.
+
+Both entries lead to the same workspace, named after the household. What a person may do there is decided by their role, never by the entry.
 
 ## 2a. Onboarding and daily unlock (`/auth`)
 
