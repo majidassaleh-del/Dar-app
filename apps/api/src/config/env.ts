@@ -26,7 +26,7 @@ const Env = z.object({
   AUTH_ADMIN_URL: z.string().url().optional(),
   AUTH_ADMIN_KEY: z.string().min(20).optional(),
   /** Name in verification messages / the authenticator app when the caller has no household yet. */
-  AUTH_BRAND_NAME: z.string().trim().min(1).max(40).default('Dar ERP'),
+  AUTH_BRAND_NAME: z.string().trim().min(1).max(40).default('Dar'),
   /** Field encryption KEK: "local" (dev/test, HERP_LOCAL_KEK) or "gcp" (Cloud KMS key HERP_KMS_KEY). */
   HERP_KMS: z.enum(['local', 'gcp']).default('local'),
   HERP_LOCAL_KEK: z.string().optional(),

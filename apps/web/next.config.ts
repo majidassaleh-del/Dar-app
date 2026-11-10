@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { resolve } from 'node:path';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
@@ -14,6 +15,8 @@ const securityHeaders = [
 ];
 
 const config: NextConfig = {
+  // Container image (deploy/Dockerfile): a self-contained server with only the files it needs, traced from the workspace root.
+  ...(process.env.NEXT_OUTPUT === 'standalone' ? { output: 'standalone' as const, outputFileTracingRoot: resolve(__dirname, '../..') } : {}),
   transpilePackages: ['@herp/i18n'],
   poweredByHeader: false,
   // A second local dev server (e.g. without the dev token) needs its own build folder.

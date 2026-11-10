@@ -4,20 +4,20 @@ Run the parts in order. Every step has an expected result; **stop at the first o
 
 Reference: `docs/03-deployment.md` (every variable), `docs/02-api.md` §2b (invitations) and §2c (operator provisioning, entries).
 
-## 0. Before you start: open items
+## 0. Before you start
 
-These are not covered by the four parts below and must be settled first. The API refuses to start in production without items 1–3.
+Hosting is decided: one Ubuntu server, Docker Compose (API, web, Caddy with Let's Encrypt), Supabase for the database and sign-in, uploads on a Docker volume. **The command sequence is `deploy/README.md`**; this guide gives the expected result of each step. Where the two overlap (operator key, settings), the scripts in `deploy/` do what the commands below show.
 
-| # | Item | Why it blocks |
+Still to confirm on the real environment, because none of it could be exercised from development:
+
+| # | Item | Why it matters |
 |---|---|---|
-| 1 | **Cloud KMS key** and the `@google-cloud/kms` package installed in the API image (`HERP_KMS=gcp`, `HERP_KMS_KEY`) | Production refuses `HERP_KMS=local`. The package is an optional dependency and is not installed by default |
+| 1 | **Cloud KMS key** and its service-account file (`HERP_KMS_KEY`, `secrets/gcp-kms.json`) | The API refuses to start in production without it. The client library is in the image |
 | 2 | **SMS / e-mail gateway for the API's own codes** (`OTP_WEBHOOK_URL`, `OTP_WEBHOOK_TOKEN`) | First-time setup sends its phone and e-mail codes through this gateway, separately from Supabase's sign-in code. Never tested against a live provider |
-| 3 | **Supabase asymmetric signing keys** enabled, so that `https://<project>.supabase.co/auth/v1/.well-known/jwks.json` returns keys (`AUTH_JWKS_URL`) | Production accepts only asymmetric tokens |
+| 3 | **Supabase asymmetric signing keys** enabled, so that `<SUPABASE_URL>/auth/v1/.well-known/jwks.json` returns keys | Production accepts only asymmetric tokens |
 | 4 | **Supabase phone provider** (SMS) and e-mail OTP enabled for existing users | Sign-in codes |
-| 5 | **Where the API and web run** (no Dockerfile or deploy config is in the repository yet) and **which Postgres** (Cloud SQL or Supabase Postgres) | The deploy commands depend on it |
-| 6 | **File storage**: uploads (salary transfer screenshots, documents) are written to local disk (`STORAGE_DIR`) | On a host without a persistent disk they are lost at every redeploy. Mount a persistent volume, or accept this for the smoke test only |
-| 7 | A fresh production database is built **once** from `prisma/migrations/*`, then `prisma/seed.sql`, then `prisma/rls.sql`, by a role with `BYPASSRLS`. `rls.sql` is written for a fresh database | Re-applying `rls.sql` to a live database needs a migration procedure that does not exist yet. On Supabase Postgres, confirm in a staging project first that its `postgres` role may run `rls.sql` (it creates the roles `app_user` and `app_service`) |
-| 8 | Two login roles, as in `scripts/dev-db.sh`, with **strong** passwords: `herp_api` (`GRANT app_user`) for `DATABASE_URL`, `herp_worker` (`GRANT app_service`) for `WORKER_DATABASE_URL` | The API must never connect as the database owner |
+| 5 | **The database owner role** used by `deploy/db-apply.sh` is superuser or has `BYPASSRLS` + `CREATEROLE`, over the direct connection (port 5432) | The script creates the roles `app_user`, `app_service`, `herp_api`, `herp_worker`. It stops with a message if the role cannot. Try it on a scratch Supabase project first |
+| 6 | The `citext` extension ends up in schema `public` | The script checks and stops if not |
 
 ## 1. Operator key
 
@@ -94,12 +94,12 @@ If check A creates a user: delete it in the dashboard, fix 2.1, repeat. Do not c
 | `WORKER_DATABASE_URL` | the `herp_worker` login role (worker jobs only) |
 | `AUTH_JWKS_URL`, `AUTH_ISSUER`, `AUTH_AUDIENCE` | from 2.2 |
 | `AUTH_ADMIN_URL`, `AUTH_ADMIN_KEY` | from 2.2 |
-| `AUTH_BRAND_NAME` | `Dar ERP` (or the product name you choose) |
+| `AUTH_BRAND_NAME` | `Dar` |
 | `HERP_KMS`, `HERP_KMS_KEY` | `gcp`, the Cloud KMS key resource name |
 | `FILE_SIGNING_SECRET`, `OFFLINE_KEY_SECRET`, `SESSION_SIGNING_SECRET` | three different random values: `openssl rand -hex 32` each |
 | `AUTH_TOTP_KEY` | `openssl rand -base64 32`. **Back it up**: losing it invalidates every authenticator enrolment |
 | `OTP_WEBHOOK_URL`, `OTP_WEBHOOK_TOKEN` | the SMS / e-mail gateway |
-| `STORAGE_DIR` | a path on a persistent volume |
+| `STORAGE_DIR` | `/data/storage` (the `dar_storage` volume; set by `docker-compose.yml`) |
 
 Rules the API enforces at start-up: `https` for both public URLs; no `*`, no `http://` and no TLD wildcard in `CORS_ORIGINS`; `AUTH_ADMIN_URL` and `AUTH_ADMIN_KEY` together. A violation stops the process with a message naming the variable.
 

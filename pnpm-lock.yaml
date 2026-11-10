@@ -29,6 +29,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@google-cloud/kms':
+        specifier: ^5.7.0
+        version: 5.7.0
       '@herp/bank-statements':
         specifier: workspace:*
         version: link:../../packages/bank-statements

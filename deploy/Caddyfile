@@ -1,0 +1,34 @@
+# Reverse proxy with automatic Let's Encrypt certificates.
+#   api.DOMAIN                        → API
+#   DOMAIN, app.DOMAIN, TENANT_HOSTS  → web app (landing page, workspace, household subdomains)
+# TENANT_HOSTS is a space-separated list of household subdomains, e.g. "abdulmalik.darerp.net adnan.darerp.net".
+# Each name gets its own certificate, so its DNS record must exist first. (A wildcard certificate
+# would need Caddy built with a DNS-provider plugin; this file does not need one.)
+{
+	email {$ACME_EMAIL}
+}
+
+(common) {
+	encode zstd gzip
+	header -Server
+}
+
+api.{$DOMAIN} {
+	import common
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy api:4000
+}
+
+{$DOMAIN} app.{$DOMAIN} {$TENANT_HOSTS} {
+	import common
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy web:3000
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}

@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@google-cloud/kms": "^5.7.0",
+    "@herp/bank-statements": "workspace:*",
     "@herp/crypto": "workspace:*",
     "@herp/i18n": "workspace:*",
     "@herp/receipt-parser": "workspace:*",
@@ -19,12 +21,11 @@
     "@nestjs/core": "11.2.8",
     "@nestjs/platform-express": "11.2.8",
     "@prisma/client": "6.16.2",
+    "intl-messageformat": "10.7.18",
     "jose": "6.2.15",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
-    "zod": "4.6.7",
-    "@herp/bank-statements": "workspace:*",
-    "intl-messageformat": "10.7.18"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@nestjs/testing": "11.2.8",

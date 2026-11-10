@@ -23,7 +23,7 @@ Use one wildcard TLS certificate (`*.darerp.net`) plus one for the apex. Point `
 | `TRUST_PROXY` | `1` | Load-balancer hops trusted for `X-Forwarded-For` / `-Proto` |
 | `AUTH_JWKS_URL`, `AUTH_ISSUER`, `AUTH_AUDIENCE` | the identity provider's values | Already required in production |
 | `AUTH_ADMIN_URL`, `AUTH_ADMIN_KEY` | `https://<project>.supabase.co/auth/v1`, the project's **service-role** key | Creates the sign-in identity while an invitation is accepted. Required in production. Server-side secret: API only |
-| `AUTH_BRAND_NAME` | `Dar ERP` | Name in verification messages before a person belongs to a household |
+| `AUTH_BRAND_NAME` | `Dar` | Name in verification messages before a person belongs to a household |
 
 **CORS:**
 * The web app calls the API **server-to-server**, and the mobile app sends no `Origin`, so neither needs CORS. The allow-list covers any browser client served from the domain.

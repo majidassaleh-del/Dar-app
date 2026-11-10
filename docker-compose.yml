@@ -1,0 +1,114 @@
+# Production stack for one server: API, web app and a TLS reverse proxy (Caddy, Let's Encrypt).
+# The database is external (Supabase). All settings come from ONE file that stays on the server:
+#
+#   docker compose --env-file .env.production up -d --build
+#
+# Each service receives only the variables listed for it below: the web app never sees the
+# Supabase service-role key or any database credential. See deploy/README.md.
+name: dar
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+x-api-env: &api-env
+  NODE_ENV: production
+  PORT: "4000"
+  TRUST_PROXY: "1"
+  PUBLIC_APP_URL: https://app.${DOMAIN:?set DOMAIN}
+  PUBLIC_API_URL: https://api.${DOMAIN}
+  CORS_ORIGINS: https://${DOMAIN},https://app.${DOMAIN},https://*.${DOMAIN}
+  DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL (the herp_api role)}
+  WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?set WORKER_DATABASE_URL (the herp_worker role)}
+  DB_REQUEST_ROLE: app_user
+  AUTH_JWKS_URL: ${SUPABASE_URL:?set SUPABASE_URL}/auth/v1/.well-known/jwks.json
+  AUTH_ISSUER: ${SUPABASE_URL}/auth/v1
+  AUTH_AUDIENCE: authenticated
+  AUTH_ADMIN_URL: ${SUPABASE_URL}/auth/v1
+  AUTH_ADMIN_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?set SUPABASE_SERVICE_ROLE_KEY}
+  AUTH_BRAND_NAME: ${AUTH_BRAND_NAME:-Dar}
+  AUTH_TOTP_KEY: ${AUTH_TOTP_KEY:?set AUTH_TOTP_KEY}
+  SESSION_SIGNING_SECRET: ${SESSION_SIGNING_SECRET:?set SESSION_SIGNING_SECRET}
+  FILE_SIGNING_SECRET: ${FILE_SIGNING_SECRET:?set FILE_SIGNING_SECRET}
+  OFFLINE_KEY_SECRET: ${OFFLINE_KEY_SECRET:?set OFFLINE_KEY_SECRET}
+  OTP_WEBHOOK_URL: ${OTP_WEBHOOK_URL:?set OTP_WEBHOOK_URL}
+  OTP_WEBHOOK_TOKEN: ${OTP_WEBHOOK_TOKEN:-}
+  HERP_KMS: gcp
+  HERP_KMS_KEY: ${HERP_KMS_KEY:?set HERP_KMS_KEY}
+  GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-kms.json
+  STORAGE_DIR: /data/storage
+  OCR_PROVIDER: ${OCR_PROVIDER:-none}
+
+x-api-volumes: &api-volumes
+  - storage:/data/storage                                   # uploaded documents and transfer screenshots
+  - ${GCP_KMS_CREDENTIALS:-./secrets/gcp-kms.json}:/run/secrets/gcp-kms.json:ro
+
+services:
+  api:
+    build: { context: ., dockerfile: deploy/Dockerfile, target: api }
+    image: dar-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    environment: *api-env
+    volumes: *api-volumes
+    expose: ["4000"]
+    logging: *logging
+
+  web:
+    build: { context: ., dockerfile: deploy/Dockerfile, target: web }
+    image: dar-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      HERP_API_URL: http://api:4000
+      HERP_AUTH_URL: ${SUPABASE_URL}/auth/v1
+      HERP_AUTH_KEY: ${SUPABASE_ANON_KEY:?set SUPABASE_ANON_KEY}
+      HERP_SESSION_COOKIE: __Secure-herp_session
+      HERP_HOUSEHOLD_COOKIE: herp_household
+      HERP_COOKIE_DOMAIN: .${DOMAIN}
+      HERP_TENANT_BASE_DOMAIN: ${DOMAIN}
+      HERP_TENANT_RESERVED: app,www,api,admin,auth,static,cdn,mail,status
+    expose: ["3000"]
+    logging: *logging
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    depends_on: [web, api]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL (Let's Encrypt account)}
+      TENANT_HOSTS: ${TENANT_HOSTS:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data                                   # certificates: keep this volume
+      - caddy_config:/config
+    logging: *logging
+
+  # --- one-shot tools:  docker compose --env-file .env.production run --rm <name> ---------------
+  db:                                                      # schema + security rules; operator key
+    profiles: [tools]
+    build: { context: ., dockerfile: deploy/Dockerfile, target: db }
+    image: dar-db:${IMAGE_TAG:-latest}
+    environment:
+      DB_OWNER_URL: ${DB_OWNER_URL:-}
+      HERP_API_DB_PASSWORD: ${HERP_API_DB_PASSWORD:-}
+      HERP_WORKER_DB_PASSWORD: ${HERP_WORKER_DB_PASSWORD:-}
+      DB_BASELINE: ${DB_BASELINE:-}
+
+  worker:                                                  # e.g. run --rm worker keys:provision
+    profiles: [tools]
+    image: dar-api:${IMAGE_TAG:-latest}
+    environment: *api-env
+    volumes: *api-volumes
+    init: true
+    entrypoint: ["node", "dist/worker.js"]
+
+volumes:
+  storage:
+  caddy_data:
+  caddy_config:

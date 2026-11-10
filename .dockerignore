@@ -1,0 +1,13 @@
+**/node_modules
+**/.next
+**/.next-*
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+.git
+.env*
+!.env.example
+secrets
+.storage
+.verify-logs
+apps/mobile

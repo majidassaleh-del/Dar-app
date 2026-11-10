@@ -711,7 +711,7 @@ BEGIN
   END IF;
   IF NEW.status = 'PUBLISHED' AND OLD.status <> 'PUBLISHED' THEN
     NEW."publishedAt" := now();
-    NEW."contentHash" := encode(digest(NEW."bodyI18n"::text, 'sha256'), 'hex');
+    NEW."contentHash" := encode(sha256(convert_to(NEW."bodyI18n"::text, 'UTF8')), 'hex');
   END IF;
   RETURN NEW;
 END $$;
@@ -2320,7 +2320,7 @@ BEGIN
         RAISE EXCEPTION 'only the worker signs for items issued to them' USING ERRCODE = 'insufficient_privilege';
       END IF;
       NEW."ackAt" := now(); NEW."ackMethod" := COALESCE(NEW."ackMethod", 'TAP_TO_ACCEPT');
-      NEW."ackContentHash" := encode(digest(concat_ws('|', NEW."itemType", NEW."descriptionI18n"::text, NEW."serialOrTag", NEW.quantity, NEW."conditionOut"), 'sha256'), 'hex');
+      NEW."ackContentHash" := encode(sha256(convert_to(concat_ws('|', NEW."itemType", NEW."descriptionI18n"::text, NEW."serialOrTag", NEW.quantity, NEW."conditionOut"), 'UTF8')), 'hex');
     ELSIF NEW.status IN ('RETURNED', 'LOST') THEN
       IF NOT v_manager THEN RAISE EXCEPTION 'returns are received by a manager' USING ERRCODE = 'insufficient_privilege'; END IF;
       IF NEW.status = 'RETURNED' THEN NEW."returnedAt" := now(); NEW."returnReceivedById" := app.current_membership_id(); END IF;

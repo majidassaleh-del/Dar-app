@@ -6,6 +6,7 @@ Multi-tenant household ERP (web + mobile), Arabic-first with 6 languages.
 |---|---|
 | `docs/01-architecture.md` | Architecture: stack, modules, tenancy, RBAC, encryption, i18n/RTL, key flows, deployment |
 | `docs/02-api.md` | Core REST API (`/v1`) for all modules, plus realtime and webhooks |
+| `deploy/README.md` | Docker Compose deployment on one server: build, database, start, first household, upgrades |
 | `docs/04-go-live.md` | Go-live: operator key, Supabase, production settings, live smoke test |
 | `docs/03-deployment.md` | SaaS domain layout (`darerp.net`), environment variables, CORS, cookies and tenant subdomains |
 | `prisma/schema.prisma` | Data model (61 tables) |
