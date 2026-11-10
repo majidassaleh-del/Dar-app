@@ -2657,6 +2657,121 @@ END $$;
 DROP TRIGGER IF EXISTS users_0_identifiers ON users;
 CREATE TRIGGER users_0_identifiers BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION app.guard_user_identifiers();
 
+-- ============================================================ INVITATIONS ==
+-- Accounts are invitation-only. The household owner (an active Household Head) issues a
+-- single-use, expiring link; only sha256(token) is stored and the request role cannot read it.
+-- Accepting the link creates the user (bound to the phone / e-mail the owner entered) and an
+-- INVITED membership, which grants nothing until that person signs in with that phone / e-mail
+-- and completes onboarding. No other path creates a user row, and a signed-in identity without
+-- one is refused everywhere (app.user_admitted → 403).
+CREATE OR REPLACE FUNCTION app.is_household_owner() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT COALESCE((SELECT r."systemRole" = 'HOUSEHOLD_HEAD' FROM memberships m JOIN roles r ON r.id = m."roleId"
+                   WHERE m.id = app.current_membership_id() AND m."householdId" = app.current_household_id()), false)
+$$;
+GRANT EXECUTE ON FUNCTION app.is_household_owner() TO app_user;
+
+REVOKE ALL ON invitations FROM app_user;
+GRANT SELECT (id, "householdId", "roleId", phone, email, "displayName", locale, "expiresAt", "invitedById",
+              "acceptedAt", "acceptedUserId", "revokedAt", "createdAt"),
+      INSERT, UPDATE ("revokedAt") ON invitations TO app_user;
+CREATE POLICY inv_read ON invitations AS RESTRICTIVE FOR SELECT TO app_user USING ((SELECT app.is_household_owner()));
+CREATE POLICY inv_ins ON invitations AS RESTRICTIVE FOR INSERT TO app_user
+  WITH CHECK ((SELECT app.is_household_owner()) AND "invitedById" = app.current_membership_id()
+              AND "acceptedAt" IS NULL AND "acceptedUserId" IS NULL AND "revokedAt" IS NULL
+              AND "tokenHash" ~ '^[0-9a-f]{64}$' AND phone ~ '^\+[1-9][0-9]{7,14}$'
+              AND "expiresAt" > now() AND "expiresAt" <= now() + interval '7 days 1 minute');
+CREATE POLICY inv_upd ON invitations AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.is_household_owner()) AND "acceptedAt" IS NULL)
+  WITH CHECK ((SELECT app.is_household_owner()) AND "acceptedAt" IS NULL);
+CREATE POLICY inv_del ON invitations AS RESTRICTIVE FOR DELETE TO app_user USING (false);
+
+-- What an invitation link shows before it is accepted. Invalid, expired, revoked and used
+-- links are indistinguishable: all are refused (42501 → HTTP 403).
+CREATE OR REPLACE FUNCTION app.invitation_preview(p_hash text)
+RETURNS TABLE (phone text, email text, locale text, household_name jsonb, role_name jsonb, expires_at timestamptz, existing_user uuid)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE i invitations;
+BEGIN
+  SELECT * INTO i FROM invitations WHERE "tokenHash" = p_hash;
+  IF NOT FOUND OR i."revokedAt" IS NOT NULL OR i."acceptedAt" IS NOT NULL OR i."expiresAt" <= now()
+     OR NOT EXISTS (SELECT 1 FROM households h WHERE h.id = i."householdId" AND h."deletedAt" IS NULL) THEN
+    RAISE EXCEPTION 'access denied: this invitation is invalid, expired or already used' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN QUERY SELECT i.phone, i.email::text, i.locale::text, h."nameI18n", r."nameI18n", i."expiresAt",
+    (SELECT u.id FROM users u WHERE u.phone = i.phone OR (i.email IS NOT NULL AND u.email = i.email) ORDER BY (u.phone = i.phone) DESC NULLS LAST LIMIT 1)
+  FROM households h, roles r WHERE h.id = i."householdId" AND r.id = i."roleId";
+END $$;
+GRANT EXECUTE ON FUNCTION app.invitation_preview(text) TO app_user;
+
+-- Consume the link (once) for the account p_user: the identity-provider user that owns the
+-- invited phone / e-mail. Creates the user row if it is new and an INVITED membership.
+CREATE OR REPLACE FUNCTION app.accept_invitation(p_hash text, p_user uuid) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE i invitations;
+BEGIN
+  SELECT * INTO i FROM invitations WHERE "tokenHash" = p_hash FOR UPDATE;
+  IF NOT FOUND OR i."revokedAt" IS NOT NULL OR i."acceptedAt" IS NOT NULL OR i."expiresAt" <= now()
+     OR NOT EXISTS (SELECT 1 FROM households h WHERE h.id = i."householdId" AND h."deletedAt" IS NULL) THEN
+    RAISE EXCEPTION 'access denied: this invitation is invalid, expired or already used' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  -- The invited phone / e-mail identify exactly one account: p_user.
+  IF EXISTS (SELECT 1 FROM users u WHERE u.id <> p_user AND (u.phone = i.phone OR (i.email IS NOT NULL AND u.email = i.email)))
+     OR EXISTS (SELECT 1 FROM users u WHERE u.id = p_user AND NOT COALESCE(u.phone = i.phone OR u.email = i.email, false)) THEN
+    RAISE EXCEPTION 'this phone or e-mail already belongs to a different account' USING ERRCODE = 'check_violation';
+  END IF;
+  IF EXISTS (SELECT 1 FROM memberships m WHERE m."householdId" = i."householdId" AND m."userId" = p_user) THEN
+    RAISE EXCEPTION 'this person is already a member of the household' USING ERRCODE = 'check_violation';
+  END IF;
+  INSERT INTO users (id, phone, email, "fullNameI18n", "preferredLocale", "updatedAt")
+  VALUES (p_user, i.phone, i.email,
+          CASE WHEN i."displayName" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object(i.locale::text, i."displayName") END, i.locale, now())
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO memberships (id, "householdId", "userId", "roleId", status, "displayName", "invitedById", "updatedAt")
+  VALUES (gen_random_uuid(), i."householdId", p_user, i."roleId", 'INVITED', i."displayName", i."invitedById", now());
+  UPDATE invitations SET "acceptedAt" = now(), "acceptedUserId" = p_user WHERE id = i.id;
+  RETURN i."householdId";
+END $$;
+GRANT EXECUTE ON FUNCTION app.accept_invitation(text, uuid) TO app_user;
+
+-- An invited membership becomes ACTIVE when its user, signed in with the invited phone /
+-- e-mail, has completed onboarding. Only memberships that came from an accepted invitation.
+CREATE OR REPLACE FUNCTION app.activate_invited_memberships() RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE n integer;
+BEGIN
+  IF app.current_user_id() IS NULL OR NOT app.user_onboarded(app.current_user_id()) THEN RETURN 0; END IF;
+  UPDATE memberships m SET status = 'ACTIVE', "joinedAt" = COALESCE(m."joinedAt", now()), "updatedAt" = now()
+   WHERE m."userId" = app.current_user_id() AND m.status = 'INVITED'
+     AND (m."expiresAt" IS NULL OR m."expiresAt" > now())
+     AND EXISTS (SELECT 1 FROM invitations i WHERE i."householdId" = m."householdId" AND i."acceptedUserId" = m."userId");
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END $$;
+GRANT EXECUTE ON FUNCTION app.activate_invited_memberships() TO app_user;
+
+-- The gate behind "invitation only": a signed-in identity is admitted only if it has a user
+-- row and a live (invited or active) membership. Both come only from provisioning a household
+-- or accepting an invitation.
+CREATE OR REPLACE FUNCTION app.user_admitted() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT EXISTS (SELECT 1 FROM users u JOIN memberships m ON m."userId" = u.id
+                 WHERE u.id = app.current_user_id() AND u."deletedAt" IS NULL AND m.status IN ('INVITED', 'ACTIVE')
+                   AND (m."expiresAt" IS NULL OR m."expiresAt" > now()))
+$$;
+GRANT EXECUTE ON FUNCTION app.user_admitted() TO app_user;
+
+-- Name shown in verification messages and in the authenticator app: the household the caller
+-- is signing in to (the request's household when it is one of theirs, else their first).
+CREATE OR REPLACE FUNCTION app.auth_brand() RETURNS jsonb
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT h."nameI18n" FROM memberships m JOIN households h ON h.id = m."householdId"
+  WHERE m."userId" = app.current_user_id() AND m.status IN ('INVITED', 'ACTIVE') AND h."deletedAt" IS NULL
+  ORDER BY (m."householdId"::text = NULLIF(current_setting('app.household_id', true), '')) DESC NULLS LAST, m."createdAt"
+  LIMIT 1
+$$;
+GRANT EXECUTE ON FUNCTION app.auth_brand() TO app_user;
+
 -- ============================================ SAUDI DOMESTIC LABOR COMPLIANCE ==
 -- لائحة عمال الخدمة المنزلية ومن في حكمهم (Decision 310/1434H).
 
@@ -3042,6 +3157,7 @@ INSERT INTO app.tenant_refs VALUES
   ('leave_records',           'exitReentryVisaId',  'identity_documents', false),
   ('payroll_runs',            'approvedById',       'memberships',        false),
   ('memberships',             'invitedById',        'memberships',        false),
+  ('invitations',             'invitedById',        'memberships',        false),
   ('policies',                'createdById',        'memberships',        false),
   ('codes_of_ethics',         'createdById',        'memberships',        false),
   ('privacy_agreements',      'createdById',        'memberships',        false),
@@ -3081,7 +3197,7 @@ END $$;
 
 -- ============================================================ PROVISIONING =
 -- Creates a household, its default roles + permission matrix, and the owner
--- membership in one call. Exposed as POST /v1/households.
+-- membership in one call. Run by an operator for now (no HTTP endpoint yet): the owner must already have a user row.
 CREATE OR REPLACE FUNCTION app.provision_household(
   p_owner uuid, p_slug text, p_name jsonb, p_locale "Locale" DEFAULT 'ar', p_id uuid DEFAULT NULL
 ) RETURNS uuid

@@ -22,6 +22,8 @@ Use one wildcard TLS certificate (`*.darerp.net`) plus one for the apex. Point `
 | `CORS_ORIGINS` | `https://darerp.net,https://app.darerp.net,https://*.darerp.net` | Browser origins allowed by CORS (see below) |
 | `TRUST_PROXY` | `1` | Load-balancer hops trusted for `X-Forwarded-For` / `-Proto` |
 | `AUTH_JWKS_URL`, `AUTH_ISSUER`, `AUTH_AUDIENCE` | the identity provider's values | Already required in production |
+| `AUTH_ADMIN_URL`, `AUTH_ADMIN_KEY` | `https://<project>.supabase.co/auth/v1`, the project's **service-role** key | Creates the sign-in identity while an invitation is accepted. Required in production. Server-side secret: API only |
+| `AUTH_BRAND_NAME` | `Dar ERP` | Name in verification messages before a person belongs to a household |
 
 **CORS:**
 * The web app calls the API **server-to-server**, and the mobile app sends no `Origin`, so neither needs CORS. The allow-list covers any browser client served from the domain.
@@ -60,11 +62,34 @@ Use one wildcard TLS certificate (`*.darerp.net`) plus one for the apex. Point `
 * A restrictive `Permissions-Policy`
 * `Strict-Transport-Security: max-age=31536000`, in production only. `includeSubDomains` is left to the domain owner, since it binds every subdomain of `darerp.net` to https.
 
+## 3a. Invitation-only sign-up (identity provider)
+
+Accounts are created only by an owner-issued invitation (`docs/02-api.md` §2b). Three things enforce it, and all three must be in place:
+
+1. **Disable public sign-up at the provider.** Supabase dashboard → Authentication → Sign In / Providers → turn **"Allow new users to sign up" off** (self-hosted GoTrue: `GOTRUE_DISABLE_SIGNUP=true`; Supabase CLI `config.toml`: `[auth] enable_signup = false`). Keep phone and e-mail OTP sign-in enabled for existing users.
+2. **Give the API, and only the API, the service-role key** (`AUTH_ADMIN_URL`, `AUTH_ADMIN_KEY`). The web app keeps using the anon key (`HERP_AUTH_KEY`) and always sends `create_user: false`.
+3. **The API's own gate.** Even if step 1 were missed, an identity without an accepted invitation has no user row and is refused with `403` on every route.
+
+Check after configuring (replace the placeholders; the number must be one nobody invited):
+
+```bash
+# 1. The provider refuses to create a user: expect a 4xx ("Signups not allowed"), and no new row under Authentication → Users.
+curl -s -X POST "https://<project>.supabase.co/auth/v1/otp" -H "apikey: <anon key>" -H "Content-Type: application/json" \
+     -d '{"phone":"+9665XXXXXXXX","create_user":true}'
+# 2. The API refuses an invitation that does not exist: expect 403.
+curl -s -o /dev/null -w "%{http_code}\n" -X POST https://api.darerp.net/v1/auth/invitations/accept -H "Content-Type: application/json" -d '{"token":"x"}'
+```
+
+Then issue one real invitation as the owner, accept it, and sign in with the invited number end to end. This path has **not** been exercised against a live Supabase project yet.
+
 ## 4. Local equivalent
 
 ```bash
 # API
 CORS_ORIGINS=http://localhost:3000,http://*.localhost:3000
+AUTH_ADMIN_URL=http://localhost:9999/auth/v1    # scripts/dev-idp.mjs stands in for the identity provider
+AUTH_ADMIN_KEY=dev-service-role-key-0123456789
+PUBLIC_APP_URL=http://localhost:3000
 # Web
 HERP_TENANT_BASE_DOMAIN=localhost      # then open http://efa.localhost:3000 or http://afa.localhost:3000
 ```
@@ -75,6 +100,7 @@ Browsers resolve `*.localhost` to loopback, and `next.config.ts` allows `*.local
 
 - [ ] DNS: the apex, `*.darerp.net` → web; `api.darerp.net` → API. TLS for both.
 - [ ] API: `NODE_ENV=production`, `PUBLIC_APP_URL`, `PUBLIC_API_URL`, `CORS_ORIGINS`, `TRUST_PROXY`, plus the existing production requirements (JWKS, Cloud KMS, signing secrets, OTP gateway). The API refuses to boot without them.
+- [ ] Identity provider: public sign-up **disabled**; `AUTH_ADMIN_URL` + `AUTH_ADMIN_KEY` (service role) set on the API only; both checks in §3a pass.
 - [ ] Web: `HERP_API_URL`, `HERP_SESSION_COOKIE=__Secure-herp_session`, `HERP_COOKIE_DOMAIN=.darerp.net`, `HERP_TENANT_BASE_DOMAIN=darerp.net`.
 - [ ] Household slugs are lowercase DNS labels and do not collide with `HERP_TENANT_RESERVED`.
 - [ ] The proxy preserves `Host` for the web app and sets `X-Forwarded-Proto`.

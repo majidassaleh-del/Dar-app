@@ -824,13 +824,13 @@ DECLARE extra text;
 BEGIN
   SELECT string_agg(p.proname, ', ') INTO extra FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'app' AND p.prosecdef AND p.prorettype <> 'trigger'::regtype AND has_function_privilege('app_user', p.oid, 'EXECUTE')
-    AND p.proname NOT IN ('accept_totp_step', 'account_custodian', 'card_holder', 'close_books', 'consume_auth_challenge', 'current_household_id',
-      'current_membership_id', 'custodian_staff', 'funding_credit', 'has_outstanding_items', 'has_valid_medical', 'household_today', 'is_admin_role',
-      'is_household_admin', 'my_households', 'my_payslip_runs', 'my_wards', 'perm_scope', 'petty_cash_custodian', 'provision_household',
+    AND p.proname NOT IN ('accept_invitation', 'accept_totp_step', 'account_custodian', 'activate_invited_memberships', 'auth_brand', 'card_holder', 'close_books', 'consume_auth_challenge', 'current_household_id',
+      'current_membership_id', 'custodian_staff', 'funding_credit', 'has_outstanding_items', 'has_valid_medical', 'household_today', 'invitation_preview', 'is_admin_role',
+      'is_household_admin', 'is_household_owner', 'my_households', 'my_payslip_runs', 'my_wards', 'perm_scope', 'petty_cash_custodian', 'provision_household',
       'record_receipt_extraction', 'record_totp_failure', 'request_parties', 'reverse_journal_entry', 'reverse_transaction', 'set_totp_secret',
-      'staff_member', 'totp_locked', 'trip_parties', 'user_onboarded', 'vehicle_drivers', 'work_order_parties');
+      'staff_member', 'totp_locked', 'trip_parties', 'user_admitted', 'user_onboarded', 'vehicle_drivers', 'work_order_parties');
   IF extra IS NOT NULL THEN RAISE EXCEPTION 'FAIL  unreviewed SECURITY DEFINER functions executable by app_user: %', extra; END IF;
-  RAISE NOTICE 'PASS  definer functions reachable by requests: only the 32 reviewed, tenant-scoped ones';
+  RAISE NOTICE 'PASS  definer functions reachable by requests: only the 39 reviewed, tenant-scoped ones';
 END $$;
 
 -- Data in both households, so the sweeps below would see a leak.
@@ -891,5 +891,83 @@ SELECT pg_temp.expect('internal mutators (post_journal, ensure_chart_of_accounts
 RESET ROLE;
 SELECT pg_temp.expect('…while the owner / workers keep them (household_today for H1)', (SELECT CASE WHEN app.household_today((SELECT v FROM ids WHERE k='h1')) IS NOT NULL THEN 1 ELSE 0 END), 1);
 SET LOCAL ROLE app_user;
+
+-- ======================= invitation-only accounts =======================
+CREATE FUNCTION pg_temp.h(t text) RETURNS text LANGUAGE sql AS $$ SELECT encode(sha256(convert_to(t, 'UTF8')), 'hex') $$;
+CREATE FUNCTION pg_temp.invite(tok text, phone text, role text DEFAULT 'STAFF', ttl interval DEFAULT '3 days') RETURNS text LANGUAGE sql AS $$
+  SELECT format($q$INSERT INTO invitations (id,"householdId","roleId",phone,"tokenHash","expiresAt","invitedById")
+    SELECT gen_random_uuid(), app.current_household_id(), r.id, %L, %L, now() + %L::interval, app.current_membership_id()
+    FROM roles r WHERE r."systemRole" = %L::"SystemRole" AND r."isDefault"$q$, phone, pg_temp.h(tok), ttl, role) $$;
+CREATE FUNCTION pg_temp.anonymous() RETURNS void LANGUAGE sql AS $$ SELECT set_config('app.user_id', '', true), set_config('app.household_id', '', true); $$;
+
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+DO $$ BEGIN EXECUTE pg_temp.invite('tok-1', '+966500000101'); EXECUTE pg_temp.invite('tok-exp', '+966500000102'); EXECUTE pg_temp.invite('tok-rev', '+966500000103');
+            EXECUTE pg_temp.invite('tok-dup', '+966500000104'); END $$;
+SELECT pg_temp.expect('the household owner issues invitations and sees them', (SELECT count(*) FROM invitations), 4);
+SELECT pg_temp.expect('…but cannot read the stored token hash, pre-accept one, or issue one valid for more than 7 days',
+  pg_temp.try_rows('SELECT "tokenHash" FROM invitations')
+  + pg_temp.try_rows(replace(replace(pg_temp.invite('tok-x', '+966500000109'), '"invitedById")', '"invitedById","acceptedAt")'), 'app.current_membership_id()', 'app.current_membership_id(), now()'))
+  + pg_temp.try_rows(pg_temp.invite('tok-y', '+966500000109', 'STAFF', '30 days')), -3);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-000000000010','h1');
+SELECT pg_temp.expect('an EFA office admin is not the owner: no invitation, none visible', pg_temp.try_rows(pg_temp.invite('tok-efa', '+966500000110')) + (SELECT count(*) FROM invitations), -1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000f','h1');
+SELECT pg_temp.expect('a spouse cannot invite', pg_temp.try_rows(pg_temp.invite('tok-sp', '+966500000111')), -1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000c','h1');
+SELECT pg_temp.expect('staff cannot invite', pg_temp.try_rows(pg_temp.invite('tok-st', '+966500000112')), -1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
+SELECT pg_temp.expect('the other household''s owner sees none of them and cannot revoke them',
+  (SELECT count(*) FROM invitations) + pg_temp.try_rows('UPDATE invitations SET "revokedAt" = now()'), 0);
+
+-- Accepting: no session, only the token.
+SELECT pg_temp.anonymous();
+SELECT pg_temp.expect('an unknown token is refused (insufficient_privilege → 403), for preview and accept alike',
+  pg_temp.try_rows(format('SELECT app.accept_invitation(%L, gen_random_uuid())', pg_temp.h('nope')))
+  + pg_temp.try_rows(format('SELECT * FROM app.invitation_preview(%L)', pg_temp.h('nope'))), -2);
+SELECT set_config('app.user_id', '00000000-0000-0000-0000-0000000000aa', true);
+SELECT pg_temp.expect('a signed-in identity nobody invited is not admitted', (SELECT CASE WHEN app.user_admitted() THEN 1 ELSE 0 END), 0);
+SELECT pg_temp.anonymous();
+SELECT pg_temp.expect('a valid token previews its household', (SELECT count(*) FROM app.invitation_preview(pg_temp.h('tok-1')) WHERE household_name ->> 'ar' = 'بيت ماجد' AND existing_user IS NULL), 1);
+SELECT app.accept_invitation(pg_temp.h('tok-1'), '00000000-0000-0000-0000-0000000000aa') IS NOT NULL AS accepted \gset
+SELECT pg_temp.expect('the token is single use', pg_temp.try_rows(format('SELECT app.accept_invitation(%L, %L)', pg_temp.h('tok-1'), '00000000-0000-0000-0000-0000000000aa'))
+  + pg_temp.try_rows(format('SELECT * FROM app.invitation_preview(%L)', pg_temp.h('tok-1'))), -2);
+SELECT pg_temp.expect('the invited phone identifies one account: a token cannot be bound to an existing account with a different phone',
+  pg_temp.try_rows(format('SELECT app.accept_invitation(%L, %L)', pg_temp.h('tok-dup'), '00000000-0000-0000-0000-00000000000c')), -2);
+RESET ROLE;
+UPDATE invitations SET "expiresAt" = now() - interval '1 minute' WHERE "tokenHash" = pg_temp.h('tok-exp');
+SELECT pg_temp.expect('accepting created the user (bound to the invited phone) and an INVITED membership',
+  (SELECT count(*) FROM users u JOIN memberships m ON m."userId" = u.id
+   WHERE u.id = '00000000-0000-0000-0000-0000000000aa' AND u.phone = '+966500000101' AND m.status = 'INVITED' AND m."invitedById" = (SELECT v FROM ids WHERE k='head1')), 1);
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+UPDATE invitations SET "revokedAt" = now() WHERE phone = '+966500000103';
+SELECT pg_temp.expect('the owner cannot revoke (or otherwise touch) an invitation that was already accepted',
+  pg_temp.try_rows($q$UPDATE invitations SET "revokedAt" = now() WHERE phone = '+966500000101'$q$), 0);
+SELECT pg_temp.anonymous();
+SELECT pg_temp.expect('expired and revoked tokens are refused',
+  pg_temp.try_rows(format('SELECT app.accept_invitation(%L, gen_random_uuid())', pg_temp.h('tok-exp')))
+  + pg_temp.try_rows(format('SELECT app.accept_invitation(%L, gen_random_uuid())', pg_temp.h('tok-rev'))), -2);
+
+-- An INVITED membership grants nothing until the person has proven the phone / e-mail (onboarding).
+SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000aa','h1');
+SELECT pg_temp.expect('invited, not yet onboarded: admitted to onboarding only; no household, no rows, activation does nothing',
+  (SELECT CASE WHEN app.user_admitted() THEN 1 ELSE 0 END) + (SELECT CASE WHEN app.current_household_id() IS NULL THEN 0 ELSE 10 END)
+  + (SELECT count(*) FROM memberships) * 10 + app.activate_invited_memberships() * 10, 1);
+RESET ROLE;
+INSERT INTO user_auth_factors ("userId", "phoneVerifiedAt", "emailVerifiedAt", "totpVerifiedAt") VALUES ('00000000-0000-0000-0000-0000000000aa', now(), now(), now());
+-- A membership that did not come from an invitation is never activated this way.
+INSERT INTO users (id, "fullNameI18n", "updatedAt") VALUES ('00000000-0000-0000-0000-0000000000ab', '{}', now());
+INSERT INTO memberships (id,"householdId","userId","roleId",status,"updatedAt")
+SELECT gen_random_uuid(), (SELECT v FROM ids WHERE k='h1'), '00000000-0000-0000-0000-0000000000ab', r.id, 'INVITED', now()
+FROM roles r WHERE r."householdId" = (SELECT v FROM ids WHERE k='h1') AND r."systemRole" = 'STAFF' AND r."isDefault";
+INSERT INTO user_auth_factors ("userId", "phoneVerifiedAt", "emailVerifiedAt", "totpVerifiedAt") VALUES ('00000000-0000-0000-0000-0000000000ab', now(), now(), now());
+SET LOCAL ROLE app_user;
+SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000ab','h1');
+SELECT pg_temp.expect('a pending membership without an accepted invitation stays pending', app.activate_invited_memberships(), 0);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000aa','h1');
+SELECT pg_temp.expect('once onboarded, the invited membership activates', app.activate_invited_memberships(), 1);
+SELECT pg_temp.expect('…once, and the household opens (without the owner-only invitation list)',
+  app.activate_invited_memberships() * 10 + (SELECT CASE WHEN app.current_household_id() IS NOT NULL THEN 1 ELSE 0 END) + (SELECT count(*) FROM invitations) * 100, 1);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000aa','h2');
+SELECT pg_temp.expect('…and only that household', (SELECT CASE WHEN app.current_household_id() IS NULL THEN 0 ELSE 1 END) + pg_temp.foreign_rows(), 0);
 
 ROLLBACK;

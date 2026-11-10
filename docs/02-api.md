@@ -102,26 +102,48 @@ If wages and amounts must also be unreadable to administrators, application-leve
 | PATCH | `/me` | self | `preferredLocale`, `timezone`, name, avatar |
 | POST | `/me/devices` | self | Registers a push token |
 | DELETE | `/me/devices/{id}` | self | |
-| GET | `/me/permissions` | member | Effective permissions and scopes in the active household (drives UI gating) |
+| GET | `/me/permissions` | member | Effective permissions and scopes in the active household, plus `householdAdmin` and `householdOwner` (drives UI gating) |
 | POST | `/households` | self | Creates a household. Calls `app.provision_household`, and the caller becomes HOUSEHOLD_HEAD |
 | GET | `/households/current` | member | |
 | PATCH | `/households/current` | `admin.household.manage` | Locales, currency, fiscal year, approval thresholds |
 | DELETE | `/households/current` | `admin.household.manage` | Soft delete, then crypto-shred after 30 days |
 | GET | `/households/current/export` | `admin.household.manage` | Async full data export (PDPL) |
 | GET | `/members` | member | Household roster |
-| POST | `/members/invitations` | `admin.members.manage` | `{ phone \| email, role, displayName, relationship, guardianId?, expiresAt? }` |
-| POST | `/invitations/{token}/accept` | self | |
+| GET | `/invitations` | **household owner** | Invitations of the household with `status` (`PENDING`, `ACCEPTED`, `REVOKED`, `EXPIRED`). Never the token |
+| POST | `/invitations` | **household owner** | `{ phone, email?, roleId, displayName?, locale?, expiresInHours? (1–168, default 72) }` → `{ id, token, path, url, expiresAt }`. The token is returned this once |
+| DELETE | `/invitations/{id}` | **household owner** | Revokes a pending invitation |
+| POST | `/auth/invitations/preview` | public | `{ token }` → household, role, masked phone / e-mail. `403` unless the token is live |
+| POST | `/auth/invitations/accept` | public | `{ token }` → creates the account (see 2b). `403` unless the token is live |
 | GET | `/members/{id}` | member | |
 | PATCH | `/members/{id}` | `admin.members.manage` | Role, status (suspend), guardian, expiry |
 | DELETE | `/members/{id}` | `admin.members.manage` | Revokes access |
 | PUT | `/members/{id}/permissions` | `admin.members.manage` | Overrides `[{ permissionId, granted, scope }]` |
-| GET | `/roles` | member | Roles with their permission matrix |
+| GET | `/roles` | member | Roles of the household `[{ id, systemRole, name, isDefault }]` |
 | POST | `/roles` | `admin.members.manage` | Custom role cloned from a system role |
 | PATCH · DELETE | `/roles/{id}` | **Head / EFA only** | Protected table. Seeded system roles cannot be deleted |
 | GET | `/permissions` | member | Global catalogue (localized descriptions) |
 | GET | `/audit-logs` | `admin.audit.read` | Filter by entity, actor or action |
 
 Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_ADMIN`) and editing role matrices or overrides are refused with `403` for non-admins. Removing or demoting the last active Head returns `409 LAST_HEAD`.
+
+## 2b. Invitation-only accounts
+
+> **Status: implemented** in `apps/api/src/members/invitations.controller.ts`, `apps/api/src/auth/` and `prisma/rls.sql` (section INVITATIONS). Tests: `apps/api/test/invitations.e2e.test.ts` and the DB suite ("invitation-only accounts"). **Not tested against a live Supabase project.**
+
+There is no sign-up. An account exists only after the **household owner** (an active `HOUSEHOLD_HEAD`; not the EFA office admin, not a member holding `admin.members.manage`) issued an invitation and its token was accepted.
+
+1. **Issue.** `POST /invitations` binds the invitation to a phone number (and optionally an e-mail) and a role. The token is 32 random bytes; the database stores only its SHA-256, in a column the request role cannot read. It is valid for at most 7 days and works once.
+2. **Accept.** `POST /auth/invitations/accept { token }` needs no session. It creates the sign-in identity at the identity provider through its admin API (`AUTH_ADMIN_URL`, service-role key), then the user row and an `INVITED` membership, all bound to the invited phone / e-mail. Holding the link is therefore not enough: only the person who receives the code on that phone / e-mail can sign in.
+3. **Activate.** The membership becomes `ACTIVE` when that person has signed in and completed onboarding (or, for an existing account invited to a second household, at their next full sign-in). Until then it grants nothing.
+
+**Refusals (all `403`, body `detail` starts with "access denied"):**
+* accepting or previewing with no token, a malformed, unknown, expired, revoked or already used token: indistinguishable on purpose;
+* any request, onboarding included, from a signed-in identity that has no user row with a live membership (`app.user_admitted()`), for example an identity that exists at the provider but was never invited;
+* issuing, listing or revoking invitations by anyone but the owner. The other household's owner gets `404`, as for every cross-household request.
+
+An accepted invitation cannot be revoked (remove the member instead). A token for a phone or e-mail that belongs to a different account is refused with `422`, as is one for somebody who is already a member.
+
+**Verification messages and the authenticator label** carry the name of the household the person belongs to (the request's `X-Household-Id` when it is one of theirs, else their first household), in the request language; `AUTH_BRAND_NAME` only when there is none.
 
 ## 2a. Onboarding and daily unlock (`/auth`)
 

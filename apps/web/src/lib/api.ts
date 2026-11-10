@@ -42,7 +42,7 @@ export async function apiGet<T>(path: string, opts: { household?: string | null;
   finally { if (signedOut) redirect(`/${opts.locale ?? 'ar'}/sign-in?expired=1`); }
 }
 
-export interface MeHousehold { householdId: string; slug: string; name: string; role: string }
+export interface MeHousehold { householdId: string; slug: string; name: string; role: string; systemRole?: string }
 
 /** Any write under the user's session; returns status + JSON (or the problem detail) instead of throwing. */
 export async function apiSend<T>(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, opts: { household: string; locale?: string },
@@ -83,6 +83,14 @@ export async function apiAuth<T>(method: 'GET' | 'POST', path: string, token: st
   }).catch(() => null);
   if (!r) return { status: 503, body: {} as T };
   return { status: r.status, body: (await r.json().catch(() => ({}))) as T };
+}
+
+/** POST without any session (invitation links): status + JSON, never throws. */
+export async function apiPublic<T>(path: string, body: unknown, locale = 'ar'): Promise<{ status: number; body: T & { detail?: string } }> {
+  const r = await fetch(`${API_URL}${path}`, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(15_000),
+    headers: { 'Content-Type': 'application/json', 'Accept-Language': locale }, body: JSON.stringify(body ?? {}) }).catch(() => null);
+  if (!r) return { status: 503, body: {} as T & { detail?: string } };
+  return { status: r.status, body: (await r.json().catch(() => ({}))) as T & { detail?: string } };
 }
 
 /** POST to the API under the user's session (server actions only). Throws with the API's problem detail. */

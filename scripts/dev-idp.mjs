@@ -4,12 +4,16 @@
 //   POST /auth/v1/otp      { phone } | { email }                      → sends a 6-digit code (printed here)
 //   POST /auth/v1/verify   { type: 'sms'|'email', phone|email, token } → { access_token, refresh_token, ... }
 //   POST /auth/v1/logout                                               → 204
+// and the two admin calls the API uses while an invitation is accepted (the only way an identity is added):
+//   POST /auth/v1/admin/users { phone, email? }   → { id, … }   (422 when the phone / e-mail exists)
+//   GET  /auth/v1/admin/users?filter=…             → { users: [...] }
+// As at a provider with sign-up disabled, /otp never creates a user.
 // Access tokens are HS256 with AUTH_JWT_SECRET, which the API accepts outside production only.
 // Users come from scripts/dev-idp-users.json ({ phone, email, id } per user). Unknown addresses get the
 // same answer as known ones and simply never receive a code.
 //   AUTH_JWT_SECRET=… node scripts/dev-idp.mjs        (port: DEV_IDP_PORT, default 9999)
 import { createServer } from 'node:http';
-import { createHmac, randomBytes, randomInt } from 'node:crypto';
+import { createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { readFileSync, appendFileSync } from 'node:fs';
 
 if (process.env.NODE_ENV === 'production') { console.error('dev-idp is for development only'); process.exit(1); }
@@ -51,5 +55,18 @@ createServer(async (req, res) => {
     return send(res, 200, { access_token: jwt(u.id), token_type: 'bearer', expires_in: 3600, refresh_token: randomBytes(24).toString('base64url'), user: { id: u.id } });
   }
   if (req.method === 'POST' && req.url === '/auth/v1/logout') return send(res, 204);
+  if (req.method === 'POST' && req.url === '/auth/v1/admin/users') {
+    const phone = b.phone ? String(b.phone).trim() : undefined, email = b.email ? String(b.email).trim().toLowerCase() : undefined;
+    if (!phone && !email) return send(res, 400, { error: 'phone or email required' });
+    if ((phone && userOf(phone)) || (email && userOf(email))) return send(res, 422, { error_code: phone && userOf(phone) ? 'phone_exists' : 'email_exists' });
+    const u = { id: randomUUID(), phone, email };
+    USERS.push(u);
+    console.log(`[dev-idp] identity created for ${phone ?? email} (invitation)`);
+    return send(res, 200, u);
+  }
+  if (req.method === 'GET' && req.url.startsWith('/auth/v1/admin/users')) {
+    const f = (new URL(req.url, 'http://x').searchParams.get('filter') ?? '').toLowerCase();
+    return send(res, 200, { users: USERS.filter((u) => (u.email ?? '').toLowerCase().includes(f) || (u.phone ?? '').replace('+', '').includes(f)) });
+  }
   send(res, 404, { error: 'not found' });
 }).listen(PORT, () => console.log(`[dev-idp] listening on http://localhost:${PORT}/auth/v1 (${USERS.length} users)`));

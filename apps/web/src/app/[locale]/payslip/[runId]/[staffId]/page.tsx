@@ -61,9 +61,9 @@ export default async function Payslip({ params }: { params: Promise<{ locale: Lo
         <header className="flex items-center justify-between gap-4 bg-header px-8 py-5 text-header-foreground print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
           <div className="flex items-center gap-3.5">
             <span aria-hidden="true" className="grid size-12 place-items-center rounded-full border-[1.5px] border-brass outline outline-1 outline-offset-[3px] outline-brass">
-              <span className="font-display text-[15px] tracking-[0.06em] text-[#e6cf9c]">EFA</span>
+              <span className="font-display text-[15px] tracking-[0.06em] text-[#e6cf9c]">{s.current.badge}</span>
             </span>
-            <div><div className="font-display text-xl">{ta('office')}</div><div className="text-xs text-header-muted">{s.current.name}</div></div>
+            <div><div className="font-display text-xl">{s.current.name}</div><div className="text-xs text-header-muted">{ta('officeTagline')}</div></div>
           </div>
           <div className="text-end">
             <div className="font-display text-2xl">{ta('slip.title')}</div>

@@ -7,7 +7,7 @@ import { createApp } from '../src/app.factory';
 import { OtpDeliveryService } from '../src/auth/otp-delivery.service';
 import { base32Decode, hotp, totpStep } from '../src/auth/totp';
 import { ServiceDb } from '../src/worker/service-db';
-import { H1, testEnv } from './helpers';
+import { H1, H2, testEnv } from './helpers';
 
 /**
  * Web sign-in: identity-provider sign-in (fresh) + authenticator code → a browser session
@@ -31,6 +31,9 @@ beforeAll(async () => {
   worker = new ServiceDb(process.env.WORKER_DATABASE_URL!);
   await worker.run(async (tx) => {
     for (const id of [WEB_USER, LATE_USER]) await tx.user.upsert({ where: { id }, create: { id, fullNameI18n: { en: 'Web user' }, preferredLocale: 'en' }, update: {} });
+    // Members of the other household only: admitted, but strangers to H1.
+    const role = await tx.role.findFirstOrThrow({ where: { householdId: H2, systemRole: 'STAFF' } });
+    for (const userId of [WEB_USER, LATE_USER]) await tx.membership.create({ data: { householdId: H2, userId, roleId: role.id, status: 'ACTIVE' } });
   });
   app = await createApp(); await app.init();
   otp = app.get(OtpDeliveryService);
@@ -47,7 +50,7 @@ beforeAll(async () => {
   await http().post('/v1/auth/onboarding/totp/verify').set(h).send({ code: codeAt() }).expect(201);
 });
 afterAll(async () => {
-  await worker?.run(async (tx) => { await tx.user.deleteMany({ where: { id: { in: [WEB_USER, LATE_USER] } } }); });
+  await worker?.run(async (tx) => { await tx.membership.deleteMany({ where: { userId: { in: [WEB_USER, LATE_USER] } } }); await tx.user.deleteMany({ where: { id: { in: [WEB_USER, LATE_USER] } } }); });
   await app?.close(); await enforced?.close(); await worker?.close();
   delete process.env.AUTH_TOTP_KEY; delete process.env.SESSION_SIGNING_SECRET;
 });

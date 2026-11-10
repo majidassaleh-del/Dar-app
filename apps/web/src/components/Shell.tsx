@@ -30,10 +30,10 @@ export async function Shell({ current, households, household, mode, back, pendin
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
             <Link href="/" className="flex items-center gap-3.5">
               <span aria-hidden="true" className="grid size-12 place-items-center rounded-full border-[1.5px] border-brass outline outline-1 outline-offset-[3px] outline-brass">
-                <span className="font-display text-[15px] tracking-[0.06em] text-[#e6cf9c]">EFA</span>
+                <span className="font-display text-[15px] tracking-[0.06em] text-[#e6cf9c]">{household.badge}</span>
               </span>
               <span className="leading-tight">
-                <span className="block font-display text-xl">{t('office')}</span>
+                <span className="block font-display text-xl">{household.name}</span>
                 <span className="block text-xs text-header-muted">{t('officeTagline')}</span>
               </span>
             </Link>
@@ -42,6 +42,7 @@ export async function Shell({ current, households, household, mode, back, pendin
               <TenantSwitcher households={households} current={household} back={back} />
               <LocaleSwitcher />
               <ThemeToggle />
+              {mode === 'live' && household.owner && <Link href="/invitations" className="field-header inline-flex items-center px-3">{t('invite.nav')}</Link>}
               {mode === 'live' && (
                 <form action={signOut}>
                   <input type="hidden" name="locale" value={f.locale} />

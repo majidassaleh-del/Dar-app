@@ -45,6 +45,13 @@ export class MembersController {
     });
   }
 
+  /** Roles of the active household (role picker for invitations and member edits). */
+  @Get('roles')
+  roles(@Ctx() ctx: RequestContext) {
+    return this.db.withRls(ctx, async (tx) => ({ data: (await tx.role.findMany({ select: { id: true, systemRole: true, nameI18n: true, isDefault: true }, orderBy: { createdAt: 'asc' } }))
+      .map((r) => ({ id: r.id, systemRole: r.systemRole, isDefault: r.isDefault, name: resolveI18n(r.nameI18n as I18nText, { locale: ctx.locale }).text })) }));
+  }
+
   /** Effective permissions and scopes in the active household (drives UI gating). */
   @Get('me/permissions')
   permissions(@Ctx() ctx: RequestContext) {
@@ -52,7 +59,8 @@ export class MembersController {
       const rows = await tx.$queryRaw<Array<{ id: string; scope: string }>>`
         SELECT id, app.perm_scope(id) AS scope FROM permissions WHERE app.perm_scope(id) IS NOT NULL ORDER BY id`;
       const [admin] = await tx.$queryRaw<Array<{ admin: boolean }>>`SELECT app.is_household_admin() AS admin`;
-      return { membershipId: ctx.membershipId, householdAdmin: admin?.admin ?? false,
+      const [owner] = await tx.$queryRaw<Array<{ owner: boolean }>>`SELECT app.is_household_owner() AS owner`;
+      return { membershipId: ctx.membershipId, householdAdmin: admin?.admin ?? false, householdOwner: owner?.owner ?? false,
                permissions: Object.fromEntries(rows.map((r) => [r.id, r.scope])) };
     });
   }

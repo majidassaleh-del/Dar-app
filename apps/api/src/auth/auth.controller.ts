@@ -1,15 +1,18 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, HttpException, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, UnauthorizedException } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpCode, HttpException, HttpStatus, Inject, NotFoundException, Param, ParseUUIDPipe, Post, UnauthorizedException } from '@nestjs/common';
+import { createHash, randomUUID } from 'node:crypto';
 import type { JsonWebKey } from 'node:crypto';
 import { z } from 'zod';
 import { createPublicKey } from 'node:crypto';
 import { PrismaService, type Tx } from '../db/prisma.service';
 import { ZodBody } from '../common/zod.pipe';
-import { AuthFlow, Ctx, NoHousehold } from '../common/decorators';
+import { resolveI18n, type I18nText } from '@herp/i18n';
+import { ENV, type Env } from '../config/env';
+import { AuthFlow, Ctx, NoHousehold, Public } from '../common/decorators';
 import type { RequestContext } from '../tenancy/request-context';
 import { AuthCryptoService } from './auth-crypto.service';
 import { OtpDeliveryService } from './otp-delivery.service';
 import { OnboardingGuard } from './onboarding.guard';
+import { IdpAdminService } from './idp-admin.service';
 import { newTotpSecret, otpauthUri, verifyTotp } from './totp';
 import { WEB_SESSION } from './session';
 
@@ -23,6 +26,11 @@ const UnlockChallenge = z.object({ deviceId: z.string().min(8).max(128) }).stric
 const Unlock = z.object({ challengeId: z.guid(), nonce: z.string().min(40).max(64), signature: z.string().min(80).max(200) }).strict();
 const OTP_TTL_MS = 5 * 60_000;
 const FRESH_AUTH_S = 600;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DENIED = 'access denied: a valid invitation from the household owner is required';
+const maskEmail = (e: string | null | undefined) => (e ? e.replace(/^(.).*(@.*)$/, '$1•••$2') : null);
+/** The stored form of an invitation token. */
+export const invitationHash = (token: string) => createHash('sha256').update(token, 'utf8').digest('hex');
 
 const mask = (s: string | null | undefined, keep = 3) => (s ? `${'•'.repeat(Math.max(0, s.length - keep))}${s.slice(-keep)}` : null);
 
@@ -40,7 +48,36 @@ class TooManyRequests extends HttpException { constructor(m: string) { super(m, 
 @AuthFlow()
 export class AuthController {
   constructor(private readonly db: PrismaService, private readonly crypto: AuthCryptoService, private readonly otp: OtpDeliveryService,
-              private readonly onboardingGuard: OnboardingGuard) {}
+              private readonly onboardingGuard: OnboardingGuard, private readonly idp: IdpAdminService, @Inject(ENV) private readonly env: Env) {}
+
+  /**
+   * Invitation link, step 1 (no session): who is inviting, and to which phone / e-mail the
+   * account will be bound. Anything but a live token is 403.
+   */
+  @Public()
+  @Post('invitations/preview')
+  @HttpCode(200)
+  async previewInvitation(@Ctx() ctx: RequestContext, @Body() b: unknown) {
+    const p = await this.invitation(b);
+    return { household: resolveI18n(p.household_name, { locale: ctx.locale }).text, role: resolveI18n(p.role_name, { locale: ctx.locale }).text,
+      phone: mask(p.phone, 4), email: maskEmail(p.email), locale: p.locale, expiresAt: p.expires_at };
+  }
+
+  /**
+   * Invitation link, step 2 (no session): consume the token. This is the only way an account is
+   * created: the sign-in identity (at the provider, where public sign-up is off), the user and a
+   * pending membership, all bound to the phone / e-mail the owner entered. The person then signs
+   * in with a code sent to that phone / e-mail; the membership activates once onboarding is done.
+   */
+  @Public()
+  @Post('invitations/accept')
+  async acceptInvitation(@Ctx() ctx: RequestContext, @Body() b: unknown) {
+    const p = await this.invitation(b);
+    const userId = p.existing_user ?? await this.idp.ensureUser({ phone: p.phone, email: p.email });
+    await this.db.withRls({ userId: '' }, (tx) => tx.$queryRaw`SELECT app.accept_invitation(${p.hash}, ${userId}::uuid)`);
+    this.onboardingGuard.forget(userId);
+    return { accepted: true, household: resolveI18n(p.household_name, { locale: ctx.locale }).text, signInWith: { phone: mask(p.phone, 4), email: maskEmail(p.email) } };
+  }
 
   @Get('onboarding')
   status(@Ctx() ctx: RequestContext) {
@@ -48,17 +85,17 @@ export class AuthController {
   }
 
   @Post('onboarding/phone')
-  startPhone(@Ctx() ctx: RequestContext, @Body(new ZodBody(Phone)) b: z.infer<typeof Phone>) {
-    return this.challenge(ctx, 'PHONE_OTP', b.phone, (code) => ({ channel: 'sms', to: b.phone,
-      text: `${code} رمز التحقق لمكتب EFA / EFA Private Office verification code. لا تشاركه / Do not share it.` }));
+  startPhone(@Ctx() ctx: RequestContext, @Body(new ZodBody(Phone)) b: z.infer<typeof Phone>, @Headers('x-household-id') hh?: string) {
+    return this.challenge(this.scoped(ctx, hh), 'PHONE_OTP', b.phone, (code, brand) => ({ channel: 'sms', to: b.phone,
+      text: `${code} رمز التحقق — ${brand} / ${brand} verification code. لا تشاركه / Do not share it.` }));
   }
 
   @Post('onboarding/phone/verify')
   verifyPhone(@Ctx() ctx: RequestContext, @Body(new ZodBody(Verify)) b: z.infer<typeof Verify>) { return this.consume(ctx, b, 'PHONE_OTP'); }
 
   @Post('onboarding/email')
-  startEmail(@Ctx() ctx: RequestContext, @Body(new ZodBody(Email)) b: z.infer<typeof Email>) {
-    return this.challenge(ctx, 'EMAIL_OTP', b.email, (code) => ({ channel: 'email', to: b.email, subject: 'EFA Private Office — verification code',
+  startEmail(@Ctx() ctx: RequestContext, @Body(new ZodBody(Email)) b: z.infer<typeof Email>, @Headers('x-household-id') hh?: string) {
+    return this.challenge(this.scoped(ctx, hh), 'EMAIL_OTP', b.email, (code, brand) => ({ channel: 'email', to: b.email, subject: `${brand} — verification code / رمز التحقق`,
       text: `Your verification code is ${code}. It expires in 5 minutes.\nرمز التحقق الخاص بك هو ${code}، صالح لمدة 5 دقائق.` }));
   }
 
@@ -67,20 +104,21 @@ export class AuthController {
 
   /** Start (or restart, until confirmed) authenticator enrolment: returns the otpauth URI for the QR code. */
   @Post('onboarding/totp')
-  startTotp(@Ctx() ctx: RequestContext) {
-    return this.db.withRls(ctx, async (tx) => {
+  startTotp(@Ctx() ctx: RequestContext, @Headers('x-household-id') hh?: string) {
+    return this.db.withRls(this.scoped(ctx, hh), async (tx) => {
       const f = await tx.userAuthFactor.findFirst({ where: { userId: ctx.userId } });
       if (!f?.phoneVerifiedAt || !f.emailVerifiedAt) throw new ForbiddenException('verify your phone and email first');
       const secret = newTotpSecret();
       await tx.$executeRaw`SELECT app.set_totp_secret(${this.crypto.encryptSecret(secret)})`;
-      return { otpauthUri: otpauthUri(secret, f.email ?? f.phone ?? ctx.userId), secret, issuer: 'EFA Private Office', digits: 6, period: 30, algorithm: 'SHA1' };
+      const issuer = await this.brand(tx, ctx);
+      return { otpauthUri: otpauthUri(secret, f.email ?? f.phone ?? ctx.userId, issuer), secret, issuer, digits: 6, period: 30, algorithm: 'SHA1' };
     });
   }
 
   @Post('onboarding/totp/verify')
   async confirmTotp(@Ctx() ctx: RequestContext, @Body(new ZodBody(Totp)) b: z.infer<typeof Totp>) {
     await this.totp(ctx, b.code);
-    this.onboardingGuard.forget(ctx.userId);
+    await this.activate(ctx);
     return this.db.withRls(ctx, (tx) => this.state(tx, ctx.userId));
   }
 
@@ -150,6 +188,7 @@ export class AuthController {
       return { deviceKeyId: k.id };
     });
     if ('error' in out) throw new UnauthorizedException(out.error);
+    await this.activate(ctx);
     return { ...(await this.crypto.issueSession({ sub: ctx.userId, did: out.deviceKeyId!, amr: ['hwk', 'bio'] })), deviceKeyId: out.deviceKeyId };
   }
 
@@ -160,6 +199,7 @@ export class AuthController {
     const k = await this.db.withRls(ctx, (tx) => tx.deviceKey.findFirst({ where: { userId: ctx.userId, deviceId: b.deviceId, revokedAt: null } }));
     if (!k) throw new NotFoundException('this device is not registered (or was revoked)');
     await this.totp(ctx, b.code);
+    await this.activate(ctx);
     return { ...(await this.crypto.issueSession({ sub: ctx.userId, did: k.id, amr: ['otp', 'totp'] })), deviceKeyId: k.id };
   }
 
@@ -174,10 +214,38 @@ export class AuthController {
     const [on] = await this.db.withRls(ctx, (tx) => tx.$queryRaw<Array<{ ok: boolean }>>`SELECT app.user_onboarded(${ctx.userId}::uuid) AS ok`);
     if (!on?.ok) throw new ForbiddenException('complete onboarding first');
     await this.totp(ctx, b.code);
+    await this.activate(ctx);
     return this.crypto.issueSession({ sub: ctx.userId, did: WEB_SESSION, amr: ['otp', 'totp'] });
   }
 
   // ---------------------------------------------------------------------------------------
+
+  /** A live invitation for this token, or 403: missing, malformed, unknown, expired, revoked and used all look the same. */
+  private async invitation(body: unknown) {
+    const token = (body as { token?: unknown } | null)?.token;
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(token)) throw new ForbiddenException(DENIED);
+    const hash = invitationHash(token);
+    const [p] = await this.db.withRls({ userId: '' }, (tx) => tx.$queryRaw<Array<{ phone: string; email: string | null; locale: string; household_name: I18nText;
+      role_name: I18nText; expires_at: Date; existing_user: string | null }>>`SELECT * FROM app.invitation_preview(${hash})`);
+    if (!p) throw new ForbiddenException(DENIED);
+    return { ...p, hash };
+  }
+
+  /** Invited memberships of a user who has now proven the invited phone / e-mail and finished onboarding become active. */
+  private async activate(ctx: RequestContext) {
+    await this.db.withRls(ctx, (tx) => tx.$queryRaw`SELECT app.activate_invited_memberships()`);
+    this.onboardingGuard.forget(ctx.userId);
+  }
+
+  /** Onboarding is not household-scoped, but messages carry the name of the household being joined (X-Household-Id when given). */
+  private scoped(ctx: RequestContext, household?: string): RequestContext {
+    return household && UUID.test(household) ? { ...ctx, householdId: household } : ctx;
+  }
+
+  private async brand(tx: Tx, ctx: RequestContext) {
+    const [b] = await tx.$queryRaw<Array<{ name: I18nText | null }>>`SELECT app.auth_brand() AS name`;
+    return (b?.name ? resolveI18n(b.name, { locale: ctx.locale }).text : '') || this.env.AUTH_BRAND_NAME;
+  }
 
   private requireFresh(ctx: RequestContext) {
     if (ctx.session || !ctx.authTime || Date.now() / 1000 - ctx.authTime > FRESH_AUTH_S) throw new UnauthorizedException('sign in again (SMS code) to continue');
@@ -191,13 +259,13 @@ export class AuthController {
       next: !f?.phoneVerifiedAt ? 'phone' : !f.emailVerifiedAt ? 'email' : !f.totpVerifiedAt ? 'authenticator' : 'device' };
   }
 
-  private challenge(ctx: RequestContext, kind: 'PHONE_OTP' | 'EMAIL_OTP', target: string, message: (code: string) => Parameters<OtpDeliveryService['send']>[0]) {
+  private challenge(ctx: RequestContext, kind: 'PHONE_OTP' | 'EMAIL_OTP', target: string, message: (code: string, brand: string) => Parameters<OtpDeliveryService['send']>[0]) {
     return this.db.withRls(ctx, async (tx) => {
       const recent = await tx.authChallenge.count({ where: { userId: ctx.userId, kind, createdAt: { gt: new Date(Date.now() - 3_600_000) } } });
       if (recent >= 5) throw new TooManyRequests('too many codes requested; try again in an hour');
       const id = randomUUID(), code = this.crypto.newCode();
       await tx.authChallenge.create({ data: { id, userId: ctx.userId, kind, target, codeHash: this.crypto.hash(id, code), expiresAt: new Date(Date.now() + OTP_TTL_MS) } });
-      await this.otp.send(message(code));
+      await this.otp.send(message(code, await this.brand(tx, ctx)));
       return { challengeId: id, expiresAt: new Date(Date.now() + OTP_TTL_MS).toISOString(), sentTo: kind === 'PHONE_OTP' ? mask(target, 4) : target.replace(/^(.).*(@.*)$/, '$1•••$2') };
     });
   }

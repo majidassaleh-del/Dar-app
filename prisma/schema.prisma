@@ -56,6 +56,33 @@ enum SystemRole {
   GUEST // time-boxed, view-only
 }
 
+/// Owner-issued invitation: the only way a new account comes into existence. The link carries a
+/// random token; only its SHA-256 is stored. Single use, expiring, revocable. Accepting it creates
+/// the user (bound to the phone / e-mail the owner entered) and an INVITED membership, which
+/// becomes ACTIVE once that person has proven the phone / e-mail and finished onboarding.
+model Invitation {
+  id             String    @id @default(uuid()) @db.Uuid
+  householdId    String    @db.Uuid
+  roleId         String    @db.Uuid
+  phone          String // E.164; the sign-in identifier the account is created with
+  email          String?   @db.Citext
+  displayName    String?
+  locale         Locale    @default(ar)
+  tokenHash      String    @unique // sha256(token), hex; never readable by the request role
+  expiresAt      DateTime  @db.Timestamptz(6)
+  invitedById    String    @db.Uuid // membership of the owner who issued it
+  acceptedAt     DateTime? @db.Timestamptz(6)
+  acceptedUserId String?   @db.Uuid
+  revokedAt      DateTime? @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id])
+
+  @@index([householdId, createdAt])
+  @@map("invitations")
+}
+
 enum MembershipStatus {
   INVITED
   ACTIVE
@@ -662,6 +689,7 @@ model Household {
   trips                 Trip[]
   tripPassengers        TripPassenger[]
   tripBookings          TripBooking[]
+  invitations           Invitation[]
 
   @@map("households")
 }
@@ -739,6 +767,7 @@ model Role {
   household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
   permissions RolePermission[]
   memberships Membership[]
+  invitations Invitation[]
 
   @@unique([householdId, systemRole, isDefault])
   @@index([householdId])

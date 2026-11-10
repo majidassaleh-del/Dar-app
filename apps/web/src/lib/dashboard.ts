@@ -5,7 +5,9 @@ import { tenantOrigin, webConfig } from './config';
 
 export type Severity = 'critical' | 'warning' | 'info';
 /** `origin` is set when tenant subdomains are configured: the switcher then links to https://<slug>.<base>. */
-export interface Household { id: string; name: string; role: string; badge: string; tone: 'emerald' | 'gold' | 'platinum'; origin?: string | null }
+export interface Household { id: string; name: string; role: string; badge: string; tone: 'emerald' | 'gold' | 'platinum'; origin?: string | null;
+  /** The household owner (Household Head): the only one who may invite people. */
+  owner?: boolean }
 export interface StaffRow {
   id: string; name: string; staffType: string; status: string; hireDate: string | null;
   identity: { type: string; last4: string | null } | null; ibanLast4: string | null;
@@ -33,8 +35,8 @@ export function badgeFor(name: string) {
   if (acronym) return acronym;
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '•';
 }
-const household = (id: string, name: string, role: string, i: number, origin?: string | null): Household =>
-  ({ id, name, role, badge: badgeFor(name), tone: TONES[i % TONES.length]!, origin });
+const household = (id: string, name: string, role: string, i: number, origin?: string | null, owner = false): Household =>
+  ({ id, name, role, badge: badgeFor(name), tone: TONES[i % TONES.length]!, origin, owner });
 
 interface PulseResponse {
   attention: Dashboard['attention'];
@@ -67,7 +69,7 @@ export async function loadSession(locale: string): Promise<Session> {
     return { mode: 'sample', households: SAMPLE.households, current: SAMPLE.current, opts: null, pendingRequests: 0 };
   }
   const host = await requestHost();
-  const households = ctx.households.map((h, i) => household(h.householdId, h.name, h.role, i, tenantOrigin(h.slug, host)));
+  const households = ctx.households.map((h, i) => household(h.householdId, h.name, h.role, i, tenantOrigin(h.slug, host), h.systemRole === 'HOUSEHOLD_HEAD'));
   const current = households.find((h) => h.id === ctx.id)!;
   const opts = { household: current.id, locale };
   const reqs = await apiGet<{ data: Array<{ status: string }> }>('/v1/requests', opts);

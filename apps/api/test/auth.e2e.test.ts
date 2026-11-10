@@ -6,7 +6,7 @@ import { createApp } from '../src/app.factory';
 import { ServiceDb } from '../src/worker/service-db';
 import { OtpDeliveryService } from '../src/auth/otp-delivery.service';
 import { base32Decode, base32Encode, hotp, totpStep, verifyTotp } from '../src/auth/totp';
-import { H1, as, testEnv } from './helpers';
+import { H1, H2, as, testEnv } from './helpers';
 
 const NEW_USER = 'a0000000-0000-0000-0000-0000000000a1';
 const OTHER_USER = 'a0000000-0000-0000-0000-0000000000a2';
@@ -51,6 +51,9 @@ beforeAll(async () => {
     for (const id of [NEW_USER, OTHER_USER]) await tx.user.upsert({ where: { id }, create: { id, fullNameI18n: { en: 'New staff' }, preferredLocale: 'en' }, update: {} });
     const role = await tx.role.findFirstOrThrow({ where: { householdId: H1, systemRole: 'STAFF' } });
     await tx.membership.create({ data: { householdId: H1, userId: NEW_USER, roleId: role.id, status: 'ACTIVE', displayName: 'New staff' } });
+    // Admitted (a member of the other household), so refusals below are about onboarding and ownership, not about invitations.
+    const role2 = await tx.role.findFirstOrThrow({ where: { householdId: H2, systemRole: 'STAFF' } });
+    await tx.membership.create({ data: { householdId: H2, userId: OTHER_USER, roleId: role2.id, status: 'ACTIVE', displayName: 'Other staff' } });
   });
   app = await createApp(); await app.init();
   otp = app.get(OtpDeliveryService);
@@ -59,7 +62,7 @@ beforeAll(async () => {
   delete process.env.AUTH_REQUIRE_DEVICE_SESSION;
 });
 afterAll(async () => {
-  await worker?.run(async (tx) => { await tx.membership.deleteMany({ where: { userId: NEW_USER } }); await tx.user.deleteMany({ where: { id: { in: [NEW_USER, OTHER_USER] } } }); });
+  await worker?.run(async (tx) => { await tx.membership.deleteMany({ where: { userId: { in: [NEW_USER, OTHER_USER] } } }); await tx.user.deleteMany({ where: { id: { in: [NEW_USER, OTHER_USER] } } }); });
   await app?.close(); await enforced?.close(); await worker?.close();
   delete process.env.AUTH_TOTP_KEY; delete process.env.SESSION_SIGNING_SECRET;
 });
@@ -109,7 +112,7 @@ describe('first-time onboarding: SMS OTP → email OTP → authenticator', () =>
 
   it('Microsoft Authenticator: otpauth QR, confirmed by a code; secret encrypted at rest; codes cannot be replayed', async () => {
     const t = await http().post('/v1/auth/onboarding/totp').set(await me()).expect(201);
-    expect(t.body.otpauthUri).toMatch(/^otpauth:\/\/totp\/EFA%20Private%20Office%3Anew\.staff%40example\.com\?secret=[A-Z2-7]{32}&issuer=EFA%20Private%20Office&algorithm=SHA1&digits=6&period=30$/);
+    expect(t.body.otpauthUri).toMatch(/^otpauth:\/\/totp\/Majid%20household%3Anew\.staff%40example\.com\?secret=[A-Z2-7]{32}&issuer=Majid%20household&algorithm=SHA1&digits=6&period=30$/);
     totpSecret = t.body.secret;
     const [f] = await worker.run((tx) => tx.userAuthFactor.findMany({ where: { userId: NEW_USER } }));
     expect(f!.totpSecretCiphertext).toMatch(/^t1\./);

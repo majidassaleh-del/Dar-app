@@ -31,6 +31,8 @@ type Onboarding = { complete: boolean; next: 'phone' | 'email' | 'authenticator'
 /** After the provider sign-in: send the user to the first thing still missing. */
 async function nextStep(l: string, token: string): Promise<never> {
   const s = await apiAuth<Onboarding>('GET', '/v1/auth/onboarding', token, undefined, l);
+  // 403: the provider knows this identity but nobody invited it (invitation-only accounts).
+  if (s.status === 403) { (await cookies()).delete({ name: IDP_COOKIE, path: '/', domain: webConfig.cookieDomain }); return go(l, 'address', 'denied'); }
   if (s.status !== 200) return go(l, 'address', s.status === 401 ? 'expired' : 'unavailable');
   if (s.body.next === 'phone') return go(l, 'setup-phone');
   if (s.body.next === 'email') return go(l, 'setup-email');

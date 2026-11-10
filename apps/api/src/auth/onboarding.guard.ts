@@ -7,7 +7,8 @@ import { PrismaService } from '../db/prisma.service';
 import { WEB_SESSION } from './session';
 
 /**
- * After authentication: (1) the user must have completed first-time onboarding
+ * After authentication: (0) the identity must have been admitted by an owner-issued invitation
+ * (a user row with a live membership), else 403 everywhere, onboarding included; (1) the user must have completed first-time onboarding
  * (SMS OTP + email + authenticator) before any other endpoint; (2) when device
  * sessions are required (production default), the request must carry the token
  * from today's Face ID / Touch ID unlock, from a device key that is still active.
@@ -15,6 +16,7 @@ import { WEB_SESSION } from './session';
  */
 @Injectable()
 export class OnboardingGuard implements CanActivate {
+  private readonly admitted = new Map<string, number>();
   private readonly onboarded = new Map<string, number>();
   private readonly activeKeys = new Map<string, number>();
   private readonly requireSession: boolean;
@@ -26,9 +28,14 @@ export class OnboardingGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const targets = [context.getHandler(), context.getClass()];
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
-    if (this.reflector.getAllAndOverride<boolean>(AUTH_FLOW, targets)) return true;
     const ctx = context.switchToHttp().getRequest<Request>().ctx!;
     const now = Date.now();
+    if ((this.admitted.get(ctx.userId) ?? 0) < now) {
+      const [r] = await this.db.withRls({ userId: ctx.userId }, (tx) => tx.$queryRaw<Array<{ ok: boolean }>>`SELECT app.user_admitted() AS ok`);
+      if (!r?.ok) throw new ForbiddenException('access denied: accounts are by invitation from the household owner only');
+      this.admitted.set(ctx.userId, now + 60_000);
+    }
+    if (this.reflector.getAllAndOverride<boolean>(AUTH_FLOW, targets)) return true;
     if ((this.onboarded.get(ctx.userId) ?? 0) < now) {
       const [r] = await this.db.withRls({ userId: ctx.userId }, (tx) => tx.$queryRaw<Array<{ ok: boolean }>>`SELECT app.user_onboarded(${ctx.userId}::uuid) AS ok`);
       if (!r?.ok) throw new ForbiddenException('complete onboarding first: verify your phone, your email and an authenticator app (/v1/auth/onboarding)');
@@ -46,5 +53,5 @@ export class OnboardingGuard implements CanActivate {
     return true;
   }
 
-  forget(userId: string, deviceKeyId?: string) { this.onboarded.delete(userId); if (deviceKeyId) this.activeKeys.delete(deviceKeyId); }
+  forget(userId: string, deviceKeyId?: string) { this.onboarded.delete(userId); this.admitted.delete(userId); if (deviceKeyId) this.activeKeys.delete(deviceKeyId); }
 }

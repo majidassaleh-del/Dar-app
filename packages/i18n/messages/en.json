@@ -107,7 +107,7 @@
     }
   },
   "pulse": {
-    "title": "EFA Daily Pulse",
+    "title": "Daily Pulse",
     "documentsExpired": "{count, plural, one {# staff document has expired} other {# staff documents have expired}}",
     "medicalOverdue": "{count, plural, one {# worker has no valid medical checkup} other {# workers have no valid medical checkup}}",
     "salaryDisputes": "{count, plural, one {# salary payment is disputed} other {# salary payments are disputed}}",
@@ -128,7 +128,7 @@
     "fuelFlagged": "{count, plural, one {# fuel fill-up was flagged} other {# fuel fill-ups were flagged}}"
   },
   "exec": {
-    "brand": "EFA Private Office",
+    "brand": "Dar",
     "office": "EFA Office — Operations",
     "attention": "Needs a decision today",
     "allClear": "Nothing needs a decision today",
@@ -306,7 +306,7 @@
     }
   },
   "ui": {
-    "office": "EFA Private Office",
+    "office": "Dar",
     "sections": "Sections",
     "sample": "Sample data",
     "signedOut": "Sign in to see this section. Without a session only the sample brief is shown.",
@@ -807,7 +807,7 @@
         "totp": "Authenticator code"
       },
       "hint": {
-        "address": "Enter the mobile number or email registered with the office. We will send you a one-time code.",
+        "address": "Enter your mobile number or email. We will send you a one-time code.",
         "code": "We sent a six-digit code to {address}.",
         "setup-phone": "First sign-in: confirm the number we will use for codes.",
         "setup-phone-code": "We sent a code to {address}.",
@@ -815,7 +815,7 @@
         "setup-email-code": "We sent a code to {address}.",
         "enrol": "An authenticator app protects the account even if someone gets your phone number.",
         "enrol-scan": "Scan the code, then enter the six digits the app shows.",
-        "totp": "Enter the code shown in your authenticator app for EFA Private Office."
+        "totp": "Enter the code shown in your authenticator app for this account."
       },
       "e": {
         "address": "Enter a mobile number like 05xxxxxxxx, or an email address.",
@@ -827,7 +827,9 @@
         "used": "That code was already used. Wait for the next code in the app.",
         "resent": "A new code is on its way.",
         "enrolled": "The authenticator is set up. Enter the next code it shows to finish.",
-        "signedOut": "You have signed out."
+        "signedOut": "You have signed out.",
+        "denied": "This account has no invitation. Accounts are created only by an invitation from the household owner.",
+        "invited": "Invitation accepted. Sign in with the mobile number or email you were invited with."
       }
     },
     "runStatus": {
@@ -910,6 +912,51 @@
       "ackPending": "Not confirmed yet",
       "footer": "Issued by the household office. The worker confirms receipt in the app; this payslip lists every amount paid and deducted.",
       "signature": "Signature"
+    },
+    "invite": {
+      "nav": "Invitations",
+      "pageTitle": "Invitations",
+      "pageHint": "Accounts are by invitation only. Invite a person to {household}; the link works once and expires.",
+      "ownerOnly": "Only the household owner can invite people.",
+      "linkTitle": "Invitation link",
+      "linkHint": "Copy this link now and send it to {phone}. It disappears in two minutes and cannot be shown again.",
+      "newTitle": "Invite a person",
+      "newNote": "The account is tied to this mobile number: the person signs in with a code sent to it.",
+      "name": "Name",
+      "emailOptional": "Email (optional)",
+      "role": "Role",
+      "language": "Their language",
+      "validFor": "Valid for",
+      "create": "Create invitation",
+      "listTitle": "Sent invitations",
+      "empty": "No invitations yet.",
+      "person": "Person",
+      "statusLabel": "Status",
+      "validUntil": "Valid until",
+      "revoke": "Revoke",
+      "status": {
+        "PENDING": "Waiting",
+        "ACCEPTED": "Accepted",
+        "REVOKED": "Revoked",
+        "EXPIRED": "Expired"
+      },
+      "title": "You have been invited",
+      "body": "{household} invites you to join as {role}.",
+      "household": "Household",
+      "signInWith": "You will sign in with",
+      "accept": "Accept the invitation",
+      "acceptNote": "After accepting, sign in with a code sent to this number, then set up an authenticator app.",
+      "deniedTitle": "Access denied",
+      "deniedBody": "This invitation is not valid: it was already used, it expired, or it was withdrawn.",
+      "deniedNote": "Accounts are created only by an invitation from the household owner. Ask them for a new link.",
+      "haveAccount": "I already have an account — sign in",
+      "e": {
+        "phone": "Enter a mobile number like 05xxxxxxxx.",
+        "email": "That email address does not look right.",
+        "owner": "Only the household owner can invite people.",
+        "failed": "The invitation could not be created. Try again.",
+        "member": "This person is already a member of the household."
+      }
     }
   }
 }

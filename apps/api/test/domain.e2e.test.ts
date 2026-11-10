@@ -64,7 +64,17 @@ describe('environment validation', () => {
     HERP_KMS: 'gcp', HERP_KMS_KEY: 'projects/p/locations/l/keyRings/r/cryptoKeys/k',
     FILE_SIGNING_SECRET: 'f'.repeat(32), OFFLINE_KEY_SECRET: 'o'.repeat(32), AUTH_TOTP_KEY: 'k', SESSION_SIGNING_SECRET: 's'.repeat(32),
     OTP_WEBHOOK_URL: 'https://otp.darerp.net/send',
+    AUTH_ADMIN_URL: 'https://auth.darerp.net/auth/v1', AUTH_ADMIN_KEY: 'service-role-key-0123456789', PUBLIC_APP_URL: 'https://app.darerp.net',
   };
+
+  it('production needs the identity-provider admin API and the public app URL (invitation-only accounts)', () => {
+    const { AUTH_ADMIN_KEY: _k, ...noKey } = prod;
+    expect(() => loadEnv(noKey)).toThrow(/AUTH_ADMIN_URL and AUTH_ADMIN_KEY together/);
+    const { AUTH_ADMIN_URL: _u, ...noAdmin } = noKey;
+    expect(() => loadEnv(noAdmin)).toThrow(/production requires AUTH_ADMIN_URL/);
+    const { PUBLIC_APP_URL: _a, ...noApp } = prod;
+    expect(() => loadEnv(noApp)).toThrow(/PUBLIC_APP_URL \(invitation links\)/);
+  });
 
   it('accepts a darerp.net production configuration', () => {
     const env = loadEnv({ ...prod, CORS_ORIGINS: 'https://darerp.net,https://*.darerp.net', PUBLIC_APP_URL: 'https://app.darerp.net',

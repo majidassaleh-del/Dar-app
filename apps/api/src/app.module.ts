@@ -23,10 +23,11 @@ import { HouseholdGuard } from './tenancy/household.guard';
 import { ProblemFilter } from './common/problem.filter';
 import { HealthController } from './health/health.controller';
 import { MembersController } from './members/members.controller';
+import { InvitationsController } from './members/invitations.controller';
 
 @Module({
   imports: [ConfigModule, DbModule, CryptoModule, AuthModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule, LedgerModule, BankingModule, FilesModule, HrModule, NotificationsModule, DashboardModule, SyncModule, ReceiptsModule, FleetModule],
-  controllers: [HealthController, MembersController],
+  controllers: [HealthController, MembersController, InvitationsController],
   providers: [
     // Order matters: authenticate, then resolve the household membership.
     { provide: APP_GUARD, useClass: JwtGuard },

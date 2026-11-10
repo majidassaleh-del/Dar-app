@@ -107,7 +107,7 @@
     }
   },
   "pulse": {
-    "title": "EFA Pang-araw-araw na Buod",
+    "title": "Pang-araw-araw na Buod",
     "documentsExpired": "{count, plural, one {# dokumento ng staff ang expired na} other {# dokumento ng staff ang expired na}}",
     "medicalOverdue": "{count, plural, one {# manggagawa ang walang valid na medical} other {# manggagawa ang walang valid na medical}}",
     "salaryDisputes": "{count, plural, one {# bayad sa sahod ang kinokontra} other {# bayad sa sahod ang kinokontra}}",
@@ -128,7 +128,7 @@
     "fuelFlagged": "{count, plural, one {# pagpapakarga ng gasolina ang na-flag} other {# pagpapakarga ng gasolina ang na-flag}}"
   },
   "exec": {
-    "brand": "EFA Private Office",
+    "brand": "Dar",
     "office": "EFA Office — Operasyon",
     "attention": "Kailangang pagpasyahan ngayon",
     "allClear": "Walang kailangang pagpasyahan ngayon",
@@ -306,7 +306,7 @@
     }
   },
   "ui": {
-    "office": "EFA Private Office",
+    "office": "Dar",
     "sections": "Mga seksyon",
     "sample": "Sample na datos",
     "signedOut": "Mag-sign in para makita ang seksyong ito. Kung walang session, sample na buod lang ang makikita.",
@@ -807,7 +807,7 @@
         "totp": "Code ng authenticator"
       },
       "hint": {
-        "address": "Ilagay ang mobile number o email na nakarehistro sa opisina. Magpapadala kami ng one-time code.",
+        "address": "Ilagay ang iyong mobile number o email. Padadalhan ka namin ng isang-beses na code.",
         "code": "Nagpadala kami ng anim na digit na code sa {address}.",
         "setup-phone": "Unang sign-in: kumpirmahin ang number para sa mga code.",
         "setup-phone-code": "Nagpadala kami ng code sa {address}.",
@@ -815,7 +815,7 @@
         "setup-email-code": "Nagpadala kami ng code sa {address}.",
         "enrol": "Pinoprotektahan ng authenticator app ang account kahit makuha ng iba ang number mo.",
         "enrol-scan": "I-scan ang code, saka ilagay ang anim na digit sa app.",
-        "totp": "Ilagay ang code sa iyong authenticator app para sa EFA Private Office."
+        "totp": "Ilagay ang code sa iyong authenticator app para sa account na ito."
       },
       "e": {
         "address": "Maglagay ng mobile number tulad ng 05xxxxxxxx, o email.",
@@ -827,7 +827,9 @@
         "used": "Nagamit na ang code na ito. Hintayin ang susunod na code sa app.",
         "resent": "Papunta na ang bagong code.",
         "enrolled": "Naka-set up na ang authenticator. Ilagay ang susunod na code para matapos.",
-        "signedOut": "Naka-sign out ka na."
+        "signedOut": "Naka-sign out ka na.",
+        "denied": "Walang imbitasyon ang account na ito. Nagagawa lamang ang account sa imbitasyon ng may-ari ng tahanan.",
+        "invited": "Tinanggap ang imbitasyon. Mag-sign in gamit ang mobile number o email kung saan ka inimbitahan."
       }
     },
     "runStatus": {
@@ -910,6 +912,51 @@
       "ackPending": "Hindi pa kinukumpirma",
       "footer": "Mula sa opisina ng tahanan. Kinukumpirma ng kawani ang pagtanggap sa app; nakalista dito ang lahat ng ibinayad at ibinawas.",
       "signature": "Pirma"
+    },
+    "invite": {
+      "nav": "Mga imbitasyon",
+      "pageTitle": "Mga imbitasyon",
+      "pageHint": "Sa imbitasyon lamang nagkakaroon ng account. Mag-imbita ng tao sa {household}; isang beses lang gumagana ang link at may hangganan ito.",
+      "ownerOnly": "Ang may-ari lamang ng tahanan ang maaaring mag-imbita.",
+      "linkTitle": "Link ng imbitasyon",
+      "linkHint": "Kopyahin na ang link na ito at ipadala sa {phone}. Mawawala ito sa loob ng dalawang minuto at hindi na maipapakita muli.",
+      "newTitle": "Mag-imbita ng tao",
+      "newNote": "Nakatali ang account sa mobile number na ito: magsa-sign in ang tao gamit ang code na ipapadala rito.",
+      "name": "Pangalan",
+      "emailOptional": "Email (opsyonal)",
+      "role": "Tungkulin",
+      "language": "Wika niya",
+      "validFor": "Bisa",
+      "create": "Gumawa ng imbitasyon",
+      "listTitle": "Mga naipadalang imbitasyon",
+      "empty": "Wala pang imbitasyon.",
+      "person": "Tao",
+      "statusLabel": "Katayuan",
+      "validUntil": "May bisa hanggang",
+      "revoke": "Bawiin",
+      "status": {
+        "PENDING": "Naghihintay",
+        "ACCEPTED": "Tinanggap",
+        "REVOKED": "Binawi",
+        "EXPIRED": "Nag-expire"
+      },
+      "title": "Inimbitahan ka",
+      "body": "Iniimbitahan ka ng {household} na sumali bilang {role}.",
+      "household": "Tahanan",
+      "signInWith": "Magsa-sign in ka gamit ang",
+      "accept": "Tanggapin ang imbitasyon",
+      "acceptNote": "Pagkatanggap, mag-sign in gamit ang code na ipapadala sa numerong ito, saka mag-set up ng authenticator app.",
+      "deniedTitle": "Hindi pinahintulutan",
+      "deniedBody": "Hindi na wasto ang imbitasyong ito: nagamit na, nag-expire, o binawi.",
+      "deniedNote": "Nagagawa lamang ang account sa imbitasyon ng may-ari ng tahanan. Humingi sa kanya ng bagong link.",
+      "haveAccount": "May account na ako — mag-sign in",
+      "e": {
+        "phone": "Maglagay ng mobile number tulad ng 05xxxxxxxx.",
+        "email": "Mukhang mali ang email address.",
+        "owner": "Ang may-ari lamang ng tahanan ang maaaring mag-imbita.",
+        "failed": "Hindi nagawa ang imbitasyon. Subukan muli.",
+        "member": "Miyembro na ng tahanan ang taong ito."
+      }
     }
   }
 }

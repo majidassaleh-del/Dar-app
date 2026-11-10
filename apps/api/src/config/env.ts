@@ -21,6 +21,12 @@ const Env = z.object({
   AUTH_JWT_SECRET: z.string().min(32).optional(),
   AUTH_ISSUER: z.string().optional(),
   AUTH_AUDIENCE: z.string().optional(),
+  /** Identity-provider admin API (Supabase: https://<project>.supabase.co/auth/v1) and its service-role key. Used only to
+   *  create the sign-in identity while an owner-issued invitation is accepted; public sign-up stays disabled at the provider. */
+  AUTH_ADMIN_URL: z.string().url().optional(),
+  AUTH_ADMIN_KEY: z.string().min(20).optional(),
+  /** Name in verification messages / the authenticator app when the caller has no household yet. */
+  AUTH_BRAND_NAME: z.string().trim().min(1).max(40).default('Dar ERP'),
   /** Field encryption KEK: "local" (dev/test, HERP_LOCAL_KEK) or "gcp" (Cloud KMS key HERP_KMS_KEY). */
   HERP_KMS: z.enum(['local', 'gcp']).default('local'),
   HERP_LOCAL_KEK: z.string().optional(),
@@ -60,6 +66,9 @@ const Env = z.object({
   }
 }).refine((e) => e.AUTH_JWKS_URL || e.AUTH_JWT_SECRET, { message: 'set AUTH_JWKS_URL or AUTH_JWT_SECRET' })
   .refine((e) => e.NODE_ENV !== 'production' || e.AUTH_JWKS_URL, { message: 'production requires AUTH_JWKS_URL (asymmetric keys)' })
+  .refine((e) => !e.AUTH_ADMIN_URL === !e.AUTH_ADMIN_KEY, { message: 'set AUTH_ADMIN_URL and AUTH_ADMIN_KEY together' })
+  .refine((e) => e.NODE_ENV !== 'production' || (e.AUTH_ADMIN_URL && e.AUTH_ADMIN_KEY && e.PUBLIC_APP_URL),
+    { message: 'production requires AUTH_ADMIN_URL, AUTH_ADMIN_KEY (invitations create the sign-in identity) and PUBLIC_APP_URL (invitation links)' })
   .refine((e) => e.HERP_KMS !== 'local' || e.HERP_LOCAL_KEK, { message: 'HERP_KMS=local needs HERP_LOCAL_KEK (32 bytes, base64)' })
   .refine((e) => e.HERP_KMS !== 'gcp' || e.HERP_KMS_KEY, { message: 'HERP_KMS=gcp needs HERP_KMS_KEY' })
   .refine((e) => e.NODE_ENV !== 'production' || e.HERP_KMS === 'gcp', { message: 'production requires HERP_KMS=gcp' })

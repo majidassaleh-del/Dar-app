@@ -54,7 +54,8 @@ export function verifyTotp(secretB32: string, code: string, atMs = Date.now(), w
   return match;
 }
 
-export function otpauthUri(secretB32: string, account: string, issuer = 'EFA Private Office') {
+export function otpauthUri(secretB32: string, account: string, issuerName: string) {
+  const issuer = issuerName.replace(/:/g, ' ').trim(); // ':' separates issuer and account in the label
   const label = encodeURIComponent(`${issuer}:${account}`);
   return `otpauth://totp/${label}?secret=${secretB32}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }

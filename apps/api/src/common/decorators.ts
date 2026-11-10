@@ -8,7 +8,7 @@ export const AUTH_FLOW = 'herp:auth-flow';
 
 /** No authentication (health checks, webhooks verify their own signatures). */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
-/** Authenticated, but not scoped to a household (/me, POST /households). */
+/** Authenticated, but not scoped to a household (/me, the sign-in flow). */
 export const NoHousehold = () => SetMetadata(NO_HOUSEHOLD, true);
 
 /** Onboarding / unlock endpoints: reachable before onboarding and without a device session. */

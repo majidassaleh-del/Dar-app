@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 
 const STEPS = ['address', 'code', 'setup-phone', 'setup-phone-code', 'setup-email', 'setup-email-code', 'enrol', 'enrol-scan', 'totp'] as const;
 type Step = (typeof STEPS)[number];
-const ERRORS = ['address', 'code', 'expired', 'unavailable', 'tooMany', 'locked', 'used', 'resent', 'enrolled', 'signedOut'] as const;
-const INFO = ['resent', 'enrolled', 'signedOut'];
+const ERRORS = ['address', 'code', 'expired', 'unavailable', 'tooMany', 'locked', 'used', 'resent', 'enrolled', 'signedOut', 'denied', 'invited'] as const;
+const INFO = ['resent', 'enrolled', 'signedOut', 'invited'];
 
 /** Sign-in: provider code → (first time: phone, email, authenticator) → authenticator code → session. */
 export default async function SignIn({ params, searchParams }: { params: Promise<{ locale: Locale }>; searchParams: Promise<{ step?: string; e?: string; expired?: string }> }) {
@@ -90,7 +90,7 @@ export default async function SignIn({ params, searchParams }: { params: Promise
         <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-4 px-4 py-4 sm:px-8">
           <div className="flex items-center gap-3.5">
             <span aria-hidden="true" className="grid size-12 place-items-center rounded-full border-[1.5px] border-brass outline outline-1 outline-offset-[3px] outline-brass">
-              <span className="font-display text-[15px] tracking-[0.06em] text-[#e6cf9c]">EFA</span>
+              <span className="font-display text-[15px] tracking-[0.06em] text-[#e6cf9c]">DAR</span>
             </span>
             <span className="leading-tight"><span className="block font-display text-xl">{t('office')}</span><span className="block text-xs text-header-muted">{t('officeTagline')}</span></span>
           </div>
