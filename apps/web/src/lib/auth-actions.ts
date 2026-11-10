@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { apiAuth } from './api';
+import { apiAuth, currentTenantSlug } from './api';
 import { webConfig } from './config';
 import { parseAddress, requestCode, signOutProvider, verifyCode, type Address } from './idp';
 
@@ -14,7 +14,9 @@ import { parseAddress, requestCode, signOutProvider, verifyCode, type Address } 
  *   4. authenticator code → POST /v1/auth/web/session → session cookie until 04:00 Riyadh.
  * Nothing here is readable by page scripts; every step is re-checked by the API.
  */
-const STEP_COOKIE = 'herp_signin', IDP_COOKIE = 'herp_idp', SETUP_COOKIE = 'herp_setup', TOTP_COOKIE = 'herp_totp';
+const STEP_COOKIE = 'herp_signin', IDP_COOKIE = 'herp_idp', SETUP_COOKIE = 'herp_setup', TOTP_COOKIE = 'herp_totp', ENTRY_COOKIE = 'herp_entry';
+/** Which door of the landing page this sign-in came through. The API enforces the owner door. */
+async function entry(): Promise<'owner' | 'member'> { return (await cookies()).get(ENTRY_COOKIE)?.value === 'owner' ? 'owner' : 'member'; }
 const short = () => ({ httpOnly: true, sameSite: 'lax' as const, secure: webConfig.secureCookies, path: '/', maxAge: 600, domain: webConfig.cookieDomain });
 const loc = (f: FormData) => { const l = String(f.get('locale') ?? 'ar'); return /^[a-z]{2}$/.test(l) ? l : 'ar'; };
 const go = (l: string, step: string, err?: string): never => redirect(`/${l}/sign-in?step=${step}${err ? `&e=${err}` : ''}`);
@@ -45,6 +47,7 @@ export async function startSignIn(f: FormData) {
   const a = parseAddress(String(f.get('address') ?? ''));
   if (!a) return go(l, 'address', 'address');
   if (!(await requestCode(a))) return go(l, 'address', 'unavailable');
+  (await cookies()).set(ENTRY_COOKIE, f.get('as') === 'owner' ? 'owner' : 'member', { ...short(), maxAge: 1800 });
   (await cookies()).set(STEP_COOKIE, `${a.kind}:${a.value}`, short());
   return go(l, 'code');
 }
@@ -123,14 +126,27 @@ export async function finishSignIn(f: FormData) {
   const token = await idpToken();
   if (!token) return go(l, 'address', 'expired');
   const code = String(f.get('code') ?? '').replace(/\D/g, '');
-  const r = await apiAuth<{ token?: string; expiresAt?: string }>('POST', '/v1/auth/web/session', token, { code }, l);
+  const door = await entry();
+  const r = await apiAuth<{ token?: string; expiresAt?: string }>('POST', '/v1/auth/web/session', token, { code, entry: door }, l);
   if (r.status === 401) return go(l, 'address', 'expired');
+  if (r.status === 403 && door === 'owner') { // signed in correctly, but heads no household: this door stays shut
+    const jar = await cookies();
+    for (const c of [STEP_COOKIE, IDP_COOKIE, SETUP_COOKIE, TOTP_COOKIE, ENTRY_COOKIE]) jar.delete(c);
+    await signOutProvider(token);
+    redirect(`/${l}/sign-in?as=member&e=notOwner`);
+  }
   if (r.status === 429) return go(l, 'totp', 'locked');
   if (r.status === 422) return go(l, 'totp', 'used');
   if (!r.body.token || !r.body.expiresAt) return go(l, 'totp', r.status === 400 ? 'code' : 'unavailable');
   const jar = await cookies();
   jar.set(webConfig.sessionCookie, r.body.token, { httpOnly: true, sameSite: 'lax', secure: webConfig.secureCookies, path: '/', domain: webConfig.cookieDomain, expires: new Date(r.body.expiresAt) });
-  for (const c of [STEP_COOKIE, IDP_COOKIE, SETUP_COOKIE, TOTP_COOKIE]) jar.delete(c);
+  for (const c of [STEP_COOKIE, IDP_COOKIE, SETUP_COOKIE, TOTP_COOKIE, ENTRY_COOKIE]) jar.delete(c);
+  // Through the owner door, open the household they own (they may also be a member elsewhere).
+  if (door === 'owner' && !(await currentTenantSlug())) {
+    const me = await apiAuth<{ households?: Array<{ householdId: string; systemRole: string }> }>('GET', '/v1/me', r.body.token, undefined, l);
+    const own = me.body.households?.find((h) => h.systemRole === 'HOUSEHOLD_HEAD');
+    if (own) jar.set(webConfig.householdCookie, own.householdId, { httpOnly: true, sameSite: 'lax', secure: webConfig.secureCookies, path: '/', domain: webConfig.cookieDomain, maxAge: 31_536_000 });
+  }
   await signOutProvider(token); // the provider session is no longer needed: the browser now holds only the day's session
   redirect(`/${l}`);
 }
@@ -140,7 +156,7 @@ export async function signOut(f: FormData) {
   const jar = await cookies();
   const idp = jar.get(IDP_COOKIE)?.value;
   if (idp) await signOutProvider(idp);
-  for (const c of [webConfig.sessionCookie, STEP_COOKIE, IDP_COOKIE, SETUP_COOKIE, TOTP_COOKIE]) jar.delete({ name: c, path: '/', domain: webConfig.cookieDomain });
+  for (const c of [webConfig.sessionCookie, STEP_COOKIE, IDP_COOKIE, SETUP_COOKIE, TOTP_COOKIE, ENTRY_COOKIE]) jar.delete({ name: c, path: '/', domain: webConfig.cookieDomain });
   redirect(`/${l}/sign-in?e=signedOut`);
 }
 
@@ -156,5 +172,6 @@ export async function signInState() {
     setupTo: setup[2] ?? null,
     otpauthUri: jar.get(TOTP_COOKIE)?.value ?? null,
     hasProviderToken: !!jar.get(IDP_COOKIE)?.value,
+    entry: jar.get(ENTRY_COOKIE)?.value === 'owner' ? 'owner' as const : jar.get(ENTRY_COOKIE)?.value === 'member' ? 'member' as const : null,
   };
 }

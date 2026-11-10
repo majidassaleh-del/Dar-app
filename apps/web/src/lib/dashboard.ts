@@ -29,11 +29,14 @@ export interface Dashboard {
 }
 
 const TONES: Household['tone'][] = ['emerald', 'gold', 'platinum'];
-/** "EFA Private Office" → EFA; "AFA Household" → AFA; else initials. */
+/** "EFA Private Office" → EFA; "AFA Household" → AFA; "دار أبو عبدالملك" → دار; else initials. */
 export function badgeFor(name: string) {
   const acronym = name.match(/\b[A-Z]{2,4}\b/)?.[0];
   if (acronym) return acronym;
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '•';
+  const words = name.split(/\s+/).filter(Boolean);
+  // Arabic and other unicameral scripts have no initials: a short first word ("دار") reads better than two joined letters.
+  if (words[0] && !/[A-Za-z]/.test(name)) return words[0].length <= 4 ? words[0] : words[0].slice(0, 3);
+  return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '•';
 }
 const household = (id: string, name: string, role: string, i: number, origin?: string | null, owner = false): Household =>
   ({ id, name, role, badge: badgeFor(name), tone: TONES[i % TONES.length]!, origin, owner });

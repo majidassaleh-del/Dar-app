@@ -10,11 +10,11 @@ export const dynamic = 'force-dynamic';
 
 const STEPS = ['address', 'code', 'setup-phone', 'setup-phone-code', 'setup-email', 'setup-email-code', 'enrol', 'enrol-scan', 'totp'] as const;
 type Step = (typeof STEPS)[number];
-const ERRORS = ['address', 'code', 'expired', 'unavailable', 'tooMany', 'locked', 'used', 'resent', 'enrolled', 'signedOut', 'denied', 'invited'] as const;
+const ERRORS = ['address', 'code', 'expired', 'unavailable', 'tooMany', 'locked', 'used', 'resent', 'enrolled', 'signedOut', 'denied', 'invited', 'notOwner'] as const;
 const INFO = ['resent', 'enrolled', 'signedOut', 'invited'];
 
 /** Sign-in: provider code → (first time: phone, email, authenticator) → authenticator code → session. */
-export default async function SignIn({ params, searchParams }: { params: Promise<{ locale: Locale }>; searchParams: Promise<{ step?: string; e?: string; expired?: string }> }) {
+export default async function SignIn({ params, searchParams }: { params: Promise<{ locale: Locale }>; searchParams: Promise<{ step?: string; e?: string; expired?: string; as?: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
   const [sp, t0, s] = await Promise.all([searchParams, getTranslations('ui'), signInState()]);
@@ -22,6 +22,8 @@ export default async function SignIn({ params, searchParams }: { params: Promise
   let step: Step = (STEPS as readonly string[]).includes(sp.step ?? '') ? (sp.step as Step) : 'address';
   if (step !== 'address' && step !== 'code' && !s.hasProviderToken) step = 'address';
   if (step === 'code' && !s.address) step = 'address';
+  // The door this sign-in came through: chosen on the landing page, remembered while the steps run.
+  const door: 'owner' | 'member' = step === 'address' ? (sp.as === 'owner' ? 'owner' : sp.as === 'member' ? 'member' : s.entry ?? 'member') : s.entry ?? 'member';
   const err = sp.expired ? 'expired' : (ERRORS as readonly string[]).includes(sp.e ?? '') ? sp.e! : null;
   const qr = step === 'enrol-scan' && s.otpauthUri ? await QRCode.toString(s.otpauthUri, { type: 'svg', margin: 1, width: 196, color: { dark: '#0f3d2e', light: '#ffffff' } }) : null;
   const secret = s.otpauthUri ? new URL(s.otpauthUri).searchParams.get('secret') : null;
@@ -36,10 +38,14 @@ export default async function SignIn({ params, searchParams }: { params: Promise
 
   let body;
   if (step === 'address') body = (
-    <form action={startSignIn} className="flex flex-col gap-4">{hidden}
+    <form action={startSignIn} className="flex flex-col gap-4">{hidden}<input type="hidden" name="as" value={door} />
       <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">{t('auth.addressLabel')}</span>
         <input name="address" required autoFocus autoComplete="username" dir="ltr" className="field h-11 text-start" placeholder="05xxxxxxxx · name@example.com" /></label>
       {submit(t('auth.sendCode'))}
+      <div className="flex justify-between gap-3 text-sm">
+        <Link href={`/sign-in?as=${door === 'owner' ? 'member' : 'owner'}`} className="link">{t(door === 'owner' ? 'auth.switchMember' : 'auth.switchOwner')}</Link>
+        <Link href="/" className="link">{t('auth.backHome')}</Link>
+      </div>
     </form>
   );
   else if (step === 'code') body = (
@@ -103,8 +109,9 @@ export default async function SignIn({ params, searchParams }: { params: Promise
             <div className="mb-3 flex gap-1.5" aria-label={t('auth.progress', { step: phase, total: 3 })}>
               {[1, 2, 3].map((n) => <span key={n} className={`h-1 flex-1 rounded-full ${n <= phase ? 'bg-brass' : 'bg-track'}`} />)}
             </div>
+            <p className="text-xs font-semibold text-brass-ink">{t(`auth.entry.${door}`)}</p>
             <h1 className="text-2xl">{t(`auth.title.${step}`)}</h1>
-            <p className="text-sm text-muted-foreground">{t(`auth.hint.${step}`, { address: (step.startsWith('setup') && step.endsWith('code') ? s.setupTo : s.address) ?? '' })}</p>
+            <p className="text-sm text-muted-foreground">{t(step === 'address' ? `auth.entryHint.${door}` : `auth.hint.${step}`, { address: (step.startsWith('setup') && step.endsWith('code') ? s.setupTo : s.address) ?? '' })}</p>
           </div>
           <div className="flex flex-col gap-4 px-6 py-5">
             {err && <p role={INFO.includes(err) ? 'status' : 'alert'} className={`rounded-md px-3 py-2 text-sm ${INFO.includes(err) ? 'bg-selected text-primary' : 'bg-critical-soft text-critical'}`}>{t(`auth.e.${err}`)}</p>}

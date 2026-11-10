@@ -829,8 +829,20 @@
         "enrolled": "The authenticator is set up. Enter the next code it shows to finish.",
         "signedOut": "You have signed out.",
         "denied": "This account has no invitation. Accounts are created only by an invitation from the household owner.",
-        "invited": "Invitation accepted. Sign in with the mobile number or email you were invited with."
-      }
+        "invited": "Invitation accepted. Sign in with the mobile number or email you were invited with.",
+        "notOwner": "This entry is for household owners. Sign in here as a member."
+      },
+      "entry": {
+        "owner": "Household owner entry",
+        "member": "Member entry"
+      },
+      "entryHint": {
+        "owner": "Enter the mobile number or email of the household owner. We will send you a one-time code.",
+        "member": "Enter the mobile number or email you were invited with. We will send you a one-time code."
+      },
+      "switchMember": "I am a member",
+      "switchOwner": "I am the household owner",
+      "backHome": "Back to the start"
     },
     "runStatus": {
       "DRAFT": "Draft",
@@ -1041,6 +1053,22 @@
         "failed": "The change could not be saved. Try again.",
         "name": "Give the role a name."
       }
+    },
+    "landing": {
+      "title": "Your household, run as it should be.",
+      "lead": "Staff, payroll, expenses, vehicles and requests in one private workspace under your household's name.",
+      "ownerTitle": "Household owner",
+      "ownerBody": "For the head of the household. You enter your own household's workspace and are the only one who invites its members.",
+      "ownerCta": "Owner sign-in",
+      "memberTitle": "Member",
+      "memberBody": "For family members, staff and drivers who were invited. You enter the workspace of the household that invited you.",
+      "memberCta": "Member sign-in",
+      "inviteTitle": "Have an invitation?",
+      "inviteBody": "Paste the invitation link or code you received from the household owner. Without a valid invitation there is no access.",
+      "tokenLabel": "Invitation link or code",
+      "inviteCta": "Open invitation",
+      "tokenMissing": "Paste the invitation link or code first.",
+      "closed": "Accounts are by invitation from a household owner only. There is no public sign-up."
     }
   }
 }

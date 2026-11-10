@@ -829,8 +829,20 @@
         "enrolled": "Naka-set up na ang authenticator. Ilagay ang susunod na code para matapos.",
         "signedOut": "Naka-sign out ka na.",
         "denied": "Walang imbitasyon ang account na ito. Nagagawa lamang ang account sa imbitasyon ng may-ari ng tahanan.",
-        "invited": "Tinanggap ang imbitasyon. Mag-sign in gamit ang mobile number o email kung saan ka inimbitahan."
-      }
+        "invited": "Tinanggap ang imbitasyon. Mag-sign in gamit ang mobile number o email kung saan ka inimbitahan.",
+        "notOwner": "Para sa mga may-ari ng tahanan ang pasukang ito. Mag-sign in dito bilang miyembro."
+      },
+      "entry": {
+        "owner": "Pasukan ng may-ari ng tahanan",
+        "member": "Pasukan ng miyembro"
+      },
+      "entryHint": {
+        "owner": "Ilagay ang mobile number o email ng may-ari ng tahanan. Padadalhan ka namin ng isang-beses na code.",
+        "member": "Ilagay ang mobile number o email kung saan ka inimbitahan. Padadalhan ka namin ng isang-beses na code."
+      },
+      "switchMember": "Miyembro ako",
+      "switchOwner": "Ako ang may-ari ng tahanan",
+      "backHome": "Bumalik sa simula"
     },
     "runStatus": {
       "DRAFT": "Draft",
@@ -1041,6 +1053,22 @@
         "failed": "Hindi na-save ang pagbabago. Subukan muli.",
         "name": "Bigyan ng pangalan ang tungkulin."
       }
+    },
+    "landing": {
+      "title": "Ang iyong tahanan, pinapatakbo nang tama.",
+      "lead": "Mga kawani, sahod, gastos, sasakyan at kahilingan sa iisang pribadong workspace sa pangalan ng iyong tahanan.",
+      "ownerTitle": "May-ari ng tahanan",
+      "ownerBody": "Para sa puno ng tahanan. Papasok ka sa workspace ng sarili mong tahanan at ikaw lamang ang nag-iimbita ng mga miyembro nito.",
+      "ownerCta": "Sign-in ng may-ari",
+      "memberTitle": "Miyembro",
+      "memberBody": "Para sa mga kapamilya, kawani at driver na inimbitahan. Papasok ka sa workspace ng tahanang nag-imbita sa iyo.",
+      "memberCta": "Sign-in ng miyembro",
+      "inviteTitle": "May imbitasyon ka?",
+      "inviteBody": "I-paste ang link o code ng imbitasyon mula sa may-ari ng tahanan. Walang access kung walang wastong imbitasyon.",
+      "tokenLabel": "Link o code ng imbitasyon",
+      "inviteCta": "Buksan ang imbitasyon",
+      "tokenMissing": "I-paste muna ang link o code ng imbitasyon.",
+      "closed": "Sa imbitasyon lamang ng may-ari ng tahanan nagkakaroon ng account. Walang pampublikong pagrehistro."
     }
   }
 }

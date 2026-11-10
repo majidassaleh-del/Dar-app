@@ -61,3 +61,11 @@ export async function acceptInvitation(f: FormData) {
   if (r.status === 201 && r.body.accepted) redirect(`/${l}/sign-in?e=invited`);
   redirect(`/${l}/invite/${encodeURIComponent(token)}?e=${r.status === 403 ? 'denied' : r.status === 422 ? 'member' : 'unavailable'}`);
 }
+
+/** Landing page: a pasted invitation link or bare token → its invitation page (which answers "access denied" unless the token is live). */
+export async function openInvitation(f: FormData) {
+  const l = loc(f), raw = String(f.get('token') ?? '').trim();
+  const token = (raw.match(/\/invite\/([A-Za-z0-9_-]{8,128})/)?.[1] ?? raw).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 128);
+  if (!token) redirect(`/${l}?e=token`);
+  redirect(`/${l}/invite/${token}`);
+}

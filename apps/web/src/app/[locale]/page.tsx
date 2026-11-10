@@ -2,6 +2,9 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import type { Locale } from '@herp/i18n';
 import { Link } from '@/i18n/navigation';
 import { Shell } from '@/components/Shell';
+import { Landing } from '@/components/Landing';
+import { authToken } from '@/lib/api';
+import { webConfig } from '@/lib/config';
 import { SaudiPlate } from '@/components/SaudiPlate';
 import { decideRequest } from '@/lib/actions';
 import { fmt } from '@/lib/fmt';
@@ -15,9 +18,11 @@ const TONE: Record<Upcoming['tone'], string> = { critical: 'bg-critical', warnin
 const TEXT: Record<Upcoming['tone'], string> = { critical: 'text-critical', warning: 'text-warning', task: 'text-muted-foreground' };
 
 /** Home: what needs a decision, the next 30 days, the vehicles, and the household's state at a glance. */
-export default async function Home({ params }: { params: Promise<{ locale: Locale }> }) {
+export default async function Home({ params, searchParams }: { params: Promise<{ locale: Locale }>; searchParams: Promise<{ e?: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // Nobody signed in: the public front door (owner entry, member entry, invitation), not the workspace.
+  if (!(await authToken()) && !webConfig.demo) return <Landing locale={locale} error={(await searchParams).e} />;
   const [t0, tl0, tp0, f, h] = await Promise.all([getTranslations('ui'), getTranslations('lux'), getTranslations('pulse'), fmt(), loadHome(locale)]);
   const t = loose(t0), tl = loose(tl0), tp = loose(tp0);
   const s = h.session;
