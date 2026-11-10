@@ -64,7 +64,7 @@ model Invitation {
   id             String    @id @default(uuid()) @db.Uuid
   householdId    String    @db.Uuid
   roleId         String    @db.Uuid
-  phone          String // E.164; the sign-in identifier the account is created with
+  phone          String? // E.164; the sign-in identifier the account is created with (or the e-mail, when there is no phone)
   email          String?   @db.Citext
   displayName    String?
   locale         Locale    @default(ar)
@@ -761,7 +761,7 @@ model Role {
   householdId String     @db.Uuid
   systemRole  SystemRole
   nameI18n    Json       @default("{}")
-  isDefault   Boolean    @default(false) // seeded template, cannot delete
+  isDefault   Boolean    @default(false) // seeded role of its base (one per base, see rls.sql); false = custom role built on systemRole
   createdAt   DateTime   @default(now()) @db.Timestamptz(6)
 
   household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
@@ -769,7 +769,7 @@ model Role {
   memberships Membership[]
   invitations Invitation[]
 
-  @@unique([householdId, systemRole, isDefault])
+  @@index([householdId, systemRole])
   @@index([householdId])
   @@map("roles")
 }

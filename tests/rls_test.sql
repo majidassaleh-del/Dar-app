@@ -285,11 +285,12 @@ BEGIN
     PERFORM pg_temp.as_user(uid, 'h1');
     FOR p IN SELECT * FROM probes LOOP
       n_upd := pg_temp.try_rows(p.upd); n_del := pg_temp.try_rows(p.del);
-      ok := CASE WHEN who IN ('head1','efa') THEN n_upd > 0 AND n_del > 0 ELSE n_upd <= 0 AND n_del <= 0 END;
+      -- roles are the owner's alone: the EFA office admin keeps the other five.
+      ok := CASE WHEN who = 'head1' OR (who = 'efa' AND p.label <> 'roles') THEN n_upd > 0 AND n_del > 0 ELSE n_upd <= 0 AND n_del <= 0 END;
       IF NOT ok THEN RAISE EXCEPTION 'FAIL  % on %: update=% delete=%', who, p.label, n_upd, n_del; END IF;
     END LOOP;
     RAISE NOTICE 'PASS  % %', rpad(who, 6), CASE WHEN who IN ('head1','efa')
-      THEN 'CAN update+delete all 6 protected tables' ELSE 'cannot update/delete any of the 6 protected tables' END;
+      THEN 'CAN update+delete the protected tables (roles: owner only)' ELSE 'cannot update/delete any of the 6 protected tables' END;
   END LOOP;
 END $$;
 
@@ -306,15 +307,47 @@ SELECT pg_temp.expect('maid cannot grant herself permission overrides',
 
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000f','h1');
 SELECT pg_temp.expect('spouse cannot assign the Head role to the driver',
-  pg_temp.try_rows(format('UPDATE memberships SET "roleId" = %s WHERE id = %s', pg_temp.q('headRole'), pg_temp.q('driver'))), -1);
+  pg_temp.try_rows(format('UPDATE memberships SET "roleId" = %s WHERE id = %s', pg_temp.q('headRole'), pg_temp.q('driver'))), 0);
 SELECT pg_temp.expect('spouse cannot create a Head-type role',
   pg_temp.try_rows(format($q$INSERT INTO roles (id,"householdId","systemRole") VALUES (gen_random_uuid(), %s, 'HOUSEHOLD_HEAD')$q$, pg_temp.q('h1'))), -1);
 SELECT pg_temp.expect('spouse cannot suspend the Head',
-  pg_temp.try_rows(format('UPDATE memberships SET status = %L WHERE id = %s', 'SUSPENDED', pg_temp.q('head1'))), -1);
+  pg_temp.try_rows(format('UPDATE memberships SET status = %L WHERE id = %s', 'SUSPENDED', pg_temp.q('head1'))), 0);
 SELECT pg_temp.expect('spouse cannot edit role permission matrix',
   pg_temp.try_rows(format($q$UPDATE role_permissions SET scope = 'ALL' WHERE "roleId" = %s$q$, pg_temp.q('staffRole'))), -1);
-SELECT pg_temp.expect('spouse CAN still move the maid between staff roles',
-  pg_temp.try_rows(format('UPDATE memberships SET "roleId" = %L WHERE id = %s', '30000000-0000-0000-0000-000000000005', pg_temp.q('maid'))), 1);
+SELECT pg_temp.expect('spouse (who holds admin.members.manage) can no longer move the maid between staff roles: owner only',
+  pg_temp.try_rows(format('UPDATE memberships SET "roleId" = %L WHERE id = %s', '30000000-0000-0000-0000-000000000005', pg_temp.q('maid'))), 0);
+
+-- ---- 2b. member, role and permission management is the OWNER's alone ----
+SELECT pg_temp.as_user('00000000-0000-0000-0000-000000000010','h1');
+SELECT pg_temp.expect('EFA office admin cannot change a role, suspend, remove, create a role, edit a matrix or add an override',
+  pg_temp.try_rows(format('UPDATE memberships SET "roleId" = %L WHERE id = %s', '30000000-0000-0000-0000-000000000005', pg_temp.q('maid')))
+  + pg_temp.try_rows(format('UPDATE memberships SET status = %L WHERE id = %s', 'SUSPENDED', pg_temp.q('maid')))
+  + pg_temp.try_rows(format('DELETE FROM memberships WHERE id = %s', pg_temp.q('maid')))
+  + pg_temp.try_rows(format($q$INSERT INTO roles (id,"householdId","systemRole","nameI18n") VALUES (gen_random_uuid(), %s, 'DRIVER', '{"en":"Head Driver"}')$q$, pg_temp.q('h1')))
+  + pg_temp.try_rows(format($q$UPDATE role_permissions SET scope = 'ALL' WHERE "roleId" = %s$q$, pg_temp.q('staffRole')))
+  + pg_temp.try_rows(format($q$INSERT INTO membership_permissions VALUES (%s, 'invest.read', true, 'ALL')$q$, pg_temp.q('maid'))), -3);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
+SELECT pg_temp.expect('the owner can: move the maid to another role, suspend her, add an override, edit the staff matrix',
+  pg_temp.try_rows(format('UPDATE memberships SET "roleId" = %L WHERE id = %s', '30000000-0000-0000-0000-000000000005', pg_temp.q('maid')))
+  + pg_temp.try_rows(format('UPDATE memberships SET status = %L WHERE id = %s', 'SUSPENDED', pg_temp.q('maid')))
+  + pg_temp.try_rows(format($q$INSERT INTO membership_permissions VALUES (%s, 'invest.read', true, 'ALL')$q$, pg_temp.q('maid')))
+  + LEAST(pg_temp.try_rows(format($q$UPDATE role_permissions SET scope = 'OWN' WHERE "roleId" = %s$q$, pg_temp.q('staffRole'))), 1), 4);
+SELECT pg_temp.expect('custom roles: several on one base (Head Driver, Night Driver on DRIVER); never a second seeded role, never on an admin base',
+  pg_temp.try_rows(format($q$INSERT INTO roles (id,"householdId","systemRole","nameI18n") VALUES (gen_random_uuid(), %1$s, 'DRIVER', '{"en":"Head Driver"}'), (gen_random_uuid(), %1$s, 'DRIVER', '{"en":"Night Driver"}')$q$, pg_temp.q('h1')))
+  + pg_temp.try_rows(format($q$INSERT INTO roles (id,"householdId","systemRole","isDefault") VALUES (gen_random_uuid(), %s, 'DRIVER', true)$q$, pg_temp.q('h1')))
+  + pg_temp.try_rows(format($q$INSERT INTO roles (id,"householdId","systemRole") VALUES (gen_random_uuid(), %s, 'EFA_OFFICE_ADMIN')$q$, pg_temp.q('h1')))
+  + pg_temp.try_rows(format($q$INSERT INTO roles (id,"householdId","systemRole") VALUES (gen_random_uuid(), %s, 'HOUSEHOLD_HEAD')$q$, pg_temp.q('h1'))), -1);
+SELECT pg_temp.expect('a role never changes its base, the Head matrix is fixed, a Head takes no overrides, scopes are from the known set',
+  pg_temp.try_rows(format($q$UPDATE roles SET "systemRole" = 'HOUSEHOLD_HEAD' WHERE id = %s$q$, pg_temp.q('staffRole')))
+  + pg_temp.try_rows(format($q$DELETE FROM role_permissions WHERE "roleId" = %s$q$, pg_temp.q('headRole')))
+  + pg_temp.try_rows(format($q$UPDATE role_permissions SET scope = 'OWN' WHERE "roleId" = %s$q$, pg_temp.q('headRole')))
+  + pg_temp.try_rows(format($q$INSERT INTO membership_permissions VALUES (%s, 'invest.read', false, 'ALL')$q$, pg_temp.q('head1')))
+  + pg_temp.try_rows(format($q$INSERT INTO membership_permissions VALUES (%s, 'fleet.read', true, 'EVERYTHING')$q$, pg_temp.q('maid'))), -4);
+SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000b','h2');
+SELECT pg_temp.expect('the other household''s owner reaches none of it',
+  pg_temp.try_rows(format('UPDATE memberships SET status = %L WHERE id = %s', 'SUSPENDED', pg_temp.q('maid')))
+  + pg_temp.try_rows(format($q$DELETE FROM role_permissions WHERE "roleId" = %s$q$, pg_temp.q('staffRole')))
+  + LEAST(pg_temp.try_rows(format($q$INSERT INTO membership_permissions VALUES (%s, 'invest.read', true, 'ALL')$q$, pg_temp.q('maid'))), 0), -1);
 
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000a','h1');
 SELECT pg_temp.expect('the last Head cannot demote themselves',
@@ -825,12 +858,12 @@ BEGIN
   SELECT string_agg(p.proname, ', ') INTO extra FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'app' AND p.prosecdef AND p.prorettype <> 'trigger'::regtype AND has_function_privilege('app_user', p.oid, 'EXECUTE')
     AND p.proname NOT IN ('accept_invitation', 'accept_totp_step', 'account_custodian', 'activate_invited_memberships', 'auth_brand', 'card_holder', 'close_books', 'consume_auth_challenge', 'current_household_id',
-      'current_membership_id', 'custodian_staff', 'funding_credit', 'has_outstanding_items', 'has_valid_medical', 'household_today', 'invitation_preview', 'is_admin_role',
+      'current_membership_id', 'custodian_staff', 'funding_credit', 'has_outstanding_items', 'has_valid_medical', 'household_today', 'invitation_preview', 'is_admin_role', 'is_head_role',
       'is_household_admin', 'is_household_owner', 'my_households', 'my_payslip_runs', 'my_wards', 'perm_scope', 'petty_cash_custodian', 'provision_household',
       'record_receipt_extraction', 'record_totp_failure', 'request_parties', 'reverse_journal_entry', 'reverse_transaction', 'set_totp_secret',
       'staff_member', 'totp_locked', 'trip_parties', 'user_admitted', 'user_onboarded', 'vehicle_drivers', 'work_order_parties');
   IF extra IS NOT NULL THEN RAISE EXCEPTION 'FAIL  unreviewed SECURITY DEFINER functions executable by app_user: %', extra; END IF;
-  RAISE NOTICE 'PASS  definer functions reachable by requests: only the 39 reviewed, tenant-scoped ones';
+  RAISE NOTICE 'PASS  definer functions reachable by requests: only the 40 reviewed, tenant-scoped ones';
 END $$;
 
 -- Data in both households, so the sweeps below would see a leak.
@@ -908,6 +941,9 @@ SELECT pg_temp.expect('…but cannot read the stored token hash, pre-accept one,
   pg_temp.try_rows('SELECT "tokenHash" FROM invitations')
   + pg_temp.try_rows(replace(replace(pg_temp.invite('tok-x', '+966500000109'), '"invitedById")', '"invitedById","acceptedAt")'), 'app.current_membership_id()', 'app.current_membership_id(), now()'))
   + pg_temp.try_rows(pg_temp.invite('tok-y', '+966500000109', 'STAFF', '30 days')), -3);
+SELECT pg_temp.expect('an invitation may be addressed to an e-mail alone, but not to nobody',
+  pg_temp.try_rows(replace(replace(pg_temp.invite('tok-mail', 'X'), 'phone,', 'email,'), quote_literal('X'), quote_literal('only.mail@example.test')))
+  + pg_temp.try_rows(replace(pg_temp.invite('tok-none', 'X'), quote_literal('X'), 'NULL')), 0);
 SELECT pg_temp.as_user('00000000-0000-0000-0000-000000000010','h1');
 SELECT pg_temp.expect('an EFA office admin is not the owner: no invitation, none visible', pg_temp.try_rows(pg_temp.invite('tok-efa', '+966500000110')) + (SELECT count(*) FROM invitations), -1);
 SELECT pg_temp.as_user('00000000-0000-0000-0000-00000000000f','h1');

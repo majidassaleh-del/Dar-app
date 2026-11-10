@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs
 import { randomUUID } from 'node:crypto';
 import { ENV, type Env } from '../config/env';
 
-export interface IdpIdentity { phone: string; email?: string | null }
+export interface IdpIdentity { phone?: string | null; email?: string | null }
 interface IdpUser { id: string; phone?: string | null; email?: string | null }
 
 const digits = (s?: string | null) => (s ?? '').replace(/\D/g, '');
@@ -25,27 +25,27 @@ export class IdpAdminService {
   async ensureUser(who: IdpIdentity): Promise<string> {
     const base = this.env.AUTH_ADMIN_URL?.replace(/\/+$/, '');
     if (!base) {
-      const known = this.local.find((u) => u.phone === who.phone || (!!who.email && u.email === who.email));
+      const known = this.local.find((u) => (!!who.phone && u.phone === who.phone) || (!!who.email && u.email === who.email));
       if (known) return known.id;
-      const u = { id: randomUUID(), phone: who.phone, email: who.email ?? null };
+      const u = { id: randomUUID(), phone: who.phone ?? null, email: who.email ?? null };
       this.local.push(u);
       return u.id;
     }
     const headers = { 'Content-Type': 'application/json', apikey: this.env.AUTH_ADMIN_KEY!, Authorization: `Bearer ${this.env.AUTH_ADMIN_KEY}` };
     const create = await fetch(`${base}/admin/users`, { method: 'POST', headers,
-      body: JSON.stringify({ phone: who.phone, ...(who.email ? { email: who.email, email_confirm: true } : {}), phone_confirm: true }) }).catch(() => undefined);
+      body: JSON.stringify({ ...(who.phone ? { phone: who.phone, phone_confirm: true } : {}), ...(who.email ? { email: who.email, email_confirm: true } : {}) }) }).catch(() => undefined);
     if (create?.ok) {
       const u = (await create.json()) as IdpUser;
       if (u?.id) return u.id;
     }
     // Already registered (an earlier, interrupted acceptance): find that identity; exact match only.
     if (create && (create.status === 422 || create.status === 409 || create.status === 400)) {
-      for (const needle of [who.email, digits(who.phone)].filter(Boolean) as string[]) {
+      for (const needle of [who.email, digits(who.phone)].filter(Boolean) as string[]) { // phones are stored without "+"
         const r = await fetch(`${base}/admin/users?per_page=50&filter=${encodeURIComponent(needle)}`, { headers }).catch(() => undefined);
         if (!r?.ok) continue;
         const body = (await r.json()) as { users?: IdpUser[] } | IdpUser[];
         const hit = (Array.isArray(body) ? body : body.users ?? [])
-          .find((u) => (!!who.email && u.email?.toLowerCase() === who.email.toLowerCase()) || (!!u.phone && digits(u.phone) === digits(who.phone)));
+          .find((u) => (!!who.email && u.email?.toLowerCase() === who.email.toLowerCase()) || (!!who.phone && !!u.phone && digits(u.phone) === digits(who.phone)));
         if (hit?.id) return hit.id;
       }
     }

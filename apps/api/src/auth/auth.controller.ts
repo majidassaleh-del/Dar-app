@@ -225,7 +225,7 @@ export class AuthController {
     const token = (body as { token?: unknown } | null)?.token;
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(token)) throw new ForbiddenException(DENIED);
     const hash = invitationHash(token);
-    const [p] = await this.db.withRls({ userId: '' }, (tx) => tx.$queryRaw<Array<{ phone: string; email: string | null; locale: string; household_name: I18nText;
+    const [p] = await this.db.withRls({ userId: '' }, (tx) => tx.$queryRaw<Array<{ phone: string | null; email: string | null; locale: string; household_name: I18nText;
       role_name: I18nText; expires_at: Date; existing_user: string | null }>>`SELECT * FROM app.invitation_preview(${hash})`);
     if (!p) throw new ForbiddenException(DENIED);
     return { ...p, hash };

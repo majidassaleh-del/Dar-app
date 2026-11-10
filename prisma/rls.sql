@@ -138,6 +138,20 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     WHERE m.id = app.current_membership_id()), false)
 $$;
 
+-- The household OWNER: an active Household Head. Role-based, like is_household_admin, and
+-- narrower: the EFA office admin is not the owner. Gates invitations, member roles and
+-- status, custom roles, permission matrices and per-member overrides.
+CREATE OR REPLACE FUNCTION app.is_household_owner() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT COALESCE((SELECT r."systemRole" = 'HOUSEHOLD_HEAD' FROM memberships m JOIN roles r ON r.id = m."roleId"
+                   WHERE m.id = app.current_membership_id() AND m."householdId" = app.current_household_id()), false)
+$$;
+
+CREATE OR REPLACE FUNCTION app.is_head_role(p_role uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT COALESCE((SELECT "systemRole" = 'HOUSEHOLD_HEAD' FROM roles WHERE id = p_role AND app.tenant_ok("householdId")), false)
+$$;
+
 CREATE OR REPLACE FUNCTION app.is_admin_role(p_role uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT COALESCE((SELECT "systemRole" IN ('HOUSEHOLD_HEAD', 'EFA_OFFICE_ADMIN') FROM roles WHERE id = p_role AND app.tenant_ok("householdId")), false)
@@ -236,31 +250,37 @@ ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE role_permissions FORCE ROW LEVEL SECURITY;
 CREATE POLICY rp_tenant ON role_permissions FOR ALL TO app_user
   USING ("roleId" IN (SELECT id FROM roles))
-  WITH CHECK ("roleId" IN (SELECT id FROM roles) AND (SELECT app.is_household_admin()));
+  WITH CHECK ("roleId" IN (SELECT id FROM roles) AND (SELECT app.is_household_owner()));
 
 ALTER TABLE membership_permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE membership_permissions FORCE ROW LEVEL SECURITY;
 CREATE POLICY mp_tenant ON membership_permissions FOR ALL TO app_user
   USING ("membershipId" IN (SELECT id FROM memberships))
-  WITH CHECK ("membershipId" IN (SELECT id FROM memberships) AND (SELECT app.is_household_admin()));
+  WITH CHECK ("membershipId" IN (SELECT id FROM memberships) AND (SELECT app.is_household_owner()));
 
 -- ======================================== LAYER 2: ROLE / SCOPE (restrictive)
 -- Helper macro: CREATE POLICY <name> ON <t> AS RESTRICTIVE FOR <cmd> TO app_user ...
 
--- Members & roles: everyone can see the household roster; only admins write.
+-- Members & roles: everyone can see the household roster; only the household OWNER (an active
+-- Household Head) writes: roles, suspensions, removals, permission matrices and overrides. Neither
+-- the EFA office admin nor a member holding admin.members.manage can. New memberships come only
+-- from an accepted invitation (app.accept_invitation, definer).
 CREATE POLICY members_write ON memberships AS RESTRICTIVE FOR INSERT TO app_user
-  WITH CHECK ((SELECT app.perm_scope('admin.members.manage')) = 'ALL');
+  WITH CHECK ((SELECT app.is_household_owner()));
 -- A member may edit their own row, but the guard trigger below limits
 -- self-edits to cosmetic columns (displayName). Changing role, status,
--- guardian or expiry needs admin.members.manage, and granting an ADMIN
--- role (Head / EFA) needs to be an admin oneself.
+-- guardian or expiry is the owner's alone.
 CREATE POLICY members_update ON memberships AS RESTRICTIVE FOR UPDATE TO app_user
-  USING ((SELECT app.perm_scope('admin.members.manage')) = 'ALL' OR "userId" = app.current_user_id());
+  USING ((SELECT app.is_household_owner()) OR "userId" = app.current_user_id());
 CREATE POLICY members_delete ON memberships AS RESTRICTIVE FOR DELETE TO app_user
-  USING ((SELECT app.perm_scope('admin.members.manage')) = 'ALL');
+  USING ((SELECT app.is_household_owner()));
+-- Custom roles are labels on a non-admin base role; the two admin roles exist once, seeded.
 CREATE POLICY roles_write ON roles AS RESTRICTIVE FOR INSERT TO app_user
-  WITH CHECK ((SELECT app.perm_scope('admin.members.manage')) = 'ALL'
-              AND ("systemRole" NOT IN ('HOUSEHOLD_HEAD', 'EFA_OFFICE_ADMIN') OR (SELECT app.is_household_admin())));
+  WITH CHECK ((SELECT app.is_household_owner()) AND NOT "isDefault" AND "systemRole" NOT IN ('HOUSEHOLD_HEAD', 'EFA_OFFICE_ADMIN'));
+CREATE POLICY roles_owner_upd ON roles AS RESTRICTIVE FOR UPDATE TO app_user
+  USING ((SELECT app.is_household_owner())) WITH CHECK ((SELECT app.is_household_owner()));
+CREATE POLICY roles_owner_del ON roles AS RESTRICTIVE FOR DELETE TO app_user
+  USING ((SELECT app.is_household_owner()));
 
 -- ---- Staff HR --------------------------------------------------------------
 CREATE POLICY staff_read ON staff_profiles AS RESTRICTIVE FOR SELECT TO app_user
@@ -481,18 +501,34 @@ BEGIN
       USING ((SELECT app.is_household_admin()))$p$, t);
   END LOOP;
 END $$;
--- Seeded system roles can never be deleted (would orphan memberships).
+-- Seeded system roles can never be deleted (would orphan memberships), and there is exactly
+-- one per base role; custom roles (isDefault = false) share a base freely.
 CREATE POLICY roles_keep_defaults ON roles AS RESTRICTIVE FOR DELETE TO app_user USING (NOT "isDefault");
+CREATE UNIQUE INDEX IF NOT EXISTS roles_one_default_per_base ON roles ("householdId", "systemRole") WHERE "isDefault";
+-- A role keeps its base and its seeded / custom nature for life; only its label changes.
+CREATE OR REPLACE FUNCTION app.guard_role() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF app.caller_is_restricted() AND (NEW."systemRole", NEW."isDefault", NEW."householdId") IS DISTINCT FROM (OLD."systemRole", OLD."isDefault", OLD."householdId") THEN
+    RAISE EXCEPTION 'a role''s base cannot change; create another role instead' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS roles_guard ON roles;
+CREATE TRIGGER roles_guard BEFORE UPDATE ON roles FOR EACH ROW EXECUTE FUNCTION app.guard_role();
 
 -- ---- Remaining gaps found by the coverage query -----------------------------
+-- Permission matrices and per-member overrides: the owner alone. The Household Head role's own
+-- matrix is fixed (the owner cannot lock the household out), and nobody overrides a Head.
 CREATE POLICY rp_admin ON role_permissions AS RESTRICTIVE FOR ALL TO app_user
-  USING (true) WITH CHECK ((SELECT app.is_household_admin()));
+  USING (true) WITH CHECK ((SELECT app.is_household_owner()) AND NOT app.is_head_role("roleId") AND scope IN ('ALL', 'OWN', 'ASSIGNED', 'WARDS'));
 CREATE POLICY rp_admin_del ON role_permissions AS RESTRICTIVE FOR DELETE TO app_user
-  USING ((SELECT app.is_household_admin()));
+  USING ((SELECT app.is_household_owner()) AND NOT app.is_head_role("roleId"));
 CREATE POLICY mp_admin ON membership_permissions AS RESTRICTIVE FOR ALL TO app_user
-  USING (true) WITH CHECK ((SELECT app.is_household_admin()));
+  USING (true) WITH CHECK ((SELECT app.is_household_owner()) AND scope IN ('ALL', 'OWN', 'ASSIGNED', 'WARDS')
+                           AND NOT app.is_head_role((SELECT m."roleId" FROM memberships m WHERE m.id = "membershipId")));
 CREATE POLICY mp_admin_del ON membership_permissions AS RESTRICTIVE FOR DELETE TO app_user
-  USING ((SELECT app.is_household_admin()));
+  USING ((SELECT app.is_household_owner()));
 
 -- Approval rows are created ONLY by the routing trigger (below), never by a
 -- client, so a requester cannot pick a friendly approver.
@@ -553,12 +589,12 @@ DECLARE v_manager boolean; v_admin boolean;
 BEGIN
   IF NOT app.caller_is_restricted() THEN RETURN NEW; END IF; -- provisioning / workers
   -- COALESCE matters: perm_scope() is NULL when not granted, and NOT NULL skips an IF.
-  v_manager := COALESCE(app.perm_scope('admin.members.manage') = 'ALL', false);
+  v_manager := app.is_household_owner(); -- the owner alone manages members
   v_admin   := app.is_household_admin();
 
-  IF app.is_admin_role(NEW."roleId") AND NOT v_admin
+  IF app.is_admin_role(NEW."roleId") AND NOT v_manager
      AND (TG_OP = 'INSERT' OR NEW."roleId" IS DISTINCT FROM OLD."roleId") THEN
-    RAISE EXCEPTION 'only a Household Head or EFA Office Admin can grant an admin role'
+    RAISE EXCEPTION 'only the household owner can grant an admin role'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
@@ -573,9 +609,9 @@ BEGIN
       RAISE EXCEPTION 'members may only change their own display name' USING ERRCODE = 'insufficient_privilege';
     END IF;
     -- Admins can be demoted/suspended only by admins, and never the last Head.
-    IF app.is_admin_role(OLD."roleId") AND NOT v_admin
+    IF app.is_admin_role(OLD."roleId") AND NOT v_manager
        AND (NEW."roleId", NEW.status) IS DISTINCT FROM (OLD."roleId", OLD.status) THEN
-      RAISE EXCEPTION 'only an admin can change another admin' USING ERRCODE = 'insufficient_privilege';
+      RAISE EXCEPTION 'only the household owner can change an admin' USING ERRCODE = 'insufficient_privilege';
     END IF;
     IF (SELECT "systemRole" FROM roles WHERE id = OLD."roleId") = 'HOUSEHOLD_HEAD'
        AND ((SELECT "systemRole" FROM roles WHERE id = NEW."roleId") <> 'HOUSEHOLD_HEAD' OR NEW.status <> 'ACTIVE')
@@ -2664,11 +2700,6 @@ CREATE TRIGGER users_0_identifiers BEFORE UPDATE ON users FOR EACH ROW EXECUTE F
 -- INVITED membership, which grants nothing until that person signs in with that phone / e-mail
 -- and completes onboarding. No other path creates a user row, and a signed-in identity without
 -- one is refused everywhere (app.user_admitted → 403).
-CREATE OR REPLACE FUNCTION app.is_household_owner() RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT COALESCE((SELECT r."systemRole" = 'HOUSEHOLD_HEAD' FROM memberships m JOIN roles r ON r.id = m."roleId"
-                   WHERE m.id = app.current_membership_id() AND m."householdId" = app.current_household_id()), false)
-$$;
 GRANT EXECUTE ON FUNCTION app.is_household_owner() TO app_user;
 
 REVOKE ALL ON invitations FROM app_user;
@@ -2679,7 +2710,7 @@ CREATE POLICY inv_read ON invitations AS RESTRICTIVE FOR SELECT TO app_user USIN
 CREATE POLICY inv_ins ON invitations AS RESTRICTIVE FOR INSERT TO app_user
   WITH CHECK ((SELECT app.is_household_owner()) AND "invitedById" = app.current_membership_id()
               AND "acceptedAt" IS NULL AND "acceptedUserId" IS NULL AND "revokedAt" IS NULL
-              AND "tokenHash" ~ '^[0-9a-f]{64}$' AND phone ~ '^\+[1-9][0-9]{7,14}$'
+              AND "tokenHash" ~ '^[0-9a-f]{64}$' AND (phone IS NULL OR phone ~ '^\+[1-9][0-9]{7,14}$') AND (phone IS NOT NULL OR email IS NOT NULL)
               AND "expiresAt" > now() AND "expiresAt" <= now() + interval '7 days 1 minute');
 CREATE POLICY inv_upd ON invitations AS RESTRICTIVE FOR UPDATE TO app_user
   USING ((SELECT app.is_household_owner()) AND "acceptedAt" IS NULL)
@@ -2717,7 +2748,7 @@ BEGIN
   END IF;
   -- The invited phone / e-mail identify exactly one account: p_user.
   IF EXISTS (SELECT 1 FROM users u WHERE u.id <> p_user AND (u.phone = i.phone OR (i.email IS NOT NULL AND u.email = i.email)))
-     OR EXISTS (SELECT 1 FROM users u WHERE u.id = p_user AND NOT COALESCE(u.phone = i.phone OR u.email = i.email, false)) THEN
+     OR EXISTS (SELECT 1 FROM users u WHERE u.id = p_user AND NOT (COALESCE(u.phone = i.phone, false) OR COALESCE(u.email = i.email, false))) THEN
     RAISE EXCEPTION 'this phone or e-mail already belongs to a different account' USING ERRCODE = 'check_violation';
   END IF;
   IF EXISTS (SELECT 1 FROM memberships m WHERE m."householdId" = i."householdId" AND m."userId" = p_user) THEN

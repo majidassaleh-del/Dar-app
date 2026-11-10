@@ -12,13 +12,13 @@ import type { RequestContext } from '../tenancy/request-context';
 
 const LOCALES = ['ar', 'en', 'hi', 'tl', 'am', 'bn'] as const;
 const Create = z.object({
-  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'E.164, e.g. +9665XXXXXXXX'),
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'E.164, e.g. +9665XXXXXXXX').optional(),
   email: z.string().trim().toLowerCase().email().max(254).optional(),
   roleId: z.guid(),
   displayName: z.string().trim().min(1).max(80).optional(),
   locale: z.enum(LOCALES).optional(),
   expiresInHours: z.number().int().min(1).max(168).default(72),
-}).strict();
+}).strict().refine((b) => b.phone || b.email, { message: 'a phone number or an e-mail address is required' });
 
 /**
  * Invitations: the only way a new account is created. Only the household owner (an active
@@ -39,7 +39,7 @@ export class InvitationsController {
       const now = Date.now();
       return { data: rows.map(({ role, ...i }) => ({ ...i,
         status: i.acceptedAt ? 'ACCEPTED' : i.revokedAt ? 'REVOKED' : i.expiresAt.getTime() <= now ? 'EXPIRED' : 'PENDING',
-        role: { id: role.id, systemRole: role.systemRole, name: resolveI18n(role.nameI18n as I18nText, { locale: ctx.locale }).text } })) };
+        role: { id: role.id, systemRole: role.systemRole, name: resolveI18n(role.nameI18n as I18nText, { locale: ctx.locale }).text || role.systemRole } })) };
     });
   }
 
@@ -53,10 +53,10 @@ export class InvitationsController {
       // Raw insert: the request role cannot read "tokenHash", so a RETURNING * (Prisma create) would be refused.
       const [row] = await tx.$queryRaw<Array<{ id: string }>>`
         INSERT INTO invitations (id, "householdId", "roleId", phone, email, "displayName", locale, "tokenHash", "expiresAt", "invitedById")
-        VALUES (gen_random_uuid(), ${ctx.householdId}::uuid, ${b.roleId}::uuid, ${b.phone}, ${b.email ?? null}, ${b.displayName ?? null},
+        VALUES (gen_random_uuid(), ${ctx.householdId}::uuid, ${b.roleId}::uuid, ${b.phone ?? null}, ${b.email ?? null}, ${b.displayName ?? null},
                 ${locale}::"Locale", ${invitationHash(token)}, ${expiresAt}, ${ctx.membershipId}::uuid)
         RETURNING id::text`;
-      await audit(tx, ctx, { action: 'CREATE', entityType: 'Invitation', entityId: row!.id, after: { phone: b.phone, email: b.email ?? null, roleId: b.roleId, expiresAt: expiresAt.toISOString() } });
+      await audit(tx, ctx, { action: 'CREATE', entityType: 'Invitation', entityId: row!.id, after: { phone: b.phone ?? null, email: b.email ?? null, roleId: b.roleId, expiresAt: expiresAt.toISOString() } });
       const path = `/${locale}/invite/${token}`;
       return { id: row!.id, token, path, url: this.env.PUBLIC_APP_URL ? `${this.env.PUBLIC_APP_URL.replace(/\/+$/, '')}${path}` : null, expiresAt: expiresAt.toISOString() };
     });

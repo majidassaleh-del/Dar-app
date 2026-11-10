@@ -110,21 +110,26 @@ If wages and amounts must also be unreadable to administrators, application-leve
 | GET | `/households/current/export` | `admin.household.manage` | Async full data export (PDPL) |
 | GET | `/members` | member | Household roster |
 | GET | `/invitations` | **household owner** | Invitations of the household with `status` (`PENDING`, `ACCEPTED`, `REVOKED`, `EXPIRED`). Never the token |
-| POST | `/invitations` | **household owner** | `{ phone, email?, roleId, displayName?, locale?, expiresInHours? (1–168, default 72) }` → `{ id, token, path, url, expiresAt }`. The token is returned this once |
+| POST | `/invitations` | **household owner** | `{ phone?, email?, roleId` (built-in or custom role)`, displayName?, locale?, expiresInHours? (1–168, default 72) }` → `{ id, token, path, url, expiresAt }`. The token is returned this once |
 | DELETE | `/invitations/{id}` | **household owner** | Revokes a pending invitation |
 | POST | `/auth/invitations/preview` | public | `{ token }` → household, role, masked phone / e-mail. `403` unless the token is live |
 | POST | `/auth/invitations/accept` | public | `{ token }` → creates the account (see 2b). `403` unless the token is live |
-| GET | `/members/{id}` | member | |
-| PATCH | `/members/{id}` | `admin.members.manage` | Role, status (suspend), guardian, expiry |
-| DELETE | `/members/{id}` | `admin.members.manage` | Revokes access |
-| PUT | `/members/{id}/permissions` | `admin.members.manage` | Overrides `[{ permissionId, granted, scope }]` |
-| GET | `/roles` | member | Roles of the household `[{ id, systemRole, name, isDefault }]` |
-| POST | `/roles` | `admin.members.manage` | Custom role cloned from a system role |
-| PATCH · DELETE | `/roles/{id}` | **Head / EFA only** | Protected table. Seeded system roles cannot be deleted |
-| GET | `/permissions` | member | Global catalogue (localized descriptions) |
+| PATCH | `/members/{id}` | self · **household owner** | A member renames themselves (`displayName`). `roleId` and `status` (`ACTIVE`, `SUSPENDED`, `REVOKED`): owner only |
+| DELETE | `/members/{id}` | **household owner** | Removes the member (status `REVOKED`): access ends at once, history stays |
+| GET | `/members/{id}/permissions` | **household owner** | Per permission: what the role gives, the override, the effective scope |
+| PUT | `/members/{id}/permissions` | **household owner** | Replaces the overrides `{ overrides: [{ permissionId, granted, scope? }] }`. A denial wins over the role |
+| GET | `/roles` | member | `[{ id, systemRole, custom, name, baseName, members, nameI18n }]` |
+| POST | `/roles` | **household owner** | Custom role `{ baseRole, name? \| nameI18n? }` on a non-admin base; starts with a copy of the base role's permissions |
+| PATCH | `/roles/{id}` | **household owner** | Renames a custom role |
+| DELETE | `/roles/{id}` | **household owner** | Custom roles only; `409` while a member holds it or an invitation was issued for it |
+| GET | `/roles/{id}/permissions` | **household owner** | The role's matrix over the whole catalogue |
+| PUT | `/roles/{id}/permissions` | **household owner** | Replaces the matrix `{ permissions: [{ permissionId, scope }] }` (`ALL`, `OWN`, `ASSIGNED`, `WARDS`) |
+| GET | `/permissions` | member | Global catalogue `[{ id, module, description }]` |
 | GET | `/audit-logs` | `admin.audit.read` | Filter by entity, actor or action |
 
-Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_ADMIN`) and editing role matrices or overrides are refused with `403` for non-admins. Removing or demoting the last active Head returns `409 LAST_HEAD`.
+**Member, role and permission management is the household owner's alone** (an active `HOUSEHOLD_HEAD`), in the API and in RLS: changing a role, suspending, removing, custom roles, role matrices and per-member overrides are refused with `403` for everyone else, the EFA office admin and holders of `admin.members.manage` included. Suspending or demoting the last active Head returns `422`. The Household Head role's matrix is fixed and a Head takes no overrides. An `INVITED` member cannot be switched to `ACTIVE` by hand (`422`): that happens at their first sign-in.
+
+**Custom roles** are labels on a base role (`Head Driver` on `DRIVER`, `Office Staff` on `STAFF`): `systemRole` stays the base, so features keyed to the base role keep working, while the permission matrix is the custom role's own. Several custom roles may share a base. Tests: `apps/api/test/members-admin.e2e.test.ts` and DB-suite section 2b.
 
 ## 2b. Invitation-only accounts
 
@@ -132,7 +137,7 @@ Role changes: granting or changing an admin role (`HOUSEHOLD_HEAD`, `EFA_OFFICE_
 
 There is no sign-up. An account exists only after the **household owner** (an active `HOUSEHOLD_HEAD`; not the EFA office admin, not a member holding `admin.members.manage`) issued an invitation and its token was accepted.
 
-1. **Issue.** `POST /invitations` binds the invitation to a phone number (and optionally an e-mail) and a role. The token is 32 random bytes; the database stores only its SHA-256, in a column the request role cannot read. It is valid for at most 7 days and works once.
+1. **Issue.** `POST /invitations` binds the invitation to a phone number, an e-mail address or both, and to a role (built-in or custom). The token is 32 random bytes; the database stores only its SHA-256, in a column the request role cannot read. It is valid for at most 7 days and works once.
 2. **Accept.** `POST /auth/invitations/accept { token }` needs no session. It creates the sign-in identity at the identity provider through its admin API (`AUTH_ADMIN_URL`, service-role key), then the user row and an `INVITED` membership, all bound to the invited phone / e-mail. Holding the link is therefore not enough: only the person who receives the code on that phone / e-mail can sign in.
 3. **Activate.** The membership becomes `ACTIVE` when that person has signed in and completed onboarding (or, for an existing account invited to a second household, at their next full sign-in). Until then it grants nothing.
 
@@ -140,6 +145,8 @@ There is no sign-up. An account exists only after the **household owner** (an ac
 * accepting or previewing with no token, a malformed, unknown, expired, revoked or already used token: indistinguishable on purpose;
 * any request, onboarding included, from a signed-in identity that has no user row with a live membership (`app.user_admitted()`), for example an identity that exists at the provider but was never invited;
 * issuing, listing or revoking invitations by anyone but the owner. The other household's owner gets `404`, as for every cross-household request.
+
+An invitation addressed to an e-mail alone creates an account without a phone; the person still confirms a mobile number during first sign-in, as everyone does.
 
 An accepted invitation cannot be revoked (remove the member instead). A token for a phone or e-mail that belongs to a different account is refused with `422`, as is one for somebody who is already a member.
 

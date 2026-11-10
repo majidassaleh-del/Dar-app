@@ -24,10 +24,11 @@ import { ProblemFilter } from './common/problem.filter';
 import { HealthController } from './health/health.controller';
 import { MembersController } from './members/members.controller';
 import { InvitationsController } from './members/invitations.controller';
+import { RolesController } from './members/roles.controller';
 
 @Module({
   imports: [ConfigModule, DbModule, CryptoModule, AuthModule, StaffModule, RequestsModule, PettyCashModule, WorkOrdersModule, LedgerModule, BankingModule, FilesModule, HrModule, NotificationsModule, DashboardModule, SyncModule, ReceiptsModule, FleetModule],
-  controllers: [HealthController, MembersController, InvitationsController],
+  controllers: [HealthController, MembersController, InvitationsController, RolesController],
   providers: [
     // Order matters: authenticate, then resolve the household membership.
     { provide: APP_GUARD, useClass: JwtGuard },
