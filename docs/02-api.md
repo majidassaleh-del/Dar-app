@@ -98,7 +98,7 @@ If wages and amounts must also be unreadable to administrators, application-leve
 | POST | `/auth/otp/verify` | public | Returns access and refresh tokens |
 | POST | `/auth/refresh` | public | |
 | POST | `/auth/logout` | self | Revokes the refresh token and device |
-| GET | `/me` | self | Profile and the caller's active memberships `[{householdId, slug, name, membershipId, systemRole, role}]`. `slug` is the tenant subdomain (`efa` → `efa.darhub.net`) |
+| GET | `/me` | self | Profile and the caller's active memberships `[{householdId, slug, name, membershipId, systemRole, role}]`. `slug` is the tenant subdomain (`efa` → `efa.darerp.net`) |
 | PATCH | `/me` | self | `preferredLocale`, `timezone`, name, avatar |
 | POST | `/me/devices` | self | Registers a push token |
 | DELETE | `/me/devices/{id}` | self | |
@@ -835,7 +835,7 @@ The Pulse is for the Head and the EFA office only. Other members get 403, and no
 * **API client.** `src/lib/api.ts` is server-only, so the token never reaches the browser. It calls `HERP_API_URL` with the bearer token from the httpOnly session cookie (`HERP_SESSION_COOKIE`, default `herp_session`). All settings are in `src/lib/config.ts` and `apps/web/.env.example`.
 * **Dev token.** `HERP_DEV_TOKEN` is honoured only when `NODE_ENV !== 'production'`.
 * **Active household.** It is sent as `X-Household-Id`, and the API's membership check is always the authority.
-  * **On a tenant subdomain** (`efa.darhub.net`, with `HERP_TENANT_BASE_DOMAIN=darhub.net`), the household is the one with that slug. A user who is not a member there gets a 404. There is never a fall-back to another household.
+  * **On a tenant subdomain** (`efa.darerp.net`, with `HERP_TENANT_BASE_DOMAIN=darerp.net`), the household is the one with that slug. A user who is not a member there gets a 404. There is never a fall-back to another household.
   * **On the app host**, it comes from the switcher's httpOnly cookie (`HERP_HOUSEHOLD_COOKIE`). If the cookie names a household the user does not belong to, the first membership is used.
 * **Settlement proxy.** `GET /api/settlement?staffId&asOf&locale` calls `end-of-service`, `leave-balance` and `final-settlement`. The browser never computes amounts in live mode.
 * **Sample mode.** Without a session the home page shows labelled sample data, and the sections ask the user to sign in.

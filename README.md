@@ -6,7 +6,7 @@ Multi-tenant household ERP (web + mobile), Arabic-first with 6 languages.
 |---|---|
 | `docs/01-architecture.md` | Architecture: stack, modules, tenancy, RBAC, encryption, i18n/RTL, key flows, deployment |
 | `docs/02-api.md` | Core REST API (`/v1`) for all modules, plus realtime and webhooks |
-| `docs/03-deployment.md` | SaaS domain layout (`darhub.net`), environment variables, CORS, cookies and tenant subdomains |
+| `docs/03-deployment.md` | SaaS domain layout (`darerp.net`), environment variables, CORS, cookies and tenant subdomains |
 | `prisma/schema.prisma` | Data model (61 tables) |
 | `prisma/migrations/0001_init` | Initial DDL |
 | `prisma/migrations/0002_…` | Governance, petty cash, work orders, travel, encrypted columns, EFA role, CHECK constraints |
@@ -45,7 +45,7 @@ HERP_API_URL=http://localhost:4000 HERP_DEV_TOKEN=… pnpm --filter @herp/web de
 
 `HERP_DEV_TOKEN` is ignored when `NODE_ENV=production`. Without it, open `/ar` and sign in. For example, use `0500000002` (the EFA office user): the code shows in the dev-idp console, and on first sign-in you set up an authenticator app. The session lives in the httpOnly `herp_session` cookie until 04:00 Riyadh.
 
-Production on a SaaS domain (`darhub.net`: app, API and tenant subdomains, CORS and cookies) is described in [`docs/03-deployment.md`](docs/03-deployment.md).
+Production on a SaaS domain (`darerp.net`: app, API and tenant subdomains, CORS and cookies) is described in [`docs/03-deployment.md`](docs/03-deployment.md).
 
 `rls.sql` must be applied by a role with BYPASSRLS (it checks and aborts otherwise).
 

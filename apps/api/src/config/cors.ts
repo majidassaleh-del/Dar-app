@@ -1,10 +1,10 @@
 /**
  * Browser origins allowed to call the API (CORS_ORIGINS, comma-separated).
  *
- *   https://darhub.net,https://app.darhub.net,https://*.darhub.net
+ *   https://darerp.net,https://app.darerp.net,https://*.darerp.net
  *
- * An entry is either an exact origin or a one-label wildcard (`https://*.darhub.net`
- * matches `https://efa.darhub.net`, not `https://a.b.darhub.net` and not the apex).
+ * An entry is either an exact origin or a one-label wildcard (`https://*.darerp.net`
+ * matches `https://efa.darerp.net`, not `https://a.b.darerp.net` and not the apex).
  * A bare `*` is refused: tenant data must never be readable from an arbitrary site.
  * Server-to-server calls (the web app's server components) and the mobile app send
  * no Origin and are unaffected.

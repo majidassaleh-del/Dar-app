@@ -8,7 +8,7 @@ import { tenantSlugFromHost, webConfig } from './config';
  *  - production: the session cookie (httpOnly, HERP_SESSION_COOKIE) set by the sign-in flow
  *    (device-session token from POST /v1/auth/unlock);
  *  - development only: HERP_DEV_TOKEN, a token for a local API.
- * The active household is the tenant subdomain (efa.darhub.net) or, on the app host, the
+ * The active household is the tenant subdomain (efa.darerp.net) or, on the app host, the
  * switcher cookie. Either way the API decides: it requires an active membership.
  */
 export const API_URL = webConfig.apiUrl;

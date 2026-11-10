@@ -998,7 +998,7 @@ REVOKE INSERT, UPDATE, DELETE ON tenant_keys FROM app_user;
 -- Household picker for GET /v1/me: the caller's ACTIVE, unexpired memberships
 -- across households. Memberships are tenant-isolated, so this is the one
 -- cross-tenant read, and it returns only the caller's own rows.
--- The slug is the tenant subdomain (efa.darhub.net); returned only for the caller's own households.
+-- The slug is the tenant subdomain (efa.darerp.net); returned only for the caller's own households.
 DROP FUNCTION IF EXISTS app.my_households();
 CREATE FUNCTION app.my_households()
 RETURNS TABLE (household_id uuid, household_slug text, household_name jsonb, membership_id uuid, system_role text, role_name jsonb)

@@ -3,9 +3,9 @@
  * Read on the server only; nothing here is a NEXT_PUBLIC_ value.
  *
  * Production on the SaaS domain, for example:
- *   app.darhub.net         → the app with the household switcher
- *   efa.darhub.net         → pinned to the household whose slug is "efa"
- *   api.darhub.net         → HERP_API_URL
+ *   app.darerp.net         → the app with the household switcher
+ *   efa.darerp.net         → pinned to the household whose slug is "efa"
+ *   api.darerp.net         → HERP_API_URL
  */
 const env = process.env;
 const list = (s: string | undefined, d: string) => (s ?? d).split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
@@ -17,11 +17,11 @@ export const webConfig = {
   sessionCookie: env.HERP_SESSION_COOKIE ?? 'herp_session',
   /** The household chosen in the switcher (httpOnly). */
   householdCookie: env.HERP_HOUSEHOLD_COOKIE ?? 'herp_household',
-  /** Cookie Domain attribute, e.g. `.darhub.net` so one sign-in covers every tenant subdomain. Unset = host-only. */
+  /** Cookie Domain attribute, e.g. `.darerp.net` so one sign-in covers every tenant subdomain. Unset = host-only. */
   cookieDomain: env.HERP_COOKIE_DOMAIN?.trim() || undefined,
   /** `Secure` cookies: always in production; HERP_COOKIE_SECURE=true forces it elsewhere (https staging). */
   secureCookies: env.NODE_ENV === 'production' || env.HERP_COOKIE_SECURE === 'true',
-  /** Tenant subdomains live under this domain (darhub.net). Unset = no subdomain routing. */
+  /** Tenant subdomains live under this domain (darerp.net). Unset = no subdomain routing. */
   tenantBaseDomain: env.HERP_TENANT_BASE_DOMAIN?.trim().toLowerCase().replace(/^\.+|\.+$/g, '') || null,
   /** Subdomains that are never a household slug. */
   reservedSubdomains: new Set(list(env.HERP_TENANT_RESERVED, 'app,www,api,admin,auth,static,cdn,mail,status')),
@@ -37,8 +37,8 @@ export const webConfig = {
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /**
- * The household slug a Host header names: `efa.darhub.net` → "efa" when the base domain is
- * darhub.net. Null for the apex, reserved names (app, www, api …), nested labels and other hosts.
+ * The household slug a Host header names: `efa.darerp.net` → "efa" when the base domain is
+ * darerp.net. Null for the apex, reserved names (app, www, api …), nested labels and other hosts.
  * This only *selects* a household: the API still requires an active membership in it.
  */
 export function tenantSlugFromHost(host: string | null | undefined, base = webConfig.tenantBaseDomain,

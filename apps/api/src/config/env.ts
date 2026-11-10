@@ -4,9 +4,9 @@ import { corsEntryError, parseCorsOrigins } from './cors';
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(4000),
-  /** Public origin of the web app, e.g. https://app.darhub.net (links in notifications and e-mails). */
+  /** Public origin of the web app, e.g. https://app.darerp.net (links in notifications and e-mails). */
   PUBLIC_APP_URL: z.string().url().optional(),
-  /** Public origin of this API, e.g. https://api.darhub.net (absolute URLs such as signed download links). */
+  /** Public origin of this API, e.g. https://api.darerp.net (absolute URLs such as signed download links). */
   PUBLIC_API_URL: z.string().url().optional(),
   /** Browser origins allowed by CORS, comma-separated; exact or https://*.domain (see config/cors.ts). Unset = none. */
   CORS_ORIGINS: z.string().optional().transform(parseCorsOrigins),

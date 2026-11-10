@@ -19,7 +19,7 @@ export async function createApp(): Promise<INestApplication> {
   const env = app.get<Env>(ENV);
   // Behind a load balancer: real client IP / https from X-Forwarded-* (only the configured hops).
   http.set('trust proxy', env.TRUST_PROXY);
-  // CORS: only the configured browser origins (e.g. https://*.darhub.net); none when unset.
+  // CORS: only the configured browser origins (e.g. https://*.darerp.net); none when unset.
   // No cookies are accepted cross-origin (credentials: false): browsers authenticate with a bearer token.
   if (env.CORS_ORIGINS.length) {
     const allowed = corsMatcher(env.CORS_ORIGINS);

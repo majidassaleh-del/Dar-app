@@ -3,7 +3,7 @@ import type { Household } from '@/lib/dashboard';
 
 /**
  * Household switcher in the header. Works without JS: a <details> list of form buttons (cookie
- * switch on the app host) or of links (each household on its own subdomain, efa.darhub.net).
+ * switch on the app host) or of links (each household on its own subdomain, efa.darerp.net).
  */
 export async function TenantSwitcher({ households, current, back }: { households: Household[]; current: Household; back: string }) {
   const t = await getTranslations('ui.tenant');
