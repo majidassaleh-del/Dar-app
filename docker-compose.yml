@@ -1,4 +1,7 @@
-# Production stack for one server: API, web app and a TLS reverse proxy (Caddy, Let's Encrypt).
+# Production stack for one machine: API, web app and ONE way in from the internet, chosen with
+# COMPOSE_PROFILES in the env file:
+#   caddy   a public server: Caddy terminates TLS with Let's Encrypt (ports 80/443 open);
+#   tunnel  a machine behind a router (e.g. a Mac mini): Cloudflare Tunnel, no open ports.
 # The database is external (Supabase). All settings come from ONE file that stays on the server:
 #
 #   docker compose --env-file .env.production up -d --build
@@ -75,18 +78,31 @@ services:
     logging: *logging
 
   caddy:
+    profiles: [caddy]
     image: caddy:2.10
     restart: unless-stopped
     depends_on: [web, api]
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       DOMAIN: ${DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL (Let's Encrypt account)}
+      ACME_EMAIL: ${ACME_EMAIL:-}
       TENANT_HOSTS: ${TENANT_HOSTS:-}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data                                   # certificates: keep this volume
       - caddy_config:/config
+    logging: *logging
+
+  # Cloudflare Tunnel: outbound connection only. Public hostnames are routed in the Cloudflare
+  # dashboard to http://web:3000 and http://api:4000 (deploy/README-mac-mini.md).
+  cloudflared:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on: [web, api]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
     logging: *logging
 
   # --- one-shot tools:  docker compose --env-file .env.production run --rm <name> ---------------

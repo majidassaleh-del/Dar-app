@@ -15,6 +15,8 @@ Three containers: **api** (NestJS), **web** (Next.js) and **caddy** (reverse pro
 
 The full checklist with expected results is `docs/04-go-live.md`. This page is the command sequence.
 
+**Hosting on a Mac mini behind a router (Cloudflare Tunnel):** follow `deploy/README-mac-mini.md` instead of sections 0 and 4 below; everything else is the same.
+
 ## 0. Server and DNS (once)
 
 - Ubuntu with Docker Engine and the Compose plugin; ports 80 and 443 open; nothing else listening on them (Caddy replaces Nginx here).
@@ -51,7 +53,7 @@ dc run --rm db deploy/operator-key.sh      # prints the key ONCE: store it in a 
 ## 4. Start
 
 ```bash
-dc up -d
+dc up -d                              # starts api, web and the profile named in COMPOSE_PROFILES
 dc ps                                 # api and web: "healthy"
 dc logs -f caddy                      # certificates being issued
 deploy/smoke.sh darerp.net            # every line "ok"

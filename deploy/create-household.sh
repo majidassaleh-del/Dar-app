@@ -24,4 +24,5 @@ code=${out##*$'\n'}; echo "${out%$'\n'*}"; echo "HTTP $code"
 [ "$code" = 201 ] || { echo "not created" >&2; exit 1; }
 echo "== encryption key for the new household"
 docker compose --env-file "$ENV_FILE" run --rm worker keys:provision
-echo "== next: add  $slug.$domain  to TENANT_HOSTS in $ENV_FILE (DNS record first), then: docker compose --env-file $ENV_FILE up -d caddy"
+if grep -qE '^COMPOSE_PROFILES=.*tunnel' "$ENV_FILE"; then echo "== $slug.$domain is served already (the tunnel's wildcard hostname)"
+else echo "== next: add  $slug.$domain  to TENANT_HOSTS in $ENV_FILE (DNS record first), then: docker compose --env-file $ENV_FILE up -d caddy"; fi
